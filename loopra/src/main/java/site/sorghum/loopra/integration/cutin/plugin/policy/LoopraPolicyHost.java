@@ -30,7 +30,9 @@ public interface LoopraPolicyHost {
 
     String interceptHITLFromCutin(ModelResponse response);
 
-    ToolRegistry getToolRegistryInstance();
+    ToolRegistry getToolRegistry();
+
+    default site.sorghum.cutin.core.tool.ToolRegistry getCutinTools() { return null; }
 
     boolean isPlanMode();
 

@@ -4,6 +4,7 @@ import site.sorghum.cutin.core.context.Message;
 import site.sorghum.cutin.core.tool.ToolCall;
 import site.sorghum.loopra.bin.agent.model.ChatMessage;
 import site.sorghum.loopra.bin.agent.model.ToolCallEntry;
+import site.sorghum.loopra.bin.agent.model.UserMessage;
 
 import java.util.ArrayList;
 import java.util.HashMap;
@@ -62,12 +63,27 @@ public final class CutinMessageBridge {
         );
     }
 
+    /** 把回合级用户消息转换为 Cutin 消息，并保留图片元数据。 */
+    public static Message toCutin(UserMessage message) {
+        Map<String, Object> metadata = new HashMap<>();
+        if (message != null && message.hasImages()) {
+            metadata.put("images", List.copyOf(message.getImages()));
+        }
+        return new Message(
+            "user",
+            message == null ? null : message.getText(),
+            null,
+            List.of(),
+            metadata
+        );
+    }
+
     public static List<ChatMessage> toLoopra(List<Message> messages) {
         List<ChatMessage> result = new ArrayList<>(messages.size());
         for (Message message : messages) {
             switch (message.role()) {
                 case "system" -> result.add(ChatMessage.ofSystem(message.content()));
-                case "user" -> result.add(ChatMessage.ofUser(message.content()));
+                case "user" -> result.add(toLoopraUser(message));
                 case "assistant" -> result.add(toLoopraAssistant(message));
                 case "tool" -> result.add(ChatMessage.tool(
                     message.toolCallId(),
@@ -77,6 +93,15 @@ public final class CutinMessageBridge {
             }
         }
         return result;
+    }
+
+    private static ChatMessage toLoopraUser(Message message) {
+        Object images = message.metadata("images");
+        if (images instanceof List<?> list && !list.isEmpty()) {
+            List<String> urls = list.stream().map(String::valueOf).toList();
+            return ChatMessage.ofUser(message.content(), urls);
+        }
+        return ChatMessage.ofUser(message.content());
     }
 
     private static ChatMessage toLoopraAssistant(Message message) {

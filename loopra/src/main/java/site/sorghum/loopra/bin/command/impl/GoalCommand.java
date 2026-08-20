@@ -53,8 +53,8 @@ public class GoalCommand implements ChatCommand {
             String[] parts = input.getMessage().trim().split("\\s+", 3);
             String action = parts.length > 1 ? parts[1].toLowerCase(Locale.ROOT) : "status";
             String argument = parts.length > 2 ? parts[2].trim() : "";
-            GoalRuntime.Scope scope = GoalRuntime.forWorkspace(context.getAgent().getWorkspace(),
-                    context.getAgent().getSessionStore().currentName());
+            GoalRuntime.Scope scope = GoalRuntime.forWorkspace(context.getAgent().getEnvironment().executionRoot(),
+                    context.getAgent().getCtx().getSessionStore().currentName());
 
             String result = switch (action) {
                 case "create" -> {

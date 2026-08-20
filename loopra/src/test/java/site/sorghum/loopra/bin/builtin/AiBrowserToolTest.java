@@ -6,6 +6,7 @@ import site.sorghum.loopra.bin.agent.model.ImageToolResult;
 import site.sorghum.loopra.bin.model.LoopraModelProvider;
 import site.sorghum.loopra.bin.model.ModalitySupport;
 import site.sorghum.loopra.bin.model.ModelModalityProvider;
+import site.sorghum.loopra.bin.tool.ToolRegistry;
 import site.sorghum.loopra.tool.AgentLoopController;
 import site.sorghum.loopra.tool.AgentOutput;
 import site.sorghum.loopra.tool.ToolContext;
@@ -98,7 +99,7 @@ class AiBrowserToolTest {
             }
 
             @Override
-            public <T> T getToolRegistry() {
+            public ToolRegistry getToolRegistry() {
                 return null;
             }
 

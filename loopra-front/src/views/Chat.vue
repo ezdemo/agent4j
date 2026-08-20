@@ -295,7 +295,7 @@
         :session-busy="sessionBusy"
         :session-status-stopping="sessionStatusStopping"
         :plan-mode="planMode"
-        @send="(imgs, text) => sendMessage(imgs, text)"
+        @send="(imgs, text, linkedProjectHashes) => sendMessage(imgs, text, null, props.sessionName, props.workspaceHash, undefined, null, undefined, linkedProjectHashes)"
         @toggle-plan="togglePlan"
         @remove-queued="removeQueuedMessage"
         @guide-queued="guideQueuedMessage"
@@ -878,13 +878,13 @@ const getSessionFastMode = (sessionName = props.sessionName, workspaceHash = pro
   sessionFastModes.value[conversationKey(workspaceHash, sessionName)] ?? currentFastMode.value
 )
 
-const addQueuedMessage = (sessionName, workspaceHash, images, text, modelSelection, reasoningEffort, fastMode) => {
+const addQueuedMessage = (sessionName, workspaceHash, images, text, modelSelection, reasoningEffort, fastMode, linkedProjectHashes = []) => {
   if (!sessionName) return
   const key = conversationKey(workspaceHash, sessionName)
   const queue = queuedMessagesBySession.value[key] || []
   queuedMessagesBySession.value = {
     ...queuedMessagesBySession.value,
-    [key]: [...queue, {id: `${Date.now()}-${Math.random().toString(36).slice(2)}`, workspaceHash, images, text, modelSelection, reasoningEffort, fastMode}]
+    [key]: [...queue, {id: `${Date.now()}-${Math.random().toString(36).slice(2)}`, workspaceHash, images, text, modelSelection, reasoningEffort, fastMode, linkedProjectHashes}]
   }
 }
 
@@ -911,7 +911,7 @@ const sendNextQueuedMessage = async (sessionName, workspaceHash) => {
   const next = queue[0]
   if (!next) return
   takeQueuedMessage(sessionName, workspaceHash, next.id)
-  await sendMessage(next.images, next.text, next.modelSelection, sessionName, workspaceHash, next.reasoningEffort, null, next.fastMode)
+  await sendMessage(next.images, next.text, next.modelSelection, sessionName, workspaceHash, next.reasoningEffort, null, next.fastMode, next.linkedProjectHashes)
 }
 
 const guideQueuedMessage = async (id) => {
@@ -924,7 +924,7 @@ const guideQueuedMessage = async (id) => {
     if (streaming.value || sessionTaskRunning.value) {
       await abortChat()
     }
-    await sendMessage(queued.images, queued.text, queued.modelSelection, props.sessionName, queued.workspaceHash, queued.reasoningEffort, null, queued.fastMode)
+    await sendMessage(queued.images, queued.text, queued.modelSelection, props.sessionName, queued.workspaceHash, queued.reasoningEffort, null, queued.fastMode, queued.linkedProjectHashes)
   } finally {
     guidingQueuedMessage.value = false
   }
@@ -1676,7 +1676,8 @@ const sendMessage = async (images = [], overrideText = null, modelSelection = nu
                             targetSessionName = props.sessionName, targetWorkspaceHash = props.workspaceHash,
                             reasoningEffort = getSessionReasoningEffort(targetSessionName, targetWorkspaceHash),
                             requestAction = null,
-                            fastMode = getSessionFastMode(targetSessionName, targetWorkspaceHash)) => {
+                            fastMode = getSessionFastMode(targetSessionName, targetWorkspaceHash),
+                            linkedProjectHashes = []) => {
   const text = requestAction ? '' : (overrideText ?? inputText.value.trim())
   if (!text && images.length === 0 && !requestAction) return
   const sessionName = targetSessionName
@@ -1686,7 +1687,7 @@ const sendMessage = async (images = [], overrideText = null, modelSelection = nu
   const selectedFastMode = fastMode ?? getSessionFastMode(sessionName, targetWorkspaceHash)
   // 流式输出中发送 → 排队（原行为）；会话后台任务运行/状态检查中发送 → 也排队，避免静默丢弃
   if (store.getSessionStreaming(sessionName) || (!requestAction && sessionName === props.sessionName && sessionBusy.value)) {
-    addQueuedMessage(sessionName, targetWorkspaceHash, images, text, selectedModel, selectedReasoningEffort, selectedFastMode)
+    addQueuedMessage(sessionName, targetWorkspaceHash, images, text, selectedModel, selectedReasoningEffort, selectedFastMode, linkedProjectHashes)
     inputText.value = ''
     return
   }
@@ -1753,6 +1754,7 @@ const sendMessage = async (images = [], overrideText = null, modelSelection = nu
             if (!data.type || data.type === 'done') return
             const hasContent = (data.type === 'content' && data.content?.trim()) ||
                 (data.type === 'reasoning' && data.content?.trim()) ||
+                data.type === 'reasoning_started' ||
                 data.type === 'tool_call' || data.type === 'tool_result' || data.type === 'file_changes' || data.type === 'error'
             if (!hasContent) return
             // 有实际内容了，插入助手气泡
@@ -1777,7 +1779,7 @@ const sendMessage = async (images = [], overrideText = null, modelSelection = nu
           }
 
           // ===== 子代理事件：注入 sub_agent 容器块，内部渲染 =====
-          if (data.type === 'sub_content' || data.type === 'sub_reasoning' ||
+          if (data.type === 'sub_content' || data.type === 'sub_reasoning' || data.type === 'sub_reasoning_started' ||
               data.type === 'sub_tool_call' || data.type === 'sub_error') {
             const container = findSubAgentBlock(data.subId)
             // 向容器内添加内容
@@ -1790,7 +1792,15 @@ const sendMessage = async (images = [], overrideText = null, modelSelection = nu
               const lb = container.blocks[container.blocks.length - 1]
               const reasoningContent = data.token || data.content || ''
               if (lb?.type === 'reasoning') lb.content += reasoningContent
+              else if (lb?.type === 'reasoning_started') {
+                Object.assign(lb, {type: 'reasoning', content: reasoningContent, showContent: false})
+              }
               else container.blocks.push({type: 'reasoning', content: reasoningContent, showContent: false})
+            } else if (data.type === 'sub_reasoning_started') {
+              const lb = container.blocks[container.blocks.length - 1]
+              if (lb?.type !== 'reasoning_started') {
+                container.blocks.push({type: 'reasoning_started', showContent: false})
+              }
             } else if (data.type === 'sub_tool_call') {
               let name = data.name || '', args = data.args || data.arguments || ''
               if (typeof args === 'string') try {
@@ -1863,7 +1873,15 @@ const sendMessage = async (images = [], overrideText = null, modelSelection = nu
           } else if (data.type === 'reasoning') {
             const lb = msg.blocks[msg.blocks.length - 1]
             if (lb?.type === 'reasoning') lb.content += (data.content || '')
+            else if (lb?.type === 'reasoning_started') {
+              Object.assign(lb, {type: 'reasoning', content: data.content || '', showContent: false})
+            }
             else msg.blocks.push({type: 'reasoning', content: data.content || '', showContent: false})
+          } else if (data.type === 'reasoning_started') {
+            const lb = msg.blocks[msg.blocks.length - 1]
+            if (lb?.type !== 'reasoning_started') {
+              msg.blocks.push({type: 'reasoning_started', showContent: false})
+            }
           } else if (data.type === 'content') {
             const lb = msg.blocks[msg.blocks.length - 1]
             if (lb?.type === 'content') lb.content += (data.content || '')
@@ -1920,6 +1938,8 @@ const sendMessage = async (images = [], overrideText = null, modelSelection = nu
             moveFileChangesToEnd(msg.blocks)
           } else if (data.type === 'error') {
             msg.blocks.push({type: 'content', content: '错误: ' + (data.error || data.content || '未知')})
+          } else if (data.type === 'token_speed') {
+            usage.value = {...usage.value, tokensPerSecond: data.tokensPerSecond, avgTokensPerSecond: data.avgTokensPerSecond ?? data.tokensPerSecond, tokenSpeedDone: !!data.done, completionTokens: data.completionTokens ?? usage.value.completionTokens}
           } else if (data.type === 'usage') {
             // 更新 usage 数据
             if (data.promptTokens !== undefined) {
@@ -2059,7 +2079,8 @@ const sendMessage = async (images = [], overrideText = null, modelSelection = nu
           modelChannelId: selectedModel.channelId,
           reasoningEffort: selectedReasoningEffort,
           fastMode: selectedFastMode,
-          action: requestAction
+          action: requestAction,
+          linkedProjectHashes
         }
     )
     store.setSessionController(sessionName, streamResult)
@@ -2088,6 +2109,25 @@ const abortChat = async (targetSessionName = props.sessionName, targetWorkspaceH
     })
   } catch {
     if (stoppingRemoteTask) sessionStatusStopping.value = false
+  }
+  // 停止超时兜底：10 秒后主动查询后端实时状态确认停止是否生效。
+  // 不直接依赖本地 streaming/sessionTaskRunning（可能残留停止前的陈旧值，
+  // 或停止后队列自动续发新任务导致误报）；用 requestId 区分“旧任务没停”和“新任务已开始”。
+  if (targetSessionName === props.sessionName) {
+    const stoppedRequestId = ctrl?.requestId || (stoppingRemoteTask ? sessionStatusRequestId.value : null)
+    setTimeout(async () => {
+      try {
+        const res = await agentAPI.getSessionStatus(targetWorkspaceHash, targetSessionName)
+        const stillRunning = Boolean(res?.success && res.data?.running)
+        if (!stillRunning) return
+        // 仍在运行，但 requestId 已变化（停止后新开始的任务）→ 不是停止失败，不提示
+        if (stoppedRequestId && res.data?.requestId && res.data.requestId !== stoppedRequestId) return
+        if (stoppingRemoteTask) sessionStatusStopping.value = false
+        message.warning('停止请求已发出，但生成仍在进行，可能未能中断')
+      } catch {
+        // 状态查询失败时不打扰用户，按钮由轮询/SSE 状态自然恢复
+      }
+    }, 10000)
   }
 }
 
@@ -2243,7 +2283,7 @@ const clearMessages = () => {
   }
 }
 
-/** 继续生成：发送 /continue 命令让 AI 继续推理，复用以有的 SSE 流式逻辑 */
+/** 继续生成：触发 /continue，后端不追加用户消息，直接复用现有上下文继续推理 */
 const continueChat = async () => {
   if (!props.sessionName || streaming.value || sessionBusy.value) return
   inputText.value = '/continue'

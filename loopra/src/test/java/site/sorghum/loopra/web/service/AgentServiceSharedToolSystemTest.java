@@ -3,6 +3,7 @@ package site.sorghum.loopra.web.service;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
+import site.sorghum.loopra.bin.agent.environment.SessionEnvironment;
 import org.junit.jupiter.api.io.TempDir;
 import site.sorghum.loopra.bin.agent.core.AgentLoop;
 import site.sorghum.loopra.bin.agent.core.LoopraAgent;
@@ -55,8 +56,8 @@ class AgentServiceSharedToolSystemTest {
         AgentService service = new AgentService();
 
         // 修复前：首次访问即抛 IllegalStateException: Recursive update
-        ToolSystemInitializer.Result first = getOrCreate(service, workspaceA);
-        ToolSystemInitializer.Result second = getOrCreate(service, workspaceA);
+        ToolSystemInitializer.ToolSystem first = getOrCreate(service, workspaceA);
+        ToolSystemInitializer.ToolSystem second = getOrCreate(service, workspaceA);
 
         assertNotNull(first);
         assertSame(first, second, "同一项目第二次访问应复用缓存");
@@ -66,8 +67,8 @@ class AgentServiceSharedToolSystemTest {
     void differentWorkspacesGetIndependentToolSystems() throws Exception {
         AgentService service = new AgentService();
 
-        ToolSystemInitializer.Result a = getOrCreate(service, workspaceA);
-        ToolSystemInitializer.Result b = getOrCreate(service, workspaceB);
+        ToolSystemInitializer.ToolSystem a = getOrCreate(service, workspaceA);
+        ToolSystemInitializer.ToolSystem b = getOrCreate(service, workspaceB);
 
         assertNotSame(a, b, "不同项目应各自构建独立的工具系统");
     }
@@ -136,7 +137,7 @@ class AgentServiceSharedToolSystemTest {
 
         assertEquals("plan task", rollbackText);
         assertNull(loopOf(agent).getPendingPlan());
-        assertNull(agent.getSessionStore().getPendingPlan(sessionName));
+        assertNull(agent.getCtx().getSessionStore().getPendingPlan(sessionName));
     }
 
     private static LoopraAgent getOrCreateAgent(AgentService service, Path workspace, String sessionName) throws Exception {
@@ -160,9 +161,10 @@ class AgentServiceSharedToolSystemTest {
         return (boolean) method.invoke(service, agent);
     }
 
-    private static ToolSystemInitializer.Result getOrCreate(AgentService service, Path workspace) throws Exception {
-        Method method = AgentService.class.getDeclaredMethod("getOrCreateSharedToolSystem", Path.class);
+    private static ToolSystemInitializer.ToolSystem getOrCreate(AgentService service, Path workspace) throws Exception {
+        Method method = AgentService.class.getDeclaredMethod("getOrCreateSharedToolSystem", SessionEnvironment.class);
         method.setAccessible(true);
-        return (ToolSystemInitializer.Result) method.invoke(service, workspace);
+        return (ToolSystemInitializer.ToolSystem) method.invoke(
+                service, SessionEnvironment.of(workspace, null));
     }
 }

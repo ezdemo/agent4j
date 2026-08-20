@@ -518,3 +518,113 @@ describe('DesktopShell 删除项目', () => {
     wrapper.unmount()
   })
 })
+
+describe('DesktopShell 批量删除项目', () => {
+  it('确认后逐个调用删除接口并从列表移除全部选中项目', async () => {
+    configAPI.listWorkspaces.mockResolvedValue({success: true, data: [
+      {hash: 'h1', name: 'A', path: '/p/a'},
+      {hash: 'h2', name: 'B', path: '/p/b'}
+    ]})
+    configAPI.deleteWorkspace.mockResolvedValue({success: true})
+    const {wrapper} = await mountShell()
+
+    wrapper.vm.confirmDeleteWorkspaces([{hash: 'h1', name: 'A'}, {hash: 'h2', name: 'B'}])
+    expect(wrapper.vm.deleteConfirm.visible).toBe(true)
+    expect(wrapper.vm.deleteConfirm.title).toBe('删除项目？')
+    expect(wrapper.vm.deleteConfirm.message).toContain('“A”、“B”')
+    wrapper.vm.handleDeleteConfirmAction('confirm')
+    await flushPromises()
+
+    expect(configAPI.deleteWorkspace).toHaveBeenCalledTimes(2)
+    expect(configAPI.deleteWorkspace).toHaveBeenCalledWith('h1')
+    expect(configAPI.deleteWorkspace).toHaveBeenCalledWith('h2')
+    expect(wrapper.vm.workspaces.some((workspace) => workspace.hash === 'h1')).toBe(false)
+    expect(wrapper.vm.workspaces.some((workspace) => workspace.hash === 'h2')).toBe(false)
+
+    wrapper.unmount()
+  })
+
+  it('部分项目删除失败时仍移除成功的，失败项保留', async () => {
+    configAPI.listWorkspaces.mockResolvedValue({success: true, data: [
+      {hash: 'h1', name: 'A', path: '/p/a'},
+      {hash: 'h2', name: 'B', path: '/p/b'}
+    ]})
+    configAPI.deleteWorkspace.mockImplementation((hash) =>
+      Promise.resolve(hash === 'h1' ? {success: true} : {success: false, message: '服务不可用'})
+    )
+    const {wrapper} = await mountShell()
+
+    wrapper.vm.confirmDeleteWorkspaces([{hash: 'h1', name: 'A'}, {hash: 'h2', name: 'B'}])
+    wrapper.vm.handleDeleteConfirmAction('confirm')
+    await flushPromises()
+
+    expect(wrapper.vm.workspaces.some((workspace) => workspace.hash === 'h1')).toBe(false)
+    expect(wrapper.vm.workspaces.some((workspace) => workspace.hash === 'h2')).toBe(true)
+
+    wrapper.unmount()
+  })
+
+  it('超过 3 个项目时确认消息摘要展示', async () => {
+    const {wrapper} = await mountShell()
+    const workspaces = ['A', 'B', 'C', 'D', 'E'].map((name, index) => ({hash: `h${index + 1}`, name, path: `/p/${name}`}))
+
+    wrapper.vm.confirmDeleteWorkspaces(workspaces)
+    expect(wrapper.vm.deleteConfirm.message).toContain('选中的 5 个项目')
+    expect(wrapper.vm.deleteConfirm.message).toContain('“A”、“B”、“C” 等')
+
+    wrapper.unmount()
+  })
+})
+
+describe('DesktopShell 批量删除会话', () => {
+  it('确认后逐个调用删除会话接口', async () => {
+    sessionsAPI.deleteSession.mockResolvedValue({success: true})
+    const {wrapper} = await mountShell()
+
+    wrapper.vm.confirmDeleteSessions([
+      {workspaceHash: 'h1', name: 's1', title: '会话一'},
+      {workspaceHash: 'h1', name: 's2', title: '会话二'}
+    ])
+    expect(wrapper.vm.deleteConfirm.visible).toBe(true)
+    expect(wrapper.vm.deleteConfirm.title).toBe('删除会话？')
+    expect(wrapper.vm.deleteConfirm.message).toContain('“会话一”、“会话二”')
+    wrapper.vm.handleDeleteConfirmAction('confirm')
+    await flushPromises()
+
+    expect(sessionsAPI.deleteSession).toHaveBeenCalledTimes(2)
+    expect(sessionsAPI.deleteSession).toHaveBeenCalledWith('s1', 'h1')
+    expect(sessionsAPI.deleteSession).toHaveBeenCalledWith('s2', 'h1')
+
+    wrapper.unmount()
+  })
+
+  it('部分会话删除失败时保留失败项，成功的仍生效', async () => {
+    sessionsAPI.deleteSession.mockImplementation((name) =>
+      Promise.resolve(name === 's1' ? {success: true} : {success: false, message: '服务不可用'})
+    )
+    const {wrapper} = await mountShell()
+
+    wrapper.vm.confirmDeleteSessions([
+      {workspaceHash: 'h1', name: 's1', title: '会话一'},
+      {workspaceHash: 'h1', name: 's2', title: '会话二'}
+    ])
+    wrapper.vm.handleDeleteConfirmAction('confirm')
+    await flushPromises()
+
+    expect(sessionsAPI.deleteSession).toHaveBeenCalledTimes(2)
+    // 无异常抛出即视为批量流程完成（失败项不影响成功项）
+
+    wrapper.unmount()
+  })
+
+  it('超过 3 个会话时确认消息摘要展示', async () => {
+    const {wrapper} = await mountShell()
+    const sessions = ['一', '二', '三', '四', '五'].map((title, index) => ({workspaceHash: 'h1', name: `s${index + 1}`, title: `会话${title}`}))
+
+    wrapper.vm.confirmDeleteSessions(sessions)
+    expect(wrapper.vm.deleteConfirm.message).toContain('选中的 5 个会话')
+    expect(wrapper.vm.deleteConfirm.message).toContain('“会话一”、“会话二”、“会话三” 等')
+
+    wrapper.unmount()
+  })
+})

@@ -17,8 +17,10 @@ import site.sorghum.cutin.core.context.Usage;
 import site.sorghum.cutin.core.event.LoopEvent;
 import site.sorghum.cutin.core.loop.*;
 import site.sorghum.cutin.core.model.ModelCallRequest;
+import site.sorghum.cutin.core.model.ModelRegistry;
 import site.sorghum.cutin.core.model.ModelResponse;
 import site.sorghum.cutin.core.model.StreamChunk;
+import site.sorghum.cutin.core.plugin.PluginBeanManager;
 import site.sorghum.cutin.core.state.LoopSnapshot;
 import site.sorghum.loopra.bin.agent.context.*;
 import site.sorghum.loopra.bin.agent.hitl.HitlManager;
@@ -26,42 +28,55 @@ import site.sorghum.loopra.bin.agent.listener.AgentLoopListener;
 import site.sorghum.loopra.bin.agent.listener.NoOpAgentLoopListener;
 import site.sorghum.loopra.bin.agent.model.*;
 import site.sorghum.loopra.bin.agent.output.ConsoleAgentOutput;
-import site.sorghum.loopra.bin.agent.output.ParentOutputHolder;
 import site.sorghum.loopra.bin.agent.resilient.ReasonBreaker;
 import site.sorghum.loopra.bin.agent.resilient.Scavenger;
 import site.sorghum.loopra.bin.agent.resilient.StormBreaker;
 import site.sorghum.loopra.bin.agent.spi.AgentConfig;
 import site.sorghum.loopra.bin.agent.spi.GoalGuard;
 import site.sorghum.loopra.bin.agent.spi.SessionUsageSink;
-import site.sorghum.loopra.bin.model.ModelApiError;
 import site.sorghum.loopra.bin.model.LoopraModelProvider;
+import site.sorghum.loopra.bin.model.ModelApiError;
 import site.sorghum.loopra.bin.model.UserMessageSanitizer;
+import site.sorghum.loopra.bin.agent.environment.SessionEnvironment;
 import site.sorghum.loopra.bin.session.SessionFileChangeTracker;
 import site.sorghum.loopra.bin.tool.ToolMetadata;
 import site.sorghum.loopra.bin.tool.ToolRegistry;
-import site.sorghum.loopra.integration.cutin.*;
-import site.sorghum.loopra.integration.cutin.plugin.cancel.LoopraCancelHost;
-import site.sorghum.loopra.integration.cutin.plugin.cancel.LoopraCancelPlugin;
+import site.sorghum.loopra.integration.cutin.CutinFunctionToolBridge;
+import site.sorghum.loopra.integration.cutin.CutinMessageBridge;
 import site.sorghum.loopra.integration.cutin.plugin.compaction.LoopraCompactionHost;
 import site.sorghum.loopra.integration.cutin.plugin.compaction.LoopraCompactionPlugin;
+import site.sorghum.loopra.integration.cutin.plugin.LoopraPluginRuntime;
 import site.sorghum.loopra.integration.cutin.plugin.exit.LoopraExitHost;
 import site.sorghum.loopra.integration.cutin.plugin.exit.LoopraExitPlugin;
-import site.sorghum.loopra.integration.cutin.plugin.lifecycle.LoopraLifecycleHost;
-import site.sorghum.loopra.integration.cutin.plugin.lifecycle.LoopraLifecyclePlugin;
+import site.sorghum.loopra.integration.cutin.plugin.httplog.LoopraHttpLogPlugin;
 import site.sorghum.loopra.integration.cutin.plugin.plan.LoopraPlanHost;
 import site.sorghum.loopra.integration.cutin.plugin.plan.LoopraPlanPlugin;
+import site.sorghum.loopra.integration.cutin.plugin.policy.LoopraMessageHealingPlugin;
 import site.sorghum.loopra.integration.cutin.plugin.policy.LoopraModelPolicyPlugin;
 import site.sorghum.loopra.integration.cutin.plugin.policy.LoopraPolicyHost;
 import site.sorghum.loopra.integration.cutin.plugin.policy.LoopraToolPolicyPlugin;
+import site.sorghum.loopra.integration.cutin.plugin.preflight.*;
+import site.sorghum.loopra.integration.cutin.plugin.rawlog.LoopraRawLogPlugin;
+import site.sorghum.loopra.integration.cutin.plugin.reasoning.LoopraReasoningStartedHost;
+import site.sorghum.loopra.integration.cutin.plugin.reasoning.LoopraReasoningStartedPlugin;
 import site.sorghum.loopra.integration.cutin.plugin.recovery.LoopraErrorRecoveryHost;
 import site.sorghum.loopra.integration.cutin.plugin.recovery.LoopraErrorRecoveryPlugin;
 import site.sorghum.loopra.integration.cutin.plugin.retry.LoopraRetryHost;
 import site.sorghum.loopra.integration.cutin.plugin.retry.LoopraRetryPolicyPlugin;
+import site.sorghum.loopra.integration.cutin.plugin.session.LoopraSessionAffinityHost;
+import site.sorghum.loopra.integration.cutin.plugin.session.LoopraSessionAffinityPlugin;
 import site.sorghum.loopra.integration.cutin.plugin.session.LoopraSessionHost;
 import site.sorghum.loopra.integration.cutin.plugin.session.LoopraSessionPlugin;
 import site.sorghum.loopra.integration.cutin.plugin.toolbatch.LoopraToolBatchEvent;
 import site.sorghum.loopra.integration.cutin.plugin.toolbatch.LoopraToolBatchHost;
 import site.sorghum.loopra.integration.cutin.plugin.toolbatch.LoopraToolBatchPlugin;
+import site.sorghum.loopra.integration.cutin.plugin.prompt.LoopraPromptHost;
+import site.sorghum.loopra.integration.cutin.plugin.prompt.LoopraPromptPlugin;
+import site.sorghum.loopra.integration.cutin.plugin.prompt.PromptRegistry;
+import site.sorghum.loopra.integration.cutin.plugin.prompt.ToolContract;
+import site.sorghum.loopra.integration.cutin.plugin.tool.LoopraToolGatewayPlugin;
+import site.sorghum.loopra.integration.cutin.plugin.usage.LoopraTokenSpeedHost;
+import site.sorghum.loopra.integration.cutin.plugin.usage.LoopraTokenSpeedPlugin;
 import site.sorghum.loopra.integration.cutin.plugin.usage.LoopraUsageHost;
 import site.sorghum.loopra.integration.cutin.plugin.usage.LoopraUsagePlugin;
 import site.sorghum.loopra.tool.*;
@@ -76,7 +91,6 @@ import java.util.concurrent.atomic.AtomicInteger;
 import java.util.concurrent.atomic.AtomicLong;
 import java.util.concurrent.atomic.AtomicReference;
 import java.util.function.BooleanSupplier;
-import java.util.function.Consumer;
 import java.util.stream.Stream;
 
 /**
@@ -93,15 +107,19 @@ public class AgentLoop implements
         AgentLoopController,
         LoopraPolicyHost,
         LoopraCompactionHost,
-        LoopraLifecycleHost,
         LoopraUsageHost,
+        LoopraTokenSpeedHost,
+        LoopraSessionAffinityHost,
         LoopraExitHost,
         LoopraErrorRecoveryHost,
         LoopraRetryHost,
         LoopraSessionHost,
         LoopraPlanHost,
         LoopraToolBatchHost,
-        LoopraCancelHost {
+        LoopraReasoningStartedHost,
+        LoopraPreflightHost,
+        LoopraPromptHost,
+        LoopraToolGatewayPlugin.LoopraToolHost {
 
     // ==================== 配置读取（带 null-safe 默认值） ====================
 
@@ -178,9 +196,6 @@ public class AgentLoop implements
      * /execute 批准时取出并注入为执行依据（取出即清空）。
      */
     private volatile String pendingPlan = null;
-    /** 上层会话存储回调：计划提交/消费时同步持久化；子代理默认不设置。 */
-    @Setter
-    private Consumer<String> pendingPlanSink;
     @Getter
     private final HitlManager hitlManager;
 
@@ -233,6 +248,16 @@ public class AgentLoop implements
     @Getter
     private volatile String sessionId;
 
+    /** 上次触发 tool-gateway 重启时的禁用集合快照；用于跳过每轮无效重启。 */
+    private volatile Set<String> lastGatewayDisabled = Collections.emptySet();
+
+    /** gateway 是否已按最新禁用列表重启过；首次调用 refreshTools 时会重启一次。 */
+    private volatile boolean gatewayEverStarted = false;
+
+    /** Prompt 插件化：切片注册表（供外部插件热插拔） */
+    @Getter
+    private final PromptRegistry promptRegistry = new PromptRegistry();
+
     /**
      * 是否在工具批次结束时提取文件变更。
      * 子代理与父代理共用同一会话范围时关闭此开关，防止子循环提前取走父轮次的变更记录。
@@ -251,14 +276,12 @@ public class AgentLoop implements
      * 事件和预算由 cutin 管理。
      */
     private final DefaultLoopEngine cutinEngine;
-    private final LoopraCutinRuntime cutinRuntime;
+    private final PluginBeanManager cutinPlugins;
     private volatile LoopHandle activeCutinHandle;
     private volatile LoopHandle suspendedCutinHandle;
     private volatile DefaultLoopContext suspendedCutinContext;
     private volatile LoopState suspendedCutinState;
     private volatile LoopState runningCutinState;
-    private Consumer<LoopResult> afterTurnSink;
-    private Consumer<String> beforeTurnSink;
     private volatile String currentTurnUserText = "";
 
     /**
@@ -270,12 +293,12 @@ public class AgentLoop implements
         return running.get();
     }
 
-    DefaultLoopEngine cutinEngine() {
-        return cutinEngine;
-    }
-
-    LoopraCutinRuntime cutinRuntime() {
-        return cutinRuntime;
+    private Path workingDirectory() {
+        Path environmentRoot = registry.getEnvironment() == null
+            ? null
+            : registry.getEnvironment().executionRoot();
+        Path root = environmentRoot != null ? environmentRoot : workspace;
+        return root == null ? null : root.toAbsolutePath().normalize();
     }
 
     // ==================== 构造器 ====================
@@ -294,23 +317,89 @@ public class AgentLoop implements
                 ? null
                 : registry.getEnvironment().executionRoot();
         this.toolCallValidator = ToolCallValidator.fromConfig(config, executionRoot);
-        this.cutinRuntime = LoopraCutinRuntime.create(
-                modelProvider,
-                registry,
-                new LoopraLifecyclePlugin(this),
-                new LoopraUsagePlugin(this),
-                new LoopraCompactionPlugin(this),
-                new LoopraModelPolicyPlugin(this),
-                new LoopraToolPolicyPlugin(this),
-                new LoopraExitPlugin(this),
-                new LoopraErrorRecoveryPlugin(this),
-                new LoopraRetryPolicyPlugin(this),
-                new LoopraSessionPlugin(this),
-                new LoopraPlanPlugin(this),
-                new LoopraToolBatchPlugin(this),
-                new LoopraCancelPlugin(this)
-        );
-        this.cutinEngine = cutinRuntime.engine();
+        this.cutinEngine = new DefaultLoopEngine(registry.cutinRegistry(), new ModelRegistry());
+        this.cutinEngine.registrar().addModelProvider(modelProvider);
+        this.cutinPlugins = createCutinPlugins();
+    }
+
+    // ========== LoopraPromptHost / LoopraToolHost / LoopraPolicyHost 实现 ==========
+    @Override
+    public SessionEnvironment environment() {
+        return registry.getEnvironment();
+    }
+
+    @Override
+    public ToolRegistry toolRegistry() {
+        return registry;
+    }
+
+    @Override
+    public site.sorghum.cutin.core.tool.ToolRegistry getCutinTools() {
+        if (cutinEngine == null) return null;
+        if (cutinEngine.registrar() instanceof site.sorghum.cutin.core.plugin.DefaultLoopRegistrar d) return d.tools();
+        return null;
+    }
+
+    @Override
+    public PromptRegistry promptRegistry() {
+        return promptRegistry;
+    }
+
+    @Override
+    public Path workspace() {
+        SessionEnvironment env = registry.getEnvironment();
+        return env == null ? null : env.executionRoot();
+    }
+
+    @Override
+    public String dynamicToolContractTail() {
+        // Goal 指令 + Plan Mode 指令：随会话状态实时变化，由 tool-contract 切片注入 system
+        StringBuilder tail = new StringBuilder();
+        String goal = currentGoalInstruction();
+        if (!goal.isBlank()) {
+            tail.append(goal);
+        }
+        if (planMode) {
+            if (!tail.isEmpty()) {
+                tail.append("\n\n");
+            }
+            tail.append(PLAN_MODE_INSTRUCTIONS);
+        }
+        return tail.toString();
+    }
+
+    private PluginBeanManager createCutinPlugins() {
+        PluginBeanManager plugins = new PluginBeanManager(cutinEngine.registrar());
+        // 暴露宿主与 PromptRegistry 供插件热插拔
+        plugins.registerBean("loopraPromptHost", (LoopraPromptHost) this);
+        plugins.registerBean("promptRegistry", promptRegistry);
+        plugins.registerBean("loopraToolHost", (LoopraToolGatewayPlugin.LoopraToolHost) this);
+        plugins.registerBean("promptRegistryTyped", promptRegistry);
+        // Prompt / Tool 插件化（优先级最高，最先拦截）
+        plugins.registerPlugin(new LoopraPromptPlugin(this, promptRegistry));
+        plugins.registerPlugin(new LoopraToolGatewayPlugin(this));
+        plugins.registerPlugin(new LoopraHttpLogPlugin(modelProvider));
+        plugins.registerPlugin(new LoopraRawLogPlugin());
+        plugins.registerPlugin(new LoopraMessageSanitizerPlugin(this));
+        plugins.registerPlugin(new LoopraHitlPlugin(this));
+        plugins.registerPlugin(new LoopraUserMessagePlugin(this));
+        plugins.registerPlugin(new LoopraUsagePlugin(this));
+        plugins.registerPlugin(new LoopraTokenSpeedPlugin(this));
+        plugins.registerPlugin(new LoopraSessionAffinityPlugin(this));
+        plugins.registerPlugin(new LoopraCompactionPlugin(this));
+        plugins.registerPlugin(new LoopraReasoningStartedPlugin(this));
+        plugins.registerPlugin(new LoopraModelPolicyPlugin(this));
+        plugins.registerPlugin(new LoopraMessageHealingPlugin());
+        plugins.registerPlugin(new LoopraToolPolicyPlugin(this));
+        plugins.registerPlugin(new LoopraExitPlugin(this));
+        plugins.registerPlugin(new LoopraErrorRecoveryPlugin(this));
+        plugins.registerPlugin(new LoopraRetryPolicyPlugin(this));
+        plugins.registerPlugin(new LoopraSessionPlugin(this));
+        plugins.registerPlugin(new LoopraPlanPlugin(this));
+        plugins.registerPlugin(new LoopraToolBatchPlugin(this));
+        plugins.startAll();
+        LoopraPluginRuntime.attach(plugins, config == null ? Set.of() : config.disabledPlugins());
+        return plugins;
     }
 
     /** 仅测试注入：覆盖由配置生成的工具调用校验器，避免为测试保留专用构造器。 */
@@ -318,10 +407,9 @@ public class AgentLoop implements
         this.toolCallValidator = Objects.requireNonNull(toolCallValidator, "toolCallValidator must not be null");
     }
 
-    void disposeCutinRuntime() {
-        if (cutinRuntime != null) {
-            cutinRuntime.stop();
-        }
+    void disposeCutinPlugins() {
+        LoopraPluginRuntime.detach(cutinPlugins);
+        cutinPlugins.stopAll();
     }
 
     // ==================== 公共控制 API ====================
@@ -517,8 +605,8 @@ public class AgentLoop implements
     }
 
     @Override
-    public <T>T getToolRegistry() {
-        return (T) registry;
+    public ToolRegistry getToolRegistry() {
+        return registry;
     }
 
     @Override
@@ -633,7 +721,33 @@ public class AgentLoop implements
         if (fixed != null) {
             return fixed;
         }
+        boolean gatewayActive = cutinPlugins != null && cutinPlugins.pluginStates().stream()
+                .anyMatch(s -> "loopra-tool-gateway".equals(s.id()) && s.active());
+        if (!gatewayActive) {
+            // 网关禁用 = 下线全部工具：清空 legacy 与 cutin 视图，模型请求的 tools 为空数组。
+            // 不能只靠 gateway stop 时的 unregister——syncCutinRegistry 的 setTools 会把视图里的
+            // bridge 换成新实例，导致注销闭包（持有旧实例）移除失败，工具残留仍会上传。
+            registry.clearTools();
+            ONode empty = registry.toOpenAiTools();
+            return planMode ? filterReadOnlyTools(empty) : empty;
+        }
         registry.refresh();
+        // 同步 cutin 工具网关：仅当禁用列表变化（或首次）时重启以按最新禁用列表重新注册 cutin Tool，
+        // 避免每轮模型调用都 stop/start 网关 + 全量扫描；禁用列表不变时 registry.refresh 已同步视图。
+        try {
+            if (cutinPlugins != null) {
+                Set<String> disabled = registry.currentDisabledTools();
+                boolean disabledChanged = !disabled.equals(lastGatewayDisabled);
+                if (!gatewayEverStarted || disabledChanged) {
+                    cutinPlugins.stopPlugin("loopra-tool-gateway");
+                    cutinPlugins.startPlugin("loopra-tool-gateway");
+                    lastGatewayDisabled = disabled;
+                    gatewayEverStarted = true;
+                }
+            }
+        } catch (Exception e) {
+            log.debug("[tool-gateway] refresh restart failed: {}", e.getMessage());
+        }
         ONode tools = registry.toOpenAiTools();
         return planMode ? filterReadOnlyTools(tools) : tools;
     }
@@ -737,10 +851,10 @@ public class AgentLoop implements
 
     @Override
     public void persistPendingPlan(String planMarkdown) {
-        Consumer<String> sink = pendingPlanSink;
+        SessionUsageSink sink = sessionUsageSink;
         if (sink == null) return;
         try {
-            sink.accept(planMarkdown);
+            sink.persistPendingPlan(planMarkdown);
         } catch (Exception e) {
             log.warn("[plan] 持久化待审查计划失败: {}", e.getMessage());
         }
@@ -767,10 +881,6 @@ public class AgentLoop implements
     /**
      * 获取工具注册表实例。
      */
-    public ToolRegistry getToolRegistryInstance() {
-        return registry;
-    }
-
     /**
      * 从当前上下文重新计算 token 构成。
      * <p>供历史会话在未执行新一轮模型请求时按持久化消息生成预估。</p>
@@ -810,6 +920,27 @@ public class AgentLoop implements
     @Override
     public void reportCutinUsage(Usage usage) {
         propagateUsage(usage);
+    }
+
+    @Override
+    public String sessionAffinity() {
+        return sessionId;
+    }
+
+    @Override
+    public void emitTokenSpeed(long completionTokens, double tokensPerSecond, double avgTokensPerSecond, boolean done) {
+        safeOutputDebug("tokenSpeed", () -> {
+            if (output instanceof site.sorghum.loopra.web.service.SseAgentOutput sse) {
+                sse.onTokenSpeed(completionTokens, tokensPerSecond, avgTokensPerSecond, done);
+            } else {
+                output.sendEvent("token_speed", "{\"completionTokens\":" + completionTokens + ",\"tokensPerSecond\":" + tokensPerSecond + ",\"avgTokensPerSecond\":" + avgTokensPerSecond + ",\"done\":" + done + "}");
+            }
+        });
+    }
+
+    @Override
+    public void emitTokenSpeed(long completionTokens, double tokensPerSecond, boolean done) {
+        emitTokenSpeed(completionTokens, tokensPerSecond, tokensPerSecond, done);
     }
 
     @Override
@@ -874,11 +1005,11 @@ public class AgentLoop implements
     }
 
     @Override
-    public void afterTurn(LoopResult result) {
-        Consumer<LoopResult> sink = afterTurnSink;
+    public void afterTurn() {
+        SessionUsageSink sink = sessionUsageSink;
         if (sink != null) {
             try {
-                sink.accept(result);
+                sink.afterTurn();
             } catch (Exception exception) {
                 log.warn("[session] 回合提交回调失败: {}", exception.getMessage());
             }
@@ -886,31 +1017,69 @@ public class AgentLoop implements
     }
 
     @Override
-    public void beforeTurn(DefaultLoopContext context) {
-        Object raw = context.variables().get("loopraUserMessage");
-        String userMessage = raw == null ? "" : String.valueOf(raw);
-        fireBeforeTurn(userMessage);
-    }
-
-    private void fireBeforeTurn(String userMessage) {
-        Consumer<String> sink = beforeTurnSink;
-        if (sink == null || userMessage.isBlank()) {
+    public void beforeTurn(String userMessage) {
+        if (userMessage.isBlank() || sessionUsageSink == null) {
             return;
         }
         try {
-            sink.accept(userMessage);
+            String sessionId = sessionUsageSink.beforeTurn(userMessage);
+            if (sessionId != null && !sessionId.isBlank()) {
+                setSessionId(sessionId);
+            }
         } catch (Exception exception) {
             log.warn("[session] 回合开始回调失败: {}", exception.getMessage());
         }
     }
 
-    public void setBeforeTurnSink(Consumer<String> beforeTurnSink) {
-        this.beforeTurnSink = beforeTurnSink;
+    @Override
+    public UserMessage sanitizePreflightMessage(UserMessage message) {
+        return UserMessageSanitizer.sanitize(message, modelProvider);
     }
 
     @Override
-    public void onCutinCancel(String reason) {
-        log.info("[loop] cutin 循环取消: {}", reason);
+    public void setCurrentTurnUserText(String text) {
+        currentTurnUserText = text == null ? "" : text;
+    }
+
+    @Override
+    public void appendPreflightUserMessage(UserMessage message) {
+        ctx.addUser(message);
+    }
+
+    @Override
+    public void clearSuspendedCutinState() {
+        suspendedCutinHandle = null;
+        suspendedCutinContext = null;
+        suspendedCutinState = null;
+    }
+
+    @Override
+    public HitlState hitlState() {
+        return hitlManager.getState();
+    }
+
+    @Override
+    public boolean hasSuspendedCutin() {
+        return suspendedCutinHandle != null && suspendedCutinContext != null;
+    }
+
+    @Override
+    public boolean hasSandboxPending() {
+        return hitlManager.hasSandboxPending();
+    }
+
+    @Override
+    public String resumeApprovedTurn() throws IOException {
+        return hitlManager.hasSandboxPending()
+            ? resumeCutinSandboxHITL()
+            : resumeCutinHITL();
+    }
+
+    @Override
+    public String rejectTurn() {
+        return hitlManager.hasSandboxPending()
+            ? denyCutinSandboxHITL()
+            : denyCutinHITL();
     }
 
     @Override
@@ -945,10 +1114,6 @@ public class AgentLoop implements
         }
     }
 
-    public void setAfterTurnSink(Consumer<LoopResult> afterTurnSink) {
-        this.afterTurnSink = afterTurnSink;
-    }
-
     /**
      * cutin 扩展点使用的上下文折叠入口：复用 Loopra 原有折叠策略，
      * 折叠结果回写 cutin context，由 BEFORE_MODEL 拦截器交给模型网关。
@@ -961,7 +1126,13 @@ public class AgentLoop implements
             return prepared;
         } catch (IOException exception) {
             log.warn("[cutin] BEFORE_MODEL 折叠失败，按当前上下文继续: {}", exception.getMessage());
-            return new PreparedMessages(ctx.buildMessages(), false);
+            List<ChatMessage> fallback = ctx.buildMessages();
+            try {
+                ONode tools = refreshTools();
+                lastContextEstimate = ContextTokenEstimator.estimate(fallback, tools, currentToolInstructions());
+            } catch (Exception ignored) {
+            }
+            return new PreparedMessages(fallback, false);
         }
     }
 
@@ -1040,36 +1211,8 @@ public class AgentLoop implements
     }
 
     private String buildToolInstructions() {
-        return """
-                ## 工具协作约定
-
-                工具的名称、参数和返回格式以本轮工具上下文为准，无需重复记忆工具清单。
-
-                - `sub_agent` 用于可独立推进的子任务。子代理有独立上下文，不能再派生子代理。收到结果后由主代理负责整合、复核并向用户交付。
-
-                | 角色 | 只读 | 适用场景 | 汇报格式 |
-                |------|------|----------|----------|
-                | `explore` | ✅ | 只调查不修改——定位代码、追溯调用链、理解实现、排查问题原因 | 发现 / 证据（文件与位置）/ 建议 |
-                | `implement` | ❌ | 按指定范围实现功能或修复——最小化改动，完成后运行相关检查 | 修改 / 验证 / 剩余风险 |
-                | `test` | ❌ | 添加或调整测试——先确认覆盖缺口，不修改生产代码（除非任务要求） | 覆盖场景 / 测试结果 / 发现的问题 |
-                | `review` | ✅ | 代码审查——寻找真实缺陷、回归、并发/安全问题、测试缺口 | 按严重性排序列出问题，附位置、影响和修复方向 |
-                | `plan` | ✅ | 方案设计——先理解现状，再给出可执行的分步方案，说明架构影响和取舍 | 分步方案，含涉及模块、兼容性、验证方法 |
-
-                选择角色的通用建议：需要探索或分析用 `explore`；需要方案设计用 `plan`；需要审查已有代码用 `review`；需要写代码或修 bug 用 `implement`；需要补充测试用 `test`。
-                派发时务必通过 workspace_write 共享必要上下文，并要求子代理将结果写回约定 key，避免结果散落在对话中。
-
-                - `workspace_*` 是主代理和子代理之间的共享通信通道，不是项目文件系统。用它传递任务背景、调查证据、中间结论和可复用交付物；不要用它替代对代码文件的读写。
-                - 派发子任务前，主代理应将需要共享的背景写入 `workspace_write`，并在任务中告知子代理准确的 key。子代理先用 `workspace_read` 获取所需上下文，完成后将重要发现、修改摘要和验证结果写回约定 key；主代理用 `workspace_read` 汇总。仅在不知道 key 时使用 `workspace_list` 按前缀查找。
-                - 使用稳定、可归属的 key，例如 `tasks/<task-id>/context`、`tasks/<task-id>/findings`、`tasks/<task-id>/result`。写入结果应包含结论、证据位置和未解决事项，避免只写“已完成”之类不可复用的信息。
-                - 只有需要用户在互斥方案之间作出选择，且该选择会实质改变实现或外部影响时，才使用 `ask_choice`；能通过现有上下文或合理工程判断解决的问题不要打断用户。
-                - 浏览器遇到登录、验证码、人机验证、二维码、短信/邮箱确认或安全风控时，严禁尝试绕过、猜测验证答案或索取敏感凭据。必须调用 `browser_request_user_action` 请求用户在可见浏览器中手动完成；用户确认后重新截图再继续。
-                - 浏览器超过 16 个标签页时仍可新建，但会返回清理提醒；应在当前步骤完成后用 `browser_tabs` 查看并关闭不再需要的非活动标签。达到 20 个硬上限时，必须清理后才能创建新标签。优先用 `browser_navigate` 复用当前标签，避免反复重试。
-                - 工作流和目标工具只用于需要跨回合追踪、人工审批或失败恢复的任务；普通的短任务无需创建工作流。
-                %s
-                """.formatted(terminateOnNoToolCall()
-                ? "- 无工具调用时，模型的纯文本回复会结束对话"
-                : "- 结束对话**必须**调用 `finish`，纯文本回复不会退出循环")
-                + "\n\n" + currentGoalInstruction();
+        // 静态文案与 LoopraPromptPlugin 的 tool-contract 切片共用 ToolContract 单一来源
+        return ToolContract.build(terminateOnNoToolCall(), currentGoalInstruction());
     }
 
     private String currentGoalInstruction() {
@@ -1132,67 +1275,15 @@ public class AgentLoop implements
      */
     public String run(UserMessage userMessage) throws IOException {
         if (cutinEngine == null) {
-            throw new IllegalStateException("[loop] Loopra 主循环已全部切换到 cutin，必须初始化 LoopraCutinRuntime");
+            throw new IllegalStateException("[loop] Loopra 主循环已全部切换到 cutin，必须初始化 cutin 引擎");
         }
         // ---- 标记运行中，防止巡检线程并发冲突 ----
         running.set(true);
         try {
-            return doRun(userMessage);
+            return runCutinMainLoop(userMessage);
         } finally {
             running.set(false);
         }
-    }
-
-    private String doRun(UserMessage userMessage) throws IOException {
-        // ---- 根据模型多模态支持清洗用户消息 ----
-        userMessage = UserMessageSanitizer.sanitize(userMessage, modelProvider);
-        currentTurnUserText = userMessage != null && userMessage.hasContent()
-                ? userMessage.getText()
-                : "";
-        
-        // ---- HITL 恢复：用户已审批 / 拒绝 ----
-        if (hitlManager.getState() == HitlState.APPROVED) {
-            if (suspendedCutinHandle != null && suspendedCutinContext != null) {
-                return hitlManager.hasSandboxPending()
-                        ? resumeCutinSandboxHITL()
-                        : resumeCutinHITL();
-            }
-            throw new IOException("[loop] cutin HITL 恢复状态丢失");
-        }
-        if (hitlManager.getState() == HitlState.DENIED) {
-            if (suspendedCutinHandle != null && suspendedCutinContext != null) {
-                return hitlManager.hasSandboxPending()
-                        ? denyCutinSandboxHITL()
-                        : denyCutinHITL();
-            }
-            throw new IOException("[loop] cutin HITL 拒绝状态丢失");
-        }
-
-        // ---- 追加用户消息 ----
-        if (userMessage != null && userMessage.hasContent()) {
-            ctx.addUser(userMessage);
-            suspendedCutinHandle = null;
-            suspendedCutinContext = null;
-            suspendedCutinState = null;
-        }
-
-        // ---- 每回合初始化：由 LoopraLifecyclePlugin 的 PRE_LOOP 钩子完成 ----
-
-        // ---- 进入统一的主推理循环（含自动重试闭环） ----
-        return runWithAutoRetry();
-    }
-
-    private String runWithAutoRetry() throws IOException {
-        return mainLoop();
-    }
-
-    // ==================== 统一主推理循环 ====================
-
-    /**
-     * 主推理循环入口：全部由 cutin {@link DefaultLoopEngine} 编排。
-     */
-    private String mainLoop() throws IOException {
-        return runCutinMainLoop();
     }
 
     /**
@@ -1201,7 +1292,7 @@ public class AgentLoop implements
      * {@link LoopraModelPolicyPlugin} / {@link LoopraToolPolicyPlugin} 注册的
      * cutin 拦截点驱动。
      */
-    private String runCutinMainLoop() throws IOException {
+    private String runCutinMainLoop(UserMessage userMessage) throws IOException {
         if (ctx == null) {
             throw new IOException("[loop] cutin 主循环需要 ConversationContext");
         }
@@ -1213,22 +1304,42 @@ public class AgentLoop implements
                 "sessionId", sessionId == null ? "" : sessionId,
                 "loopraUserMessage", currentTurnUserText
             ),
-            Budget.unlimited()
+            Budget.unlimited(),
+            workingDirectory()
         );
+        if (userMessage != null) {
+            cutinContext.putArtifact(LoopraPreflight.INPUT_ARTIFACT, userMessage);
+        }
         LoopProgram program = LoopProgram.builder("loopra-agent-loop")
-            .node("model", NodeType.MODEL, context -> modelStep((DefaultLoopContext) context, state))
-            .node("tool", NodeType.TOOL, context -> toolStep((DefaultLoopContext) context, state))
-            .node("output", NodeType.OUTPUT, ignored -> StepResult.Exit.INSTANCE)
-            .next("model", "tool")
-            .next("tool", "model")
-            .start("model")
+            .node(LoopraPreflight.SANITIZE_NODE, NodeType.CODE, "按模型能力清洗用户消息",
+                context -> cutinPlugins.getBean(LoopraMessageSanitizerPlugin.class).execute(context))
+            .node(LoopraPreflight.HITL_NODE, NodeType.CODE, "处理上一轮 HITL 审批或拒绝",
+                context -> cutinPlugins.getBean(LoopraHitlPlugin.class).execute(context))
+            .node(LoopraPreflight.USER_MESSAGE_NODE, NodeType.CODE, "追加清洗后的用户消息",
+                context -> cutinPlugins.getBean(LoopraUserMessagePlugin.class).execute(context))
+            .node("model", NodeType.MODEL, "调用模型并处理流式响应",
+                context -> modelStep((DefaultLoopContext) context, state))
+            .node("tool", NodeType.TOOL, "执行模型请求的工具",
+                context -> toolStep((DefaultLoopContext) context, state))
+            .node(LoopraPreflight.OUTPUT_NODE, NodeType.OUTPUT, "输出本轮最终结果",
+                ignored -> StepResult.Exit.INSTANCE)
+            .next(LoopraPreflight.SANITIZE_NODE, LoopraPreflight.HITL_NODE, "清洗完成后检查 HITL")
+            .next(LoopraPreflight.HITL_NODE, LoopraPreflight.USER_MESSAGE_NODE, "无审批短路时继续")
+            .next(LoopraPreflight.USER_MESSAGE_NODE, "model", "消息写入上下文后请求模型")
+            .next("model", "tool", "模型产生工具调用")
+            .next("tool", "model", "工具结果返回模型继续推理")
+            .start(LoopraPreflight.SANITIZE_NODE)
             .build();
 
+        log.info("[loop] 开始 cutin 主循环\n{}",program.prettyPrint());
         return runCutinLoop(program, cutinContext, state);
     }
 
-    private String runCutinLoop(LoopProgram program, DefaultLoopContext cutinContext, LoopState state)
-            throws IOException {
+    private String runCutinLoop(
+            LoopProgram program,
+            DefaultLoopContext cutinContext,
+            LoopState state
+    ) throws IOException {
         LoopHandle handle = cutinEngine.run(program, cutinContext);
         activeCutinHandle = handle;
         runningCutinState = state;
@@ -1246,13 +1357,17 @@ public class AgentLoop implements
         if (state.ioError != null) {
             throw state.ioError;
         }
+        Object turnError = cutinContext.artifacts().get(LoopraPreflight.ERROR_ARTIFACT);
+        if (turnError instanceof IOException exception) {
+            throw exception;
+        }
         if (state.result != null) {
             return state.result;
         }
         Map<String, Object> finalVariables = result.finalSnapshot() == null
                 ? cutinContext.variables()
                 : result.finalSnapshot().variables();
-        Object turnResult = finalVariables.get("loopraTurnResult");
+        Object turnResult = finalVariables.get(LoopraPreflight.RESULT_VARIABLE);
         String turnContent = turnResult == null ? "" : String.valueOf(turnResult);
         if (!turnContent.isBlank()) {
             return turnContent;
@@ -1375,7 +1490,8 @@ public class AgentLoop implements
                 response.message().toolCalls(),
                 thinking instanceof List<?> list ? list.stream().map(String::valueOf).toList() : List.of(),
                 response.usage() == null ? Usage.ZERO : response.usage(),
-                null);
+                null,
+                metadataString(response.message(), "response_reasoning"));
     }
 
     private StepResult modelStep(DefaultLoopContext context, LoopState state) {
@@ -1408,11 +1524,12 @@ public class AgentLoop implements
         state.step = step + 1;
         context.putVariable("loopraStep", step);
 
+        Map<String, Object> requestOptions = new HashMap<>();
         ModelCallRequest request = new ModelCallRequest(
             modelProvider.effectiveModel(),
             context.messages(),
             context.tools().definitions(),
-            Map.of()
+            requestOptions
         );
         CutinStreamSnapshot snapshot;
         try (Stream<StreamChunk> chunks = context.models().stream(request, context)) {
@@ -1443,8 +1560,25 @@ public class AgentLoop implements
         ONode toolCalls = scavengeToolCalls(snapshot.toolCalls(), snapshot.reasoningContent(), snapshot.content());
         boolean hasToolCalls = toolCalls != null && toolCalls.isArray() && !toolCalls.getArray().isEmpty();
         if (!hasToolCalls) {
-            ctx.addAssistant(snapshot.content(), null, snapshot.reasoningContent(),
-                    snapshot.thinkingBlocks(), List.of());
+            ChatMessage noTool = ChatMessage.assistant(snapshot.content(), null, snapshot.reasoningContent());
+            if (snapshot.responseReasoning() != null) {
+                noTool.setResponseReasoning(snapshot.responseReasoning());
+            }
+            if (snapshot.thinkingBlocks() != null && !snapshot.thinkingBlocks().isEmpty()) {
+                noTool.setThinkingBlocks(new ArrayList<>(snapshot.thinkingBlocks()));
+            }
+            ctx.addAssistant(noTool.getContent(), noTool.getToolCalls(), noTool.getReasoningContent(),
+                    noTool.getThinkingBlocks(), List.of());
+            if (noTool.getResponseReasoning() != null) {
+                // 兼容 ConversationContext 内部用特定签名持久化
+                for (int i = ctx.getHistory().size() - 1; i >= 0; i--) {
+                    ChatMessage m = ctx.getHistory().get(i);
+                    if (m.isAssistant() && m.getResponseReasoning() == null) {
+                        m.setResponseReasoning(noTool.getResponseReasoning());
+                        break;
+                    }
+                }
+            }
             try {
                 if (goalGuardEnabled && goalGuard != null) {
                     loadOpenGoal();
@@ -1495,8 +1629,24 @@ public class AgentLoop implements
                             : afterBatch.decision().reason());
         }
 
-        ctx.addAssistant(snapshot.content(), ter.tcList(), snapshot.reasoningContent(),
-                snapshot.thinkingBlocks(), ter.fileChanges());
+        ChatMessage toolMsg = ChatMessage.assistant(snapshot.content(), ter.tcList(), snapshot.reasoningContent());
+        if (snapshot.responseReasoning() != null) {
+            toolMsg.setResponseReasoning(snapshot.responseReasoning());
+        }
+        if (snapshot.thinkingBlocks() != null && !snapshot.thinkingBlocks().isEmpty()) {
+            toolMsg.setThinkingBlocks(new ArrayList<>(snapshot.thinkingBlocks()));
+        }
+        ctx.addAssistant(toolMsg.getContent(), toolMsg.getToolCalls(), toolMsg.getReasoningContent(),
+                toolMsg.getThinkingBlocks(), ter.fileChanges());
+        if (toolMsg.getResponseReasoning() != null) {
+            for (int i = ctx.getHistory().size() - 1; i >= 0; i--) {
+                ChatMessage m = ctx.getHistory().get(i);
+                if (m.isAssistant() && m.getResponseReasoning() == null) {
+                    m.setResponseReasoning(toolMsg.getResponseReasoning());
+                    break;
+                }
+            }
+        }
         for (ChatMessage tr : ter.toolResults()) {
             ctx.addToolResult(tr);
         }
@@ -1555,6 +1705,7 @@ public class AgentLoop implements
         site.sorghum.cutin.core.context.Usage[] usage =
                 {site.sorghum.cutin.core.context.Usage.ZERO};
         String[] error = {null};
+        String[] responseReasoning = {null};
         chunks.forEach(chunk -> {
             if (chunk.content() != null) {
                 content.append(chunk.content());
@@ -1569,14 +1720,41 @@ public class AgentLoop implements
             if (terminalError != null && chunk.terminal()) {
                 error[0] = String.valueOf(terminalError);
             }
+            Object reasoningMeta = chunk.metadata().get("response_reasoning");
+            if (reasoningMeta != null) {
+                responseReasoning[0] = String.valueOf(reasoningMeta);
+            }
+            Object reasoningContent = chunk.metadata().get("reasoning_content");
+            if (reasoningContent != null && reasoning.length() == 0) {
+                reasoning.append(String.valueOf(reasoningContent));
+            }
         });
+        String reasoningStr = reasoning.length() == 0 ? null : reasoning.toString();
+        if (responseReasoning[0] != null) {
+            try {
+                org.noear.snack4.ONode item = org.noear.snack4.ONode.ofJson(responseReasoning[0]);
+                org.noear.snack4.ONode summary = item.get("summary");
+                if (summary != null && summary.isArray()) {
+                    StringBuilder sb = new StringBuilder();
+                    for (org.noear.snack4.ONode part : summary.getArray()) {
+                        String text = part.get("text").getString();
+                        if (text != null) sb.append(text);
+                    }
+                    if (sb.length() > 0) {
+                        reasoningStr = sb.toString();
+                    }
+                }
+            } catch (RuntimeException ignored) {
+            }
+        }
         return new CutinStreamSnapshot(
             content.length() == 0 ? null : content.toString(),
-            reasoning.length() == 0 ? null : reasoning.toString(),
+            reasoningStr,
             toolCalls,
             thinkingBlocks,
             usage[0],
-            error[0]
+            error[0],
+            responseReasoning[0]
         );
     }
 
@@ -1607,7 +1785,8 @@ public class AgentLoop implements
         java.util.List<site.sorghum.cutin.core.tool.ToolCall> cutinToolCalls,
         java.util.List<String> thinkingBlocks,
         site.sorghum.cutin.core.context.Usage usage,
-        String errorMessage
+        String errorMessage,
+        String responseReasoning
     ) {
         boolean error() {
             return errorMessage != null;
@@ -1657,7 +1836,7 @@ public class AgentLoop implements
                     calls.add(new site.sorghum.cutin.core.tool.ToolCall(id, name, args, id));
                 }
             }
-            return new CutinStreamSnapshot(content, reasoningContent, calls, thinkingBlocks, usage, errorMessage);
+            return new CutinStreamSnapshot(content, reasoningContent, calls, thinkingBlocks, usage, errorMessage, responseReasoning);
         }
 
         StreamResult toStreamResult() {
@@ -1809,17 +1988,8 @@ public class AgentLoop implements
             log.warn("[prepare] output.onLog异常: {}", e.getMessage());
         }
 
-        // 注入动态工具使用指引到系统提示词
-        if (!instr.isEmpty()) {
-            ChatMessage sysMsg = messages.get(0);
-            String enhancedContent = sysMsg.getContent() + "\n\n" + instr;
-            ChatMessage enhancedSys = ChatMessage.ofSystem(enhancedContent);
-            List<ChatMessage> withInstr = new ArrayList<>(messages.size());
-            withInstr.add(enhancedSys);
-            withInstr.addAll(messages.subList(1, messages.size()));
-            messages = withInstr;
-        }
-
+        // 工具协作约定已由 LoopraPromptPlugin 的 tool-contract(600) 切片注入，此处不再重复拼接；
+        // 保留 instr 仅用于 token 估算的压缩阈值判断（与原语义一致）
         lastContextEstimate = ContextTokenEstimator.estimate(messages, tools, null);
 
         return new PreparedMessages(messages, foldedThisStep);
@@ -2001,7 +2171,6 @@ public class AgentLoop implements
         ToolExecutionControl[] controls = new ToolExecutionControl[tcCount];
         final AtomicBoolean anySuppressed = new AtomicBoolean(false);
         final AtomicReference<HitlRequiredException> hitlRef = new AtomicReference<>(null);
-        final AgentOutput capturedOutput = this.output;
         for (int i = 0; i < tcCount; i++) {
             final int idx = i;
             controls[i] = new ToolExecutionControl();
@@ -2020,12 +2189,12 @@ public class AgentLoop implements
                             "{\"error\":\"用户已中断\",\"aborted\":true}");
                 }
 
-                if (capturedOutput != null) {
-                    ParentOutputHolder.set(capturedOutput);
-                }
                 currentToolControl.set(control);
-                Path executionRoot = registry.getEnvironment() == null
-                        ? null : registry.getEnvironment().executionRoot();
+                Path executionRoot = cutinContext == null
+                        ? workingDirectory()
+                        : cutinContext.workingDirectory() != null
+                            ? cutinContext.workingDirectory()
+                            : workingDirectory();
                 SessionFileChangeTracker.bind(executionRoot, getSessionId());
                 try {
                     ONode tc = tcArray.get(idx);
@@ -2065,11 +2234,15 @@ public class AgentLoop implements
 
                     // 收集工具调用上下文；终端工具通过 __cwd 获取实际执行目录。
                     ToolContext.setCurrentController(AgentLoop.this);
-                    String executionPath = registry.getEnvironment().executionRoot()
-                            .toAbsolutePath().normalize().toString();
-                    String statePath = registry.getEnvironment().stateRoot() != null
-                            ? registry.getEnvironment().stateRoot().toAbsolutePath().normalize().toString()
-                            : null;
+                    String executionPath = executionRoot == null
+                            ? null
+                            : executionRoot.toAbsolutePath().normalize().toString();
+                    Path environmentStateRoot = registry.getEnvironment() == null
+                            ? null
+                            : registry.getEnvironment().stateRoot();
+                    String statePath = environmentStateRoot != null
+                            ? environmentStateRoot.toAbsolutePath().normalize().toString()
+                            : executionPath;
                     HashMap<String, Object> extraMap = new HashMap<>();
                     extraMap.put("__cwd", executionPath);
                     extraMap.put("ctx", new ToolContext(
@@ -2125,7 +2298,6 @@ public class AgentLoop implements
                     SessionFileChangeTracker.clearBinding();
                     currentToolControl.remove();
                     ToolContext.clearCurrentController();
-                    ParentOutputHolder.clear();
                 }
             });
         }

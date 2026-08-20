@@ -45,6 +45,11 @@ public class SseAgentOutput implements AgentOutput {
     }
 
     @Override
+    public void onReasoningStarted() {
+        emitter.sendReasoningStarted();
+    }
+
+    @Override
     public void onToolCall(String name, String args) {
         emitter.sendToolCall(name, args);
     }
@@ -64,6 +69,14 @@ public class SseAgentOutput implements AgentOutput {
     public void onUsage(String model, int promptTokens, int completionTokens, int totalTokens,
                         int cacheHit, int cacheMiss) {
         emitter.sendUsage(promptTokens, completionTokens, totalTokens, cacheHit, cacheMiss);
+    }
+
+    public void onTokenSpeed(long completionTokens, double tokensPerSecond, double avgTokensPerSecond, boolean done) {
+        emitter.sendTokenSpeed(completionTokens, tokensPerSecond, avgTokensPerSecond, done);
+    }
+
+    public void onTokenSpeed(long completionTokens, double tokensPerSecond, boolean done) {
+        emitter.sendTokenSpeed(completionTokens, tokensPerSecond, done);
     }
 
     @Override

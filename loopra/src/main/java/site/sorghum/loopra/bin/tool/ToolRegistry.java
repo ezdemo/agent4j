@@ -70,9 +70,6 @@ public class ToolRegistry {
     @Getter
     private SessionEnvironment environment;
 
-    private String apiUrl;
-    private String apiKey;
-    private List<String> blockedPaths = Collections.emptyList();
 
     /**
      * 设置被禁用的工具名称集合（静态快照，用于 CLI 模式 / 测试）。
@@ -92,6 +89,13 @@ public class ToolRegistry {
             return toolPolicyProvider.disabledTools();
         }
         return disabledToolsSnapshot;
+    }
+
+    /**
+     * 当前生效禁用工具集合的副本（供 {@code AgentLoop} 判断 tool-gateway 是否需要重启）。
+     */
+    public Set<String> currentDisabledTools() {
+        return new HashSet<>(getCurrentDisabledTools());
     }
 
     /**
@@ -126,68 +130,56 @@ public class ToolRegistry {
     }
 
 
-    /**
-     * 设置动态刷新的上下文参数。
-     * 调用 {@link #refresh()} 时会使用这些参数重新扫描并注册工具。
-     */
-    public void setRefreshContext(Path workspace, String apiUrl, String apiKey, List<String> blockedPaths) {
-        setRefreshContext(workspace, null, apiUrl, apiKey, blockedPaths);
+    /** 设置工具扫描与执行使用的会话环境。 */
+    public void setEnvironment(SessionEnvironment environment) {
+        this.environment = environment;
     }
 
     /**
-     * 设置动态刷新的上下文参数（含状态项目）。
-     *
-     * @param stateWorkspace 状态项目；null 时回退为 {@code workspace}
-     */
-    public void setRefreshContext(Path workspace, Path stateWorkspace, String apiUrl, String apiKey, List<String> blockedPaths) {
-        this.environment = SessionEnvironment.of(workspace, stateWorkspace);
-        this.apiUrl = apiUrl;
-        this.apiKey = apiKey;
-        this.blockedPaths = blockedPaths != null ? blockedPaths : Collections.emptyList();
-    }
-
-    public Path getWorkspace() {
-        return environment == null ? null : environment.executionRoot();
-    }
-
-    public Path getStateWorkspace() {
-        return environment == null ? null : environment.stateRoot();
-    }
-
-    /**
-      * 设置动态工具刷新使用的会话环境。
-     */
-    public void setRefreshContext(SessionEnvironment environment, String apiUrl, String apiKey,
-                                  List<String> blockedPaths) {
-        setRefreshContext(
-                environment == null ? null : environment.executionRoot(),
-                environment == null ? null : environment.stateRoot(),
-                apiUrl,
-                apiKey,
-                blockedPaths
-        );
-    }
-
-    /**
-     * 动态刷新工具列表 —— 使用 {@link ToolScanUtil} 统一重新扫描，
-     * 将最新发现的工具重新注册到注册表中。
+     * 清空全部工具（含 cutin 视图）——Tool 网关插件禁用时调用，实现“下线全部工具”。
      * <p>
-     * 此方法不改变系统提示词，只影响后续 API 请求中的工具挂载列表。
-     * synchronized 防止共享注册表（多 Agent 复用同一实例）时并发清空/注册造成结构损坏。
+     * 注意：网关插件自身注册的工具在 stop 时因注销闭包持有旧实例（已被
+     * {@link #syncCutinRegistry()} 的 setTools 替换）无法通过 unregister 移除，
+     * 因此网关禁用时必须以 clearTools 整体清空 legacy 与 cutin 视图。
      * </p>
      */
+    public synchronized void clearTools() {
+        functionToolMap.clear();
+        allScannedTools.clear();
+        cachedOpenAiTools = null;
+        syncCutinRegistry();
+    }
+
+    /**
+      * 动态刷新工具列表 —— 插件化后仅在 gateway 禁用时保留旧扫描路径，
+      * 正常路径由 {@code LoopraToolGatewayPlugin} 通过 cutin 注入，
+      * 此处仅同步只读覆盖与禁用过滤，避免旧拼接重新渗入 prompt。
+      */
     public synchronized void refresh() {
         Set<String> disabled = getCurrentDisabledTools();
         Map<String, Boolean> readOnlyOverrides = toolPolicyProvider != null
                 ? toolPolicyProvider.toolReadOnlyOverrides()
                 : Collections.emptyMap();
+        // 若已通过 cutin 注入（由 gateway 持有），refresh 仍需刷新 legacy 的只读覆盖与禁用过滤，
+        // 但不重新扫描避免与 gateway 竞争；仅对已存在工具重新应用过滤
+        if (!allScannedTools.isEmpty() || !functionToolMap.isEmpty()) {
+            // 重新应用只读覆盖与禁用过滤到现有集合
+            Map<String, FunctionTool> snapshot = new LinkedHashMap<>(allScannedTools);
+            functionToolMap.clear();
+            allScannedTools.clear();
+            cachedOpenAiTools = null;
+            for (FunctionTool tool : snapshot.values()) {
+                ToolMetadata.applyReadOnlyOverride(tool, readOnlyOverrides.get(tool.name()));
+                register(tool, disabled);
+            }
+            syncCutinRegistry();
+            return;
+        }
         functionToolMap.clear();
         allScannedTools.clear();
-        cachedOpenAiTools = null; // 失效缓存
-
-        // 使用 ToolScanUtil 统一扫描（Solon IoC + Skill 文件系统）
-        List<FunctionTool> functionToolsList = ToolScanUtil.scanTools(getWorkspace());
-
+        cachedOpenAiTools = null;
+        List<FunctionTool> functionToolsList = ToolScanUtil.scanTools(
+                environment == null ? null : environment.executionRoot());
         for (FunctionTool tool : functionToolsList) {
             ToolMetadata.applyReadOnlyOverride(tool, readOnlyOverrides.get(tool.name()));
             register(tool, disabled);
@@ -200,6 +192,7 @@ public class ToolRegistry {
      */
     public void register(FunctionTool tool) {
         register(tool, getCurrentDisabledTools());
+        syncCutinRegistry();
     }
 
     private void register(FunctionTool tool, Set<String> disabled) {
@@ -215,7 +208,6 @@ public class ToolRegistry {
             functionToolMap.putIfAbsent(tool.name(), tool);
         }
         cachedOpenAiTools = null;
-        syncCutinRegistry();
     }
 
 
@@ -232,7 +224,7 @@ public class ToolRegistry {
      * 复制当前注册表的全部配置及工具列表到新实例。
      * <p>
      * 继承父级的所有设置：configService、disabledTools、
-     * refreshContext、blockedPaths 以及全部已注册的工具。
+     * 会话环境以及全部已注册的工具。
      * 调用方可在返回后自行调用 {@link #setForceDenyTools} 设置强制禁止名单。
      * </p>
      *
@@ -251,13 +243,8 @@ public class ToolRegistry {
         copy.forceAllowTools = this.forceAllowTools == null ? null : new HashSet<>(this.forceAllowTools);
         // 复制工具策略提供者（实时禁用/只读来源）
         copy.toolPolicyProvider = this.toolPolicyProvider;
-        // 复制刷新上下文
+        // 复制会话环境
         copy.environment = this.environment;
-        copy.apiUrl = this.apiUrl;
-        copy.apiKey = this.apiKey;
-        copy.blockedPaths = this.blockedPaths.isEmpty()
-                ? Collections.emptyList()
-                : new ArrayList<>(this.blockedPaths);
         // 注册所有工具
         for (FunctionTool def : this.functionToolMap.values()) {
             copy.functionToolMap.put(def.name(), def);
@@ -310,7 +297,8 @@ public class ToolRegistry {
                 n2.getOrNew("function").then(toolNode -> {
                     toolNode.set("name", func.name());
                     toolNode.set("description", func.descriptionAndMeta());
-                    toolNode.set("parameters", ONode.ofJson(func.inputSchema()));
+                    toolNode.set("parameters", ONode.ofJson(
+                            ONode.serialize(ToolSchemaSanitizer.sanitize(func.inputSchema()))));
                 });
             });
         }

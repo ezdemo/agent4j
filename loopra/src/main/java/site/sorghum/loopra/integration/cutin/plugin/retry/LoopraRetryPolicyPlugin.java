@@ -1,5 +1,6 @@
 package site.sorghum.loopra.integration.cutin.plugin.retry;
 
+import lombok.extern.slf4j.Slf4j;
 import site.sorghum.cutin.core.loop.InterceptContext;
 import site.sorghum.cutin.core.loop.InterceptDecision;
 import site.sorghum.cutin.core.loop.InterceptPoint;
@@ -20,7 +21,8 @@ import java.util.Objects;
   * 替换该插件即可替换 Loopra 的重试策略。
  * </p>
  */
-@AgentPlugin(id = "loopra-retry-policy")
+@AgentPlugin(id = "loopra-retry-policy", remark = "统一控制模型和工具失败后的重试策略。")
+@Slf4j
 public final class LoopraRetryPolicyPlugin implements LoopPlugin {
 
     private static final String RETRY_COUNT_KEY = "loopraModelRetryAttempts";
@@ -40,13 +42,23 @@ public final class LoopraRetryPolicyPlugin implements LoopPlugin {
 
     @Override
     public void register(LoopRegistrar registrar) {
-        registrar.addInterceptor(InterceptPoint.ON_MODEL_ERROR, -50, this::onModelError);
-        registrar.addInterceptor(InterceptPoint.BEFORE_RETRY, 0, this::beforeRetry);
+        registrar.registerInterceptor(InterceptPoint.ON_MODEL_ERROR, -50, this::onModelError);
+        registrar.registerInterceptor(InterceptPoint.AFTER_MODEL, 50, this::afterModel);
+        registrar.registerInterceptor(InterceptPoint.BEFORE_RETRY, 0, this::beforeRetry);
+    }
+
+    /** 成功拿到模型响应后，下一次独立模型调用应重新计算重试预算。 */
+    private InterceptDecision afterModel(InterceptContext context) {
+        context.context().putVariable(RETRY_COUNT_KEY, 0);
+        context.context().putVariable(RETRY_DELAY_KEY, 0);
+        context.context().putVariable(RETRY_REASON_KEY, "");
+        return InterceptDecision.pass();
     }
 
     private InterceptDecision onModelError(InterceptContext context) {
+        log.info("onModelError: {}", context.payload());
         if (!(context.payload() instanceof ModelCallError error)
-                || !ModelApiError.isTransientModelError(error.message())) {
+                || !ModelApiError.isTransientModelError(error.message(), error.cause())) {
             return InterceptDecision.pass();
         }
         int attempts = intVariable(context, RETRY_COUNT_KEY) + 1;

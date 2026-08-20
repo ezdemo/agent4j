@@ -28,7 +28,7 @@ public class AskChoiceTool extends AbsToolProvider implements SolonToTools {
     public String askChoice(@Param(name = "question", description = "问题") String question,
                             @Param(name = "options", description = "选项列表") List<Object> options,
                             @Param(name = "allowCustom", description = "是否允许自定义输入", required = false) Boolean allowCustom,
-                            ToolContext ctx) {
+                            @Param(name = "ctx", required = false) ToolContext ctx) {
         // 通过 AgentLoopController 获取输出通道
         AgentLoopController ctrl = ctx.getLoopController();
         if (ctrl == null) {

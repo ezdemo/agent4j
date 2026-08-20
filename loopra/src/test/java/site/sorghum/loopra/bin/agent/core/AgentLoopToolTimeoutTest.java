@@ -4,6 +4,7 @@ import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.io.TempDir;
 import org.noear.snack4.ONode;
 import org.noear.solon.ai.chat.tool.FunctionToolDesc;
+import site.sorghum.loopra.bin.agent.environment.SessionEnvironment;
 import site.sorghum.loopra.bin.agent.model.ChatMessage;
 import site.sorghum.loopra.bin.agent.model.ToolExecutionResult;
 import site.sorghum.loopra.bin.agent.spi.AgentConfig;
@@ -151,7 +152,7 @@ class AgentLoopToolTimeoutTest {
                 })
                 .build();
         ToolRegistry registry = new ToolRegistry().setDisabledTools(Set.of());
-        registry.setRefreshContext(Paths.get(".").toAbsolutePath(), null, null, List.of());
+        registry.setEnvironment(SessionEnvironment.local(Paths.get(".").toAbsolutePath()));
         SubAgent subAgent = new SubAgent(client, registry, "test sub agent");
         subAgent.setConfig(config(5, 5));
 
@@ -165,7 +166,7 @@ class AgentLoopToolTimeoutTest {
     @Test
     void parentLoopDrainsFileChangesRecordedBySubAgentLoop() throws Exception {
         ToolRegistry registry = new ToolRegistry().setDisabledTools(Set.of());
-        registry.setRefreshContext(workspace, null, null, List.of());
+        registry.setEnvironment(SessionEnvironment.local(workspace));
         registry.register(tool("write", args -> {
             SessionFileChangeTracker.record("src/Child.java", "before\n", "after\n", false);
             return "written";
@@ -212,7 +213,7 @@ class AgentLoopToolTimeoutTest {
 
     private static ToolRegistry registryWith(FunctionToolDesc tool) {
         ToolRegistry registry = new ToolRegistry().setDisabledTools(Set.of());
-        registry.setRefreshContext(Paths.get(".").toAbsolutePath(), null, null, List.of());
+        registry.setEnvironment(SessionEnvironment.local(Paths.get(".").toAbsolutePath()));
         registry.register(tool);
         return registry;
     }

@@ -108,6 +108,18 @@ public class ConfigService {
         setDisabledTools(current);
     }
 
+    /** 持久化全局禁用的插件 ID。 */
+    public static synchronized void setDisabledPlugins(Collection<String> pluginIds) {
+        try {
+            config.updateAndSave(Map.of("disabledPlugins",
+                    pluginIds != null ? new ArrayList<>(pluginIds) : Collections.emptyList()));
+            ConfigService.config = loadAndInitializeProject();
+            log.info("[config] 已更新禁用插件列表，共 {} 个插件", pluginIds != null ? pluginIds.size() : 0);
+        } catch (IOException e) {
+            throw new IllegalStateException("保存插件配置失败", e);
+        }
+    }
+
     // ==================== 工具只读分类覆盖 ====================
 
     public static Map<String, Boolean> getToolReadOnlyOverrides() {

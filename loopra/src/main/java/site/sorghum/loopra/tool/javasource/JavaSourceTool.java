@@ -39,7 +39,7 @@ public class JavaSourceTool extends AbsToolProvider implements SolonToTools {
                 """)
     public String javaSource(@Param(name = "className", description = "Fully qualified Java class name, e.g. \"com.google.common.collect.Lists\" or \"org.springframework.web.servlet.DispatcherServlet\".") String className,
                              @Param(name = "jarKeyword", description = "Only search jars whose filename or path contains this keyword (case-insensitive). Keep it short — a narrow substring like \"spring-core\", \"guava\", or \"mycompany-utils\" scans faster and matches more precisely than a long fragment.") String jarKeyword,
-                             ToolContext ctx) {
+                             @Param(name = "ctx", required = false) ToolContext ctx) {
         // ── 校验 className ──
         if (className == null || className.isBlank()) {
             return ErrorCodes.TOOL_EXEC_ERROR + ": java_source: `className` is required";

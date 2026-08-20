@@ -54,7 +54,7 @@ public class MemoryTool extends AbsToolProvider implements SolonToTools {
                     required = false) String keyword,
             @Param(name = "index", description = "delete 时必填：要删除的条目编号（1-based，先用 action=list 查看）",
                     required = false) String index,
-            ToolContext ctx) {
+            @Param(name = "ctx", required = false) ToolContext ctx) {
 
         if (action == null || action.isBlank()) {
             return "PARAM_MISSING: 缺少必填参数 'action'（search 或 add）";

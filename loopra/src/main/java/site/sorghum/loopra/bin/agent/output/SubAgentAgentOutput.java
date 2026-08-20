@@ -99,6 +99,11 @@ public class SubAgentAgentOutput implements AgentOutput {
     }
 
     @Override
+    public void onReasoningStarted() {
+        delegate.sendEvent("sub_reasoning_started", subIdOnly());
+    }
+
+    @Override
     public void onToolCall(String name, String args) {
          // JSON：{"subId":...,"name":"xxx","args":{...}}
         StringBuilder sb = new StringBuilder(subIdPrefix());

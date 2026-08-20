@@ -8,6 +8,16 @@ const now = () => {
   return d.toLocaleTimeString('zh-CN', {hour12: false, hour: '2-digit', minute: '2-digit'})
 }
 
+export const hasEncryptedReasoning = (value) => {
+  if (!value) return false
+  try {
+    const item = typeof value === 'string' ? JSON.parse(value) : value
+    return item?.type === 'reasoning' && typeof item.encrypted_content === 'string' && item.encrypted_content.length > 0
+  } catch {
+    return false
+  }
+}
+
 export const formatTimestamp = (timestamp) => {
   if (!timestamp) return now()
   const d = new Date(timestamp)
@@ -137,6 +147,9 @@ export const buildHistoryItems = (raw = [], includeWebHidden = false) => {
         content: m.reasoning_content,
         showContent: false
       })
+      if (hasEncryptedReasoning(m.response_reasoning || m.responseReasoning)) {
+        lastAssistantItem.blocks.push({type: 'reasoning_started', showContent: false})
+      }
       if (m.tool_calls) for (const tc of m.tool_calls) {
         let name = tc.function?.name || tc.name || ''
         let args = tc.function?.arguments || tc.arguments || ''

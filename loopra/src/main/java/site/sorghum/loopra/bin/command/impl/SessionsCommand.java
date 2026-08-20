@@ -41,7 +41,7 @@ public class SessionsCommand implements ChatCommand {
 
     @Override
     public CommandResult execute(MessageWrapper input, ChatCommandContext context) throws Exception {
-        SessionStore store = context.getAgent().getSessionStore();
+        SessionStore store = context.getAgent().getCtx().getSessionStore();
         if (store == null) {
             log.info("(会话存储未启用)");
             return CommandResult.CONTINUE;

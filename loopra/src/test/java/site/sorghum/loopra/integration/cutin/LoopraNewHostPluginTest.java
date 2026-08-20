@@ -10,8 +10,6 @@ import site.sorghum.cutin.core.model.*;
 import site.sorghum.cutin.core.plugin.DefaultLoopRegistrar;
 import site.sorghum.cutin.core.plugin.PluginBeanManager;
 import site.sorghum.loopra.bin.agent.model.ToolExecutionResult;
-import site.sorghum.loopra.integration.cutin.plugin.cancel.LoopraCancelHost;
-import site.sorghum.loopra.integration.cutin.plugin.cancel.LoopraCancelPlugin;
 import site.sorghum.loopra.integration.cutin.plugin.exit.LoopraExitHost;
 import site.sorghum.loopra.integration.cutin.plugin.exit.LoopraExitPlugin;
 import site.sorghum.loopra.integration.cutin.plugin.plan.LoopraPlanHost;
@@ -97,27 +95,7 @@ class LoopraNewHostPluginTest {
         engine.run(program, engine.newContext("ctx", Map.of())).result().join();
 
         assertEquals(1, host.beforeTurns.get());
-        assertEquals(1, host.results.size());
-        assertEquals(LoopResult.Status.COMPLETED, host.results.get(0).status());
-    }
-
-    @Test
-    void cancelPluginNotifiesHost() throws Exception {
-        DefaultLoopEngine engine = new DefaultLoopEngine();
-        CancelStub host = new CancelStub();
-        PluginBeanManager manager = new PluginBeanManager(engine.registrar());
-        manager.registerPlugin(new LoopraCancelPlugin(host));
-        manager.startAll();
-
-        LoopProgram program = LoopProgram.builder("cancel")
-            .node("out", NodeType.OUTPUT, Steps.finish())
-            .start("out")
-            .build();
-        LoopHandle handle = engine.run(program, engine.newContext("ctx", Map.of()));
-        handle.result().join();
-        handle.cancel(CancelReason.USER);
-
-        assertEquals("user", host.reason);
+        assertEquals(1, host.afterTurns.get());
     }
 
     @Test
@@ -204,27 +182,25 @@ class LoopraNewHostPluginTest {
 
     private static final class SessionStub implements LoopraSessionHost {
 
-        private final AtomicInteger beforeTurns = new AtomicInteger();
-        private final List<LoopResult> results = new CopyOnWriteArrayList<>();
+        @Override
+        public void beginCutinLoop() {
+        }
 
         @Override
-        public void beforeTurn(DefaultLoopContext context) {
+        public void endCutinLoop() {
+        }
+
+        private final AtomicInteger beforeTurns = new AtomicInteger();
+        private final AtomicInteger afterTurns = new AtomicInteger();
+
+        @Override
+        public void beforeTurn(String userMessage) {
             beforeTurns.incrementAndGet();
         }
 
         @Override
-        public void afterTurn(LoopResult result) {
-            results.add(result);
-        }
-    }
-
-    private static final class CancelStub implements LoopraCancelHost {
-
-        private String reason;
-
-        @Override
-        public void onCutinCancel(String reason) {
-            this.reason = reason;
+        public void afterTurn() {
+            afterTurns.incrementAndGet();
         }
     }
 

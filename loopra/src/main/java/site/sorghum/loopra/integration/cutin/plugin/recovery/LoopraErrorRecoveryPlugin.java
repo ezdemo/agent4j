@@ -12,7 +12,7 @@ import site.sorghum.loopra.bin.model.ModelApiError;
 /**
   * 通过折叠历史并重试同一模型节点，从服务端确认的上下文超限中恢复。
  */
-@AgentPlugin(id = "loopra-error-recovery")
+@AgentPlugin(id = "loopra-error-recovery", remark = "捕获可恢复错误并协调后续重试或降级处理。")
 public final class LoopraErrorRecoveryPlugin implements LoopPlugin {
 
     private static final String RECOVERY_KEY = "loopraContextRecoveryAttempts";
@@ -30,7 +30,7 @@ public final class LoopraErrorRecoveryPlugin implements LoopPlugin {
 
     @Override
     public void register(LoopRegistrar registrar) {
-        registrar.addInterceptor(InterceptPoint.ON_MODEL_ERROR, -100, this::onModelError);
+        registrar.registerInterceptor(InterceptPoint.ON_MODEL_ERROR, -100, this::onModelError);
     }
 
     private InterceptDecision onModelError(InterceptContext context) {

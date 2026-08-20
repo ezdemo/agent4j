@@ -79,6 +79,11 @@ public class LoopraModelProvider implements ModelProvider {
         return new LoopraModelProvider(apiUrl, apiKey, model, "none", modelChannelId, apiProtocol);
     }
 
+    /** 当前模型服务的请求地址。 */
+    public String apiUrl() {
+        return apiUrl;
+    }
+
     /** 当前 Provider 使用的 cutin 协议 Provider。 */
     public ModelProvider provider() {
         ModelProvider current = provider;
@@ -102,12 +107,12 @@ public class LoopraModelProvider implements ModelProvider {
 
     @Override
     public ModelResponse call(ModelCallRequest request) {
-        return provider().call(runtimeRequest(request));
+        return provider().call(prepareRequest(request));
     }
 
     @Override
     public Stream<StreamChunk> stream(ModelCallRequest request) {
-        Stream<StreamChunk> raw = provider().stream(runtimeRequest(request));
+        Stream<StreamChunk> raw = provider().stream(prepareRequest(request));
         AtomicReference<Stream<StreamChunk>> trackedRef = new AtomicReference<>();
         Stream<StreamChunk> tracked = raw.onClose(() -> {
             if (trackedRef.get() == activeStream) {
@@ -233,17 +238,34 @@ public class LoopraModelProvider implements ModelProvider {
     }
 
     /** 把 Loopra 运行期参数合并进请求，请求中已有的值优先。 */
-    private ModelCallRequest runtimeRequest(ModelCallRequest request) {
+    public ModelCallRequest prepareRequest(ModelCallRequest request) {
         Map<String, Object> options = new HashMap<>(request.options());
         options.putIfAbsent("reasoningEffort", reasoningEffort);
         if (fastMode) {
             options.putIfAbsent("serviceTier", "fast");
         }
-        if (sessionAffinity != null) {
-            options.putIfAbsent("sessionAffinity", sessionAffinity);
+        String affinity = resolveSessionAffinity(request);
+        if (affinity != null && !affinity.isBlank()) {
+            // 用 put 而非 putIfAbsent：子代理显式亲和必须覆盖 AgentLoop 注入的会话级值
+            options.put("sessionAffinity", affinity);
         }
         options.putIfAbsent("userId", site.sorghum.loopra.bin.util.UserIdProvider.getUserId());
         return new ModelCallRequest(request.modelId(), request.messages(), request.tools(), options);
+    }
+    
+    /**
+     * 解析会话亲和标识，优先级：显式设置（子代理）> 请求携带值（AgentLoop 注入的会话 ID）>
+     * 当前日志会话名（旧版 ThreadLocal 回退，仅部分入口设置）。
+     */
+    private String resolveSessionAffinity(ModelCallRequest request) {
+        if (sessionAffinity != null && !sessionAffinity.isBlank()) {
+            return sessionAffinity;
+        }
+        Object fromRequest = request.options().get("sessionAffinity");
+        if (fromRequest != null && !String.valueOf(fromRequest).isBlank()) {
+            return String.valueOf(fromRequest);
+        }
+        return CURRENT_LOG_SESSION.get();
     }
 
     private ModelProvider createProvider() {

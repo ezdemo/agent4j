@@ -10,7 +10,7 @@ import site.sorghum.loopra.bin.command.MessageWrapper;
  * <p>
  * 功能：
  * - 有 HITL 待审批时：批准并继续执行（行为同 /agree）
- * - 无 HITL 时：发送"继续"消息，让 AI 延续当前思路生成更多内容
+ * - 无 HITL 时：不追加任何消息，直接基于现有上下文继续推理
  * </p>
  *
  * @author Sorghum
@@ -40,7 +40,8 @@ public class ContinueCommand implements ChatCommand {
         if (!context.getAgent().noPendingHITL()) {
             context.getAgent().approveHITL();
         }
-        input.setMessage("继续");
+        // 空输入会跳过用户消息追加，直接进入模型节点继续推理。
+        input.setMessage(null);
         return CommandResult.LOOP;
     }
 }

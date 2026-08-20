@@ -15,7 +15,7 @@ import site.sorghum.loopra.bin.tool.ToolMetadata;
 /**
   * Loopra 面向工具的策略：工具执行前的计划模式只读约束与 StormBreaker 抑制。
  */
-@AgentPlugin(id = "loopra-tool-policy")
+@AgentPlugin(id = "loopra-tool-policy", remark = "按安全策略检查和约束工具调用。")
 public final class LoopraToolPolicyPlugin implements LoopPlugin {
 
     private final LoopraPolicyHost host;
@@ -31,25 +31,47 @@ public final class LoopraToolPolicyPlugin implements LoopPlugin {
 
     @Override
     public void register(LoopRegistrar registrar) {
-        registrar.addInterceptor(InterceptPoint.BEFORE_TOOL, -100, this::guardToolCall);
+        registrar.registerInterceptor(InterceptPoint.BEFORE_TOOL, -100, this::guardToolCall);
     }
 
     private InterceptDecision guardToolCall(InterceptContext context) {
         if (!(context.payload() instanceof ToolCall call)) {
             return InterceptDecision.pass();
         }
-        FunctionTool tool = host.getToolRegistryInstance().get(call.toolId());
-        if (host.isPlanMode() && tool != null && !ToolMetadata.isReadOnly(tool)) {
+        // 优先用 cutin 元数据，确保网关禁用/移除后仍能正确判断
+        boolean readOnly = false;
+        boolean stormExempt = false;
+        boolean hasMeta = false;
+        try {
+            var cutinReq = host.getCutinTools();
+            if (cutinReq != null) {
+                var def = cutinReq.find(call.toolId()).orElse(null);
+                if (def != null) {
+                    readOnly = def.definition().metadata().readOnly();
+                    stormExempt = def.definition().metadata().stormExempt();
+                    hasMeta = true;
+                }
+            }
+        } catch (Exception ignored) {}
+        FunctionTool tool = host.getToolRegistry().get(call.toolId());
+        if (!hasMeta) {
+            if (tool != null) {
+                readOnly = ToolMetadata.isReadOnly(tool);
+                stormExempt = ToolMetadata.isStormExempt(tool);
+                hasMeta = true;
+            }
+        }
+        if (host.isPlanMode() && hasMeta && !readOnly) {
             return InterceptDecision.replace(host.rejectCutinTool(
                     call,
                     "当前处于计划模式，仅允许只读工具；本次调用已被拒绝。请继续使用只读工具探索，完成后用 submit_plan 提交计划。",
                     "plan_mode"
             ));
         }
-        if (tool != null && !ToolMetadata.isStormExempt(tool)) {
+        if (hasMeta && !stormExempt) {
             String argumentsJson = ONode.ofBean(call.arguments()).toJson();
             StormBreaker.SuppressResult suppression = host.stormBreaker().inspect(
-                    call.toolId(), argumentsJson, ToolMetadata.isReadOnly(tool));
+                    call.toolId(), argumentsJson, readOnly);
             if (suppression.suppressed()) {
                 host.markCutinStormSuppressed();
                 return InterceptDecision.replace(host.rejectCutinTool(

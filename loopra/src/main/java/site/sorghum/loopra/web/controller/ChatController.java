@@ -69,6 +69,9 @@ public class ChatController {
         } else {
             agentService.abortCurrentChat();
         }
+        log.info("[chat] 收到停止请求: session={}, requestId={}",
+                request == null ? null : request.getSessionName(),
+                request == null ? null : request.getRequestId());
         return ApiResponse.ok("已发送中断请求");
     }
 
@@ -118,6 +121,8 @@ public class ChatController {
         final String message = request.getMessage() != null ? request.getMessage().trim() : "";
         final UserMessage userMsg = UserMessage.of(message, request.getImages());
         final String resolvedPath = agentService.resolveProjectPath(request.getWorkspaceHash());
+        final String linkedProjectContext = agentService.buildLinkedProjectContext(
+                request.getLinkedProjectHashes(), request.getWorkspaceHash());
         final String sessionName = request.getSessionName();
         final String requestId = ensureRequestId(request);
 
@@ -154,7 +159,7 @@ public class ChatController {
 
                 agentService.chatStream(userMsg, resolvedPath, sessionName, emitter,
                         request.getModel(), request.getModelChannelId(), request.getReasoningEffort(),
-                        request.getFastMode(), request.getAction());
+                        request.getFastMode(), request.getAction(), linkedProjectContext);
             } catch (Exception e) {
                 log.error("[chat] 流任务执行异常: session={}, requestId={}, 原因: {}",
                         sessionName, requestId, e.getMessage(), e);
@@ -213,7 +218,12 @@ public class ChatController {
         Future<?> task = activeChatTasks.remove(requestId);
         AtomicBoolean taskStarted = activeChatStarted.remove(requestId);
         unregisterSessionTask(requestId);
-        if (task != null) task.cancel(true);
+        if (task != null) {
+            task.cancel(true);
+            log.info("[chat] 已取消流任务: requestId={}", requestId);
+        } else {
+            log.warn("[chat] 流任务未命中（可能请求已结束或 requestId 不匹配）: requestId={}", requestId);
+        }
         SseEmitter emitter = activeChatEmitters.remove(requestId);
         // 已启动任务必须自行完成 finally，让计划恢复事件在 SSE 关闭前送达。
         if (emitter != null && (taskStarted == null || !taskStarted.get())) emitter.complete();

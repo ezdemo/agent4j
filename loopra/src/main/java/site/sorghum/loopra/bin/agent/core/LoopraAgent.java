@@ -5,12 +5,6 @@ import lombok.SneakyThrows;
 import lombok.extern.slf4j.Slf4j;
 import org.noear.dami2.Dami;
 import org.noear.dami2.bus.EventListener;
-import site.sorghum.cutin.core.context.Budget;
-import site.sorghum.cutin.core.context.DefaultLoopContext;
-import site.sorghum.cutin.core.context.Message;
-import site.sorghum.cutin.core.loop.DefaultLoopEngine;
-import site.sorghum.cutin.core.loop.LoopProgram;
-import site.sorghum.cutin.core.loop.LoopResult;
 import site.sorghum.loopra.bin.agent.context.ContextTokenEstimate;
 import site.sorghum.loopra.bin.agent.context.ConversationContext;
 import site.sorghum.loopra.bin.agent.environment.SessionEnvironment;
@@ -35,10 +29,6 @@ import site.sorghum.loopra.bin.session.SessionService;
 import site.sorghum.loopra.bin.session.SessionStore;
 import site.sorghum.loopra.bin.tool.ToolRegistry;
 import site.sorghum.loopra.bin.tool.ToolSystemInitializer;
-import site.sorghum.loopra.integration.cutin.CutinLoopraBridge;
-import site.sorghum.loopra.integration.cutin.CutinMessageBridge;
-import site.sorghum.loopra.integration.cutin.CutinSteps;
-import site.sorghum.loopra.integration.cutin.LoopraCutinRuntime;
 import site.sorghum.loopra.tool.AgentOutput;
 
 import java.io.IOException;
@@ -62,12 +52,6 @@ public class LoopraAgent {
      */
     private final AgentLoop loop;
     /**
-     * cutin 引擎 —— Loopra 公共 API 不变，内部以 cutin 状态机执行标准编码循环。
-     */
-    @Getter
-    private final DefaultLoopEngine cutinEngine;
-    private final LoopraCutinRuntime cutinRuntime;
-    /**
      * 对话上下文
       * -- 读取器 --
      *  获取会话上下文（用于外部截断历史等操作）。
@@ -81,10 +65,6 @@ public class LoopraAgent {
      */
     private final ChatCommandRegistry commandRegistry;
 
-    /**
-     * 获取当前 SessionService（用于保存/恢复状态）
-     */
-    @Getter
     private SessionService sessionService;
     /**
      * 会话存储是否为 Agent 自建（未注入 sessionStore 时为 true）。
@@ -97,17 +77,6 @@ public class LoopraAgent {
     @Getter
     private final SessionEnvironment environment;
 
-    /**
-      * 执行根的已弃用别名。
-     */
-    public Path getWorkspace() {
-        return environment.executionRoot();
-    }
-
-    /**
-      * 持有本会话状态根的项目注册表。
-     */
-    @Getter
     private ProjectRegistry projectRegistry;
 
     /**
@@ -125,28 +94,17 @@ public class LoopraAgent {
 
     private LoopraAgent(Builder b) {
         this.commandRegistry = b.commandRegistry;
-        this.environment = b.environment != null
-                ? b.environment
-                : SessionEnvironment.of(b.workspace, b.stateWorkspace);
+        this.environment = b.environment != null ? b.environment : SessionEnvironment.local(null);
 
-        final LoopraModelProvider modelProvider = b.modelProvider;
-        final String prompt = resolvePrompt(b);
+        final String systemPrompt = resolvePrompt(b);
         // 注入共享工具系统时直接复用，跳过完整的工具扫描与提示词构建
-        final ToolSystemInitializer.Result initResult = b.toolSystem != null
+        final ToolSystemInitializer.ToolSystem initResult = b.toolSystem != null
                 ? b.toolSystem
                 : ToolSystemInitializer.initialize(
-                        this.environment, b.apiUrl, b.apiKey,
-                        b.disabledTools, b.blockedPaths, prompt);
-        this.ctx = new ConversationContext(initResult.promptPrefix);
+                        this.environment, b.disabledTools, systemPrompt);
+        this.ctx = new ConversationContext(initResult.promptPrefix());
         LoopraConfig loopConfig = b.loopraConfig != null ? b.loopraConfig : LoopraConfig.getInstance();
-        this.loop = initSessionAndLoop(b, modelProvider, initResult.toolRegistry, loopConfig);
-        this.cutinRuntime = this.loop.cutinRuntime() != null
-                ? this.loop.cutinRuntime()
-                : (modelProvider != null && initResult.toolRegistry != null
-                        ? CutinLoopraBridge.newRuntime(modelProvider, initResult.toolRegistry)
-                        : null);
-        this.cutinEngine = cutinRuntime == null ? null : cutinRuntime.engine();
-
+        this.loop = initSessionAndLoop(b, b.modelProvider, initResult.toolRegistry(), loopConfig);
         //  —— 每个 Agent 自监听自更新（保存引用以便 dispose 时注销）
         this.configListener = event -> {
             ConfigChangedEvent e = event.getPayload();
@@ -215,77 +173,10 @@ public class LoopraAgent {
         agentLoop.setHitlMode(b.hitl);
         agentLoop.setWorkspace(environment.executionRoot());
         agentLoop.setSessionUsageSink(this.sessionService);
-        agentLoop.setPendingPlanSink(plan -> {
-            String name = getSessionStore().currentName();
-            if (name != null) getSessionStore().setPendingPlan(name, plan);
-        });
-        agentLoop.setBeforeTurnSink(text -> {
-            generateSessionTitleIfNeeded(text);
-            String name = getSessionStore().currentName();
-            if (name != null) agentLoop.setSessionId(name);
-        });
-        agentLoop.setAfterTurnSink(result -> {
-            flushSession();
-            saveUsage();
-        });
         agentLoop.setGoalGuard(b.goalGuard != null ? b.goalGuard : new GoalGuardImpl());
-        restorePlanState(agentLoop, getSessionStore().currentName());
+        restorePlanState(agentLoop, ctx.getSessionStore().currentName());
         registry.setToolPolicyProvider(b.toolPolicyProvider != null ? b.toolPolicyProvider : new ConfigServiceToolPolicyProvider());
         return agentLoop;
-    }
-
-    /**
-     * 基于 cutin 的标准编码循环入口。
-     * <p>
-     * 与 {@link #chat(UserMessage)} 共享同一 {@link ConversationContext}，
-     * 但推理循环完全由 cutin 的 {@link DefaultLoopEngine} 驱动：
-     * 模型经 {@code LoopraModelProvider} 直连 cutin Provider，工具经 {@code CutinToolRegistryView}
-     * 桥接，规则与原有 Loopra 工具集保持一致。
-     * </p>
-     *
-     * @param userMessage 用户输入
-     * @return 最终 assistant content
-     */
-    public String chatCutin(UserMessage userMessage) throws IOException {
-        if (userMessage != null && userMessage.hasContent()) {
-            ctx.addUser(userMessage);
-        }
-        String model = loop.getModelProvider().getModel();
-        LoopProgram program = CutinSteps.codingProgram(model);
-        DefaultLoopContext cutinContext = cutinEngine.newContext(
-            java.util.UUID.randomUUID().toString(),
-            CutinMessageBridge.toCutin(ctx.buildMessages()),
-            Map.of("sessionId", String.valueOf(loop.getSessionId())),
-            Budget.unlimited()
-        );
-        LoopResult result = cutinEngine.run(program, cutinContext).result().join();
-        if (result.finalSnapshot() != null) {
-            syncContext(result.finalSnapshot().messages());
-        }
-        return lastAssistantContent(result);
-    }
-
-    private void syncContext(List<Message> messages) {
-        ctx.clearHistory();
-        for (Message message : messages) {
-            ctx.injectHistory(CutinMessageBridge.toLoopra(List.of(message)).get(0));
-        }
-    }
-
-    private static String lastAssistantContent(LoopResult result) {
-        if (result.finalSnapshot() == null) {
-            return result.message() == null ? "" : result.message();
-        }
-        List<Message> messages = result.finalSnapshot().messages();
-        for (int i = messages.size() - 1; i >= 0; i--) {
-            Message message = messages.get(i);
-            if ("assistant".equals(message.role())
-                    && message.content() != null
-                    && !message.content().isEmpty()) {
-                return message.content();
-            }
-        }
-        return result.message() == null ? "" : result.message();
     }
 
     // 使用 ToolDefHelper 提供的公共方法
@@ -295,22 +186,6 @@ public class LoopraAgent {
 
     public static Builder builder() {
         return new Builder();
-    }
-
-    /**
-     * 如果当前会话尚未生成标题，则根据用户消息生成标题。
-     *
-     * @param userMessage 用户消息内容
-     */
-    private void generateSessionTitleIfNeeded(String userMessage) {
-        if (sessionService != null && !sessionService.isTitleGenerated()) {
-            // 确保会话名已分配（新会话的 currentName 初始为 null，延迟到首次 append 才分配）
-            sessionService.ensureSessionName();
-            String title = sessionService.generateSessionTitle(userMessage);
-            sessionService.updateCurrentSessionTitle(title);
-            sessionService.setTitleGenerated(true);
-            log.info("[session] 自动生成会话标题: {}", title);
-        }
     }
 
     /**
@@ -405,21 +280,21 @@ public class LoopraAgent {
      * 切换后加载历史消息到上下文并恢复 token 用量。
      */
     public void bindSession(String name) {
-        boolean ok = getSessionStore().bindTo(name);
+        boolean ok = ctx.getSessionStore().bindTo(name);
         if (ok) {
             // 加载会话历史消息到上下文，将 JSONL 中的 OpenAI 格式 tool_calls
             // 转回内存格式 {id, name, arguments}，与新创建的消息保持一致
             try {
-                List<ChatMessage> loaded = getSessionStore().load();
+                List<ChatMessage> loaded = ctx.getSessionStore().load();
                 for (ChatMessage m : loaded) {
-                    sessionService.injectHistory(m);
+                    ctx.injectHistory(m);
                 }
             } catch (IOException e) {
                 log.error("[session] 加载会话历史失败: {}", e.getMessage());
             }
             // 恢复该会话的 token 用量
             sessionService.restoreUsage(name);
-            String existingTitle = getSessionStore().getTitle(name);
+            String existingTitle = ctx.getSessionStore().getTitle(name);
             sessionService.setTitleGenerated(existingTitle != null && !existingTitle.isEmpty());
             // 恢复持久化的计划模式与待审查计划（静默恢复，不发事件；
             // Agent 重建/会话切换后不丢失只读约束和待批准计划）
@@ -430,8 +305,8 @@ public class LoopraAgent {
     private void restorePlanState(AgentLoop targetLoop, String name) {
         if (targetLoop == null || name == null) return;
         try {
-            targetLoop.setPlanMode(getSessionStore().isPlanMode(name));
-            targetLoop.restorePendingPlan(getSessionStore().getPendingPlan(name));
+            targetLoop.setPlanMode(ctx.getSessionStore().isPlanMode(name));
+            targetLoop.restorePendingPlan(ctx.getSessionStore().getPendingPlan(name));
         } catch (Exception e) {
             log.warn("[plan] 恢复计划状态失败: {}", e.getMessage());
         }
@@ -555,20 +430,6 @@ public class LoopraAgent {
         return result;
     }
 
-    /**
-     * 获取 SessionStore（用于列表/切换）
-     */
-    public SessionStore getSessionStore() {
-        return sessionService.getStore();
-    }
-
-    /**
-     * 注入历史消息（加载会话时）
-     */
-    public void injectHistory(ChatMessage msg) {
-        sessionService.injectHistory(msg);
-    }
-
      // ========== HITL（人在回路）==========
 
     /**
@@ -578,13 +439,6 @@ public class LoopraAgent {
      */
     public String getHitlMode() {
         return loop.getHitlMode();
-    }
-
-    /**
-     * 获取 HITL 是否处于启用状态（审批模式或自动模式均视为启用）。
-     */
-    public boolean isHitlMode() {
-        return loop.isHitlMode();
     }
 
     /**
@@ -639,9 +493,9 @@ public class LoopraAgent {
         try {
             if (sessionService != null) {
                 sessionService.ensureSessionName();
-                String name = getSessionStore().currentName();
+                String name = ctx.getSessionStore().currentName();
                 if (name != null) {
-                    getSessionStore().setPlanMode(name, enabled);
+                    ctx.getSessionStore().setPlanMode(name, enabled);
                 }
             }
         } catch (Exception e) {
@@ -681,11 +535,6 @@ public class LoopraAgent {
         return buildPlanExecutionMessage(plan);
     }
 
-    /** 模型执行已启动，提交本次批准。 */
-    public void completePendingPlanExecution() {
-        clearPendingPlan();
-    }
-
     /** 模型执行尚未启动即失败，恢复计划模式并重新推送待审查计划。 */
     public void restorePendingPlanExecution() {
         String plan = getPendingPlan();
@@ -696,11 +545,11 @@ public class LoopraAgent {
 
     public String approvePendingPlan() {
         String executionMessage = preparePendingPlanExecution();
-        if (executionMessage != null) completePendingPlanExecution();
+        if (executionMessage != null) clearPendingPlan();
         return executionMessage;
     }
 
-    public static String buildPlanExecutionMessage(String plan) {
+    private static String buildPlanExecutionMessage(String plan) {
         return """
                 执行计划已批准，计划模式已退出（全部工具恢复可用）。请严格按以下计划逐步执行：
 
@@ -786,6 +635,11 @@ public class LoopraAgent {
      * <p>仅关闭自建的 SessionStore；上层注入的共享存储由注入方管理生命周期。</p>
      */
     public void dispose() {
+        // 主循环仍在运行时先请求中断，避免 dispose 后推理循环继续执行工具（停止请求将无法再命中它）
+        if (loop != null && loop.isRunning()) {
+            log.info("[dispose] Agent 主循环仍在运行，先请求中断");
+            loop.requestUserAbort();
+        }
         // 注销 Dami 事件监听
         if (configListener != null) {
             try {
@@ -810,10 +664,7 @@ public class LoopraAgent {
                 log.warn("[dispose] 关闭会话存储失败: {}", e.getMessage());
             }
         }
-        loop.disposeCutinRuntime();
-        if (cutinRuntime != null) {
-            cutinRuntime.stop();
-        }
+        loop.disposeCutinPlugins();
     }
 
     public void compact() throws IOException {
@@ -832,24 +683,13 @@ public class LoopraAgent {
          * 硬编码的默认系统提示词（作为 system prompt 基底，不再从文件加载）
          */
         public static final String DEFAULT_SYSTEM_PROMPT = DEFAULT_PROMPT.PROMPT;
-        String apiUrl;
-        String apiKey;
-        String model = "deepseek-v4-flash";
         /**
          * 系统提示词，默认使用硬编码的 DEFAULT_SYSTEM_PROMPT。
          */
         String systemPrompt = DEFAULT_SYSTEM_PROMPT;
-        /**
-          * 显式会话环境；缺失时回退到旧路径字段。
-         */
+        /** 显式会话环境。 */
         SessionEnvironment environment;
-        Path workspace = null;
-        /**
-          * 已弃用的状态根字段；优先使用 {@link #environment(SessionEnvironment)}。
-         */
-        Path stateWorkspace = null;
         Set<String> disabledTools;
-        List<String> blockedPaths;
         String hitl = "free";
         /**
          * 命令注册表（Solon 自动收集的 ChatCommand Bean）
@@ -884,26 +724,7 @@ public class LoopraAgent {
          * 与预构建的提示词前缀，避免每个 Agent 重复扫描工具。Result 内的环境必须
          * 与 Builder 配置的 {@link SessionEnvironment} 一致。</p>
          */
-        ToolSystemInitializer.Result toolSystem;
-
-        public Builder loopraConfig(LoopraConfig loopraConfig){
-            this.loopraConfig = loopraConfig;
-            return this;
-        }
-        public Builder apiUrl(String v) {
-            this.apiUrl = v;
-            return this;
-        }
-
-        public Builder apiKey(String v) {
-            this.apiKey = v;
-            return this;
-        }
-
-        public Builder model(String v) {
-            this.model = v;
-            return this;
-        }
+        ToolSystemInitializer.ToolSystem toolSystem;
 
         public Builder systemPrompt(String v) {
             this.systemPrompt = v;
@@ -912,19 +733,6 @@ public class LoopraAgent {
 
         public Builder environment(SessionEnvironment v) {
             this.environment = v;
-            return this;
-        }
-
-        public Builder workspace(Path v) {
-            this.workspace = v;
-            return this;
-        }
-
-        /**
-          * 已弃用的基于路径的状态根。
-         */
-        public Builder stateWorkspace(Path v) {
-            this.stateWorkspace = v;
             return this;
         }
 
@@ -939,12 +747,11 @@ public class LoopraAgent {
         }
 
         public Builder config(LoopraConfig c) {
-            if (c.apiUrl() != null) this.apiUrl = c.apiUrl();
-            if (c.apiKey() != null) this.apiKey = c.apiKey();
-            this.model = c.model();
-            this.workspace = c.workspaceDir();
+            this.loopraConfig = c;
+            if (c.workspaceDir() != null) {
+                this.environment = SessionEnvironment.local(c.workspaceDir());
+            }
             this.disabledTools = c.disabledTools();
-            this.blockedPaths = c.blockedPaths();
             this.hitl = c.hitl();
             return this;
         }
@@ -986,7 +793,7 @@ public class LoopraAgent {
          * 注入共享的工具系统初始化结果；设置后跳过内部工具系统初始化，直接复用。
          * <p>用于多 Agent 共享同一项目的工具注册表与提示词前缀，避免重复初始化。</p>
          */
-        public Builder toolSystem(ToolSystemInitializer.Result v) {
+        public Builder toolSystem(ToolSystemInitializer.ToolSystem v) {
             this.toolSystem = v;
             return this;
         }

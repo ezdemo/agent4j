@@ -15,7 +15,7 @@ import site.sorghum.loopra.tool.LogLevel;
   * 工具批次生命周期插件：批次边界对其他插件可见，
   * 超时/取消事件走同一条拦截链。
  */
-@AgentPlugin(id = "loopra-tool-batch")
+@AgentPlugin(id = "loopra-tool-batch", remark = "汇总并跟踪一批并行工具调用的执行状态。")
 public final class LoopraToolBatchPlugin implements LoopPlugin {
 
     private final LoopraToolBatchHost host;
@@ -31,10 +31,10 @@ public final class LoopraToolBatchPlugin implements LoopPlugin {
 
     @Override
     public void register(LoopRegistrar registrar) {
-        registrar.addInterceptor(InterceptPoint.BEFORE_TOOL_BATCH, -50, this::onBatchStart);
-        registrar.addInterceptor(InterceptPoint.AFTER_TOOL_BATCH, 50, this::onBatchEnd);
-        registrar.addInterceptor(InterceptPoint.ON_TOOL_TIMEOUT, 0, this::onTimeout);
-        registrar.addInterceptor(InterceptPoint.ON_TOOL_CANCEL, 0, this::onCancel);
+        registrar.registerInterceptor(InterceptPoint.BEFORE_TOOL_BATCH, -50, this::onBatchStart);
+        registrar.registerInterceptor(InterceptPoint.AFTER_TOOL_BATCH, 50, this::onBatchEnd);
+        registrar.registerInterceptor(InterceptPoint.ON_TOOL_TIMEOUT, 0, this::onTimeout);
+        registrar.registerInterceptor(InterceptPoint.ON_TOOL_CANCEL, 0, this::onCancel);
     }
 
     private InterceptDecision onBatchStart(InterceptContext context) {

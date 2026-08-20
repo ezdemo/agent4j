@@ -85,4 +85,29 @@ describe('BlockRenderer active response state', () => {
     await wrapper.find('.tool-head').trigger('click')
     expect(wrapper.find('.tool-duration').text()).toBe('640ms')
   })
+
+  it('merges reasoning-started placeholders into the normal execution group', async () => {
+    const wrapper = mount(BlockRenderer, {
+      props: {
+        blocks: [
+          {type: 'reasoning_started', content: 'must-not-render', showContent: false},
+          {type: 'tool_call', name: 'read', status: '成功', args: {}, result: 'ok'},
+          {type: 'reasoning_started', showContent: false}
+        ],
+        streaming: true
+      }
+    })
+
+    expect(wrapper.findAll('.path-label')).toHaveLength(1)
+    expect(wrapper.find('.path-label').text()).toBe('执行')
+    expect(wrapper.find('.path-steps').text()).toBe('1 个工具')
+    expect(wrapper.find('.reasoning-head').exists()).toBe(false)
+
+    await wrapper.find('.tool-head').trigger('click')
+    expect(wrapper.findAll('.reasoning-head')).toHaveLength(2)
+
+    await wrapper.find('.reasoning-head').trigger('click')
+    expect(wrapper.find('.reasoning-text').text()).toBe('加密思考')
+    expect(wrapper.text()).not.toContain('must-not-render')
+  })
 })

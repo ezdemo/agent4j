@@ -10,6 +10,7 @@ import org.noear.solon.ai.chat.tool.FunctionToolDesc;
 import org.noear.solon.ai.chat.tool.ToolHandler;
 import site.sorghum.loopra.bin.agent.core.AgentLoop;
 import site.sorghum.loopra.bin.agent.core.LoopraAgent;
+import site.sorghum.loopra.bin.agent.environment.SessionEnvironment;
 import site.sorghum.loopra.bin.agent.model.ChatMessage;
 import site.sorghum.loopra.bin.agent.model.UserMessage;
 import site.sorghum.loopra.bin.agent.prompt.PromptPrefix;
@@ -34,7 +35,7 @@ import static org.junit.jupiter.api.Assertions.*;
  * LoopraAgent Builder 注入点装配测试 ——
  * 覆盖 docs/loopra-modular-refactor.md 遗留项 5.1（toolSystem 注入）与 5.2（SessionStore 生命周期归属）。
  * <p>
- * 与包私有 {@link ToolSystemInitializer.Result} 构造器同包，仅为构造注入结果；
+ * 与包私有 {@link ToolSystemInitializer.ToolSystem} 构造器同包，仅为构造注入结果；
  * 测试对象为公共 API {@link LoopraAgent.Builder}。
  * </p>
  *
@@ -76,8 +77,8 @@ class LoopraAgentInjectionTest {
         shared.register(tool("marker_tool", args -> "ok"));
         String markerPrompt = "MARKER_SYSTEM_PROMPT_FOR_TEST";
         PromptPrefix prefix = new PromptPrefix(markerPrompt, shared.toOpenAiTools());
-        ToolSystemInitializer.Result sharedResult =
-                new ToolSystemInitializer.Result(shared, prefix, markerPrompt);
+        ToolSystemInitializer.ToolSystem sharedResult =
+                new ToolSystemInitializer.ToolSystem(shared, prefix);
 
         AtomicReference<List<ChatMessage>> lastMessages = new AtomicReference<>();
         TestLoopraProvider client = TestLoopraProvider.builder()
@@ -88,9 +89,9 @@ class LoopraAgentInjectionTest {
                 })
                 .build();
         LoopraAgent agent = LoopraAgent.builder()
-                .loopraConfig(LoopraConfig.load())
+                .config(LoopraConfig.load())
                 .modelProvider(client)
-                .workspace(workspace)
+                .environment(SessionEnvironment.local(workspace))
                 .toolSystem(sharedResult)
                 // 单测无 Solon 容器，默认 ConfigServiceToolPolicyProvider 读不到配置；
                 // 注入空策略替身（也顺便验证该注入点生效）
@@ -101,7 +102,7 @@ class LoopraAgentInjectionTest {
 
             assertEquals("hello-from-stub", reply);
             // 注入的 registry 实例被原样装配进推理循环（若走了 initialize 则会是新实例）
-            assertSame(shared, loopOf(agent).getToolRegistryInstance(),
+            assertSame(shared, loopOf(agent).getToolRegistry(),
                     "推理循环应直接使用注入的共享 ToolRegistry");
             // 注入的 PromptPrefix 原样进入 system prompt（若走了 initialize，前缀会被重建）
             assertTrue(lastMessages.get().get(0).isSystem());
@@ -116,13 +117,13 @@ class LoopraAgentInjectionTest {
     void disposeDoesNotShutdownInjectedSessionStore() {
         RecordingSessionStore store = new RecordingSessionStore();
         LoopraAgent agent = LoopraAgent.builder()
-                .loopraConfig(LoopraConfig.load())
+                .config(LoopraConfig.load())
                 .modelProvider(TestLoopraProvider.returning("hello-from-stub"))
-                .workspace(workspace)
+                .environment(SessionEnvironment.local(workspace))
                 .sessionStore(store)
                 .buildLightweight();
 
-        assertSame(store, agent.getSessionStore());
+        assertSame(store, agent.getCtx().getSessionStore());
         agent.dispose();
 
         assertEquals(0, store.shutdownCalls,
@@ -132,12 +133,12 @@ class LoopraAgentInjectionTest {
     @Test
     void disposeShutdownsSelfBuiltSessionStore() throws Exception {
         LoopraAgent agent = LoopraAgent.builder()
-                .loopraConfig(LoopraConfig.load())
+                .config(LoopraConfig.load())
                 .modelProvider(TestLoopraProvider.returning("hello-from-stub"))
-                .workspace(workspace)
+                .environment(SessionEnvironment.local(workspace))
                 .buildLightweight();
 
-        SessionStore store = agent.getSessionStore();
+        SessionStore store = agent.getCtx().getSessionStore();
         assertInstanceOf(JsonlSessionStore.class, store);
         // 触发一次写入使 writer 句柄打开，作为 dispose 后可观察的关闭信号
         store.append(ChatMessage.ofUser("warm-up"));

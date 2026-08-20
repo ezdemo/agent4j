@@ -23,7 +23,7 @@ import java.util.Map;
   * Loopra 面向模型的规则：计划模式工具过滤、实时流式输出、
   * 推理循环检测，以及模型响应后的人工审批挂起。
  */
-@AgentPlugin(id = "loopra-model-policy")
+@AgentPlugin(id = "loopra-model-policy", remark = "根据模型策略调整请求参数与调用行为。")
 public final class LoopraModelPolicyPlugin implements LoopPlugin {
 
     private final LoopraPolicyHost host;
@@ -39,9 +39,9 @@ public final class LoopraModelPolicyPlugin implements LoopPlugin {
 
     @Override
     public void register(LoopRegistrar registrar) {
-        registrar.addInterceptor(InterceptPoint.BEFORE_MODEL, -100, this::prepareModelRequest);
-        registrar.addInterceptor(InterceptPoint.ON_MODEL_STREAM, 0, this::onModelStream);
-        registrar.addInterceptor(InterceptPoint.AFTER_MODEL, 0, this::onAfterModel);
+        registrar.registerInterceptor(InterceptPoint.BEFORE_MODEL, -100, this::prepareModelRequest);
+        registrar.registerInterceptor(InterceptPoint.ON_MODEL_STREAM, 0, this::onModelStream);
+        registrar.registerInterceptor(InterceptPoint.AFTER_MODEL, 0, this::onAfterModel);
     }
 
     private InterceptDecision prepareModelRequest(InterceptContext context) {
@@ -144,7 +144,12 @@ public final class LoopraModelPolicyPlugin implements LoopPlugin {
     }
 
     private boolean isReadOnly(String toolId) {
-        FunctionTool tool = host.getToolRegistryInstance().get(toolId);
+        // 优先用 cutin 的 ToolDefinition 元数据，兼容插件禁用后 legacy 为空的场景
+        try {
+            var def = host.getCutinTools() != null ? host.getCutinTools().find(toolId).orElse(null) : null;
+            if (def != null) return def.definition().metadata().readOnly();
+        } catch (Exception ignored) {}
+        FunctionTool tool = host.getToolRegistry().get(toolId);
         return tool != null && ToolMetadata.isReadOnly(tool);
     }
 

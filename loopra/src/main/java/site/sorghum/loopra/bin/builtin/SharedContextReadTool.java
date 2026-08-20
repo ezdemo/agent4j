@@ -58,7 +58,7 @@ public class SharedContextReadTool extends AbsToolProvider implements SolonToToo
                 """)
     public String workspaceRead(@Param(name = "key", description = "Entry path / key for the workspace entry to read") String key,
                                 @Param(name = "scope", description = "Scope / namespace filter (reserved for future use)", required = false) String scope,
-                                ToolContext ctx) {
+                                @Param(name = "ctx", required = false) ToolContext ctx) {
         // 1. 获取 key，必填
         if (key == null || key.isBlank()) {
             return "PARAM_MISSING: Missing required parameter 'key'";

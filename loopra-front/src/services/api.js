@@ -186,6 +186,7 @@ export const chatAPI = {
         if (options.reasoningEffort) requestBody.reasoningEffort = options.reasoningEffort
         if (options.fastMode) requestBody.fastMode = options.fastMode
         if (options.action) requestBody.action = options.action
+        if (options.linkedProjectHashes?.length) requestBody.linkedProjectHashes = options.linkedProjectHashes
           // 添加图片（base64 Data URI 列表）
           if (options.images && options.images.length > 0) {
               requestBody.images = options.images
@@ -724,6 +725,12 @@ export const systemAPI = {
   getLogs: (params) => {
     return api.get('/logs', { params })
   }
+}
+
+// Cutin/Loopra 插件运行时 API
+export const pluginAPI = {
+  list: () => api.get('/plugins'),
+  setEnabled: (id, enabled) => api.post(`/plugins/${encodeURIComponent(id)}/toggle`, {enabled})
 }
 
 // OpenAPI 管理 API

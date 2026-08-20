@@ -6,7 +6,7 @@ import {message} from 'ant-design-vue'
 import {getDocument} from 'pdfjs-dist'
 import {extractRawText} from 'mammoth/mammoth.browser'
 import {read as xlsxRead, utils as xlsxUtils} from 'xlsx'
-import {promptPresetsAPI} from '../services/api'
+import {configAPI, promptPresetsAPI} from '../services/api'
 import ChatInput from './ChatInput.vue'
 
 Object.defineProperty(Element.prototype, 'scrollIntoView', {
@@ -53,6 +53,9 @@ vi.mock('../services/api', () => ({
   agentAPI: {
     getCommands: vi.fn().mockResolvedValue({success: true, data: []}),
     getSkills: vi.fn().mockResolvedValue({success: true, data: []})
+  },
+  configAPI: {
+    listWorkspaces: vi.fn().mockResolvedValue({success: true, data: []})
   },
   filesAPI: {search: vi.fn().mockResolvedValue({success: true, data: []})},
   petAPI: {
@@ -140,23 +143,89 @@ describe('ChatInput quick commands', () => {
   })
 })
 
+describe('ChatInput linked projects', () => {
+  beforeEach(() => {
+    configAPI.listWorkspaces.mockResolvedValue({
+      success: true,
+      data: [
+        {hash: 'primary', name: 'primary-app', path: 'C:/code/primary'},
+        {hash: 'backend', name: 'backend-service', path: 'C:/code/backend'}
+      ]
+    })
+  })
+
+  it('excludes the current project and sends selected hashes as structured context', async () => {
+    const wrapper = mountInput({workspaceHash: 'primary', inputText: '检查接口联动'})
+    await wrapper.find('.project-tools-branch').trigger('mouseenter')
+    await flushPromises()
+
+    const projects = wrapper.findAll('.project-tools-nested .skill-panel-item')
+    expect(projects).toHaveLength(1)
+    expect(projects[0].text()).toContain('backend-service')
+
+    await projects[0].trigger('click')
+    expect(wrapper.find('.project-chips-bar').text()).toContain('backend-service')
+    await wrapper.find('.send-btn').trigger('click')
+
+    const [, text, hashes] = wrapper.emitted('send')[0]
+    expect(text).toContain('关联项目：')
+    expect(text).toContain('backend-service')
+    expect(hashes).toEqual(['backend'])
+    expect(wrapper.find('.project-chips-bar').exists()).toBe(false)
+  })
+})
+
 describe('ChatInput plan mode', () => {
+  it('groups upload and plan mode under one secondary tools menu', async () => {
+    const wrapper = mountInput({workspaceHash: 'workspace-1', welcomeMode: true})
+    const menu = wrapper.find('.composer-tools-menu')
+
+    expect(menu.findAll(':scope > .composer-tools-trigger')).toHaveLength(1)
+    expect(menu.find('.composer-tools-submenu').attributes('role')).toBe('menu')
+    expect(menu.findAll('.composer-tools-primary')).toHaveLength(5)
+    expect(menu.text()).toContain('上传文件')
+    expect(menu.text()).toContain('计划模式')
+    expect(menu.text()).toContain('关联项目')
+    expect(menu.text()).toContain('技能')
+    expect(menu.text()).toContain('权限模式')
+    expect(wrapper.find('.model-actions .project-selector').exists()).toBe(false)
+    expect(wrapper.find('.model-actions .skill-selector').exists()).toBe(false)
+    expect(wrapper.find('.model-actions .permission-hitl-selector').exists()).toBe(false)
+
+    const fileInput = wrapper.find('.upload-file-input').element
+    const click = vi.spyOn(fileInput, 'click')
+    await menu.find('.composer-upload-action').trigger('click')
+    expect(click).toHaveBeenCalledOnce()
+    wrapper.unmount()
+  })
+
+  it('switches permission from the nested tools menu', async () => {
+    const wrapper = mountInput({workspaceHash: 'workspace-1', currentPermission: 'free'})
+    const options = wrapper.findAll('.permission-tools-option')
+    expect(options).toHaveLength(3)
+    expect(options[0].attributes('aria-checked')).toBe('true')
+
+    await options[1].trigger('click')
+    expect(wrapper.emitted('switchPermission')).toEqual([['approval']])
+    wrapper.unmount()
+  })
+
   it('allows plan mode before a session exists when a workspace is selected', async () => {
     const wrapper = mountInput({workspaceHash: 'workspace-1', welcomeMode: true})
 
-    expect(wrapper.find('.plan-mode-btn').attributes('disabled')).toBeUndefined()
-    await wrapper.find('.plan-mode-btn').trigger('click')
+    expect(wrapper.find('.composer-plan-action').attributes('disabled')).toBeUndefined()
+    await wrapper.find('.composer-plan-action').trigger('click')
     expect(wrapper.emitted('togglePlan')).toEqual([[]])
     wrapper.unmount()
   })
 
   it('emits a UI event without inserting a slash command', async () => {
     const wrapper = mountInput({sessionName: 'session-1', planMode: true})
-    await wrapper.find('.plan-mode-btn').trigger('click')
+    await wrapper.find('.composer-plan-action').trigger('click')
 
     expect(wrapper.emitted('togglePlan')).toEqual([[]])
     expect(wrapper.find('.input-row textarea').element.value).toBe('')
-    expect(wrapper.find('.plan-mode-btn').attributes('aria-pressed')).toBe('true')
+    expect(wrapper.find('.composer-plan-action').attributes('aria-pressed')).toBe('true')
     wrapper.unmount()
   })
   it('keeps input and send available while the session task is running but locks plan controls', async () => {
@@ -170,7 +239,7 @@ describe('ChatInput plan mode', () => {
     // 输入区永不禁用：后台运行中也允许输入并发送（Chat.vue 侧自动排队）
     expect(wrapper.find('textarea').attributes('disabled')).toBeUndefined()
     expect(wrapper.find('.send-btn').attributes('disabled')).toBeUndefined()
-    expect(wrapper.find('.plan-mode-btn').attributes('disabled')).toBeDefined()
+    expect(wrapper.find('.composer-plan-action').attributes('disabled')).toBeDefined()
     expect(wrapper.find('.continue-btn').exists()).toBe(false)
     expect(wrapper.find('.stop-btn').exists()).toBe(true)
 

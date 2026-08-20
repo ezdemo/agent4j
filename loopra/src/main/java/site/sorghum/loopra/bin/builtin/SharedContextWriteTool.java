@@ -58,7 +58,7 @@ public class SharedContextWriteTool extends AbsToolProvider implements SolonToTo
                                  @Param(name = "content", description = "Content for document mode. If provided (and value is null), writes as a document.", required = false) String content,
                                  @Param(name = "type", description = "Document MIME type (e.g. text/plain, text/markdown, application/json). Default: text/plain", required = false) String type,
                                  @Param(name = "scope", description = "Scope / namespace for the entry (reserved for future use)", required = false) String scope,
-                                 ToolContext ctx) {
+                                 @Param(name = "ctx", required = false) ToolContext ctx) {
         // 1. 获取 key，必填
         if (key == null || key.isBlank()) {
             return "PARAM_MISSING: Missing required parameter 'key'";

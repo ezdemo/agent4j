@@ -1,23 +1,10 @@
 <?xml version="1.0" encoding="UTF-8"?>
 <project version="4">
   <component name="Encoding">
-    <file url="file://$PROJECT_DIR$/cutin-core/src/main/java" charset="UTF-8" />
-    <file url="file://$PROJECT_DIR$/cutin-core/src/main/resources" charset="UTF-8" />
-    <file url="file://$PROJECT_DIR$/loopra-acp/src/main/java" charset="UTF-8" />
-    <file url="file://$PROJECT_DIR$/loopra-acp/src/main/resources" charset="UTF-8" />
-    <file url="file://$PROJECT_DIR$/loopra-bin/src/main/java" charset="UTF-8" />
-    <file url="file://$PROJECT_DIR$/loopra-bin/src/main/resources" charset="UTF-8" />
-    <file url="file://$PROJECT_DIR$/loopra-harness/src/main/java" charset="UTF-8" />
-    <file url="file://$PROJECT_DIR$/loopra-harness/src/main/resources" charset="UTF-8" />
-    <file url="file://$PROJECT_DIR$/loopra-model/src/main/java" charset="UTF-8" />
-    <file url="file://$PROJECT_DIR$/loopra-model/src/main/resources" charset="UTF-8" />
-    <file url="file://$PROJECT_DIR$/loopra-tool/src/main/java" charset="UTF-8" />
-    <file url="file://$PROJECT_DIR$/loopra-tool/src/main/resources" charset="UTF-8" />
-    <file url="file://$PROJECT_DIR$/loopra-web/src/main/java" charset="UTF-8" />
-    <file url="file://$PROJECT_DIR$/loopra-web/src/main/resources" charset="UTF-8" />
+    <file url="file://$PROJECT_DIR$/cutin/src/main/java" charset="UTF-8" />
+    <file url="file://$PROJECT_DIR$/cutin/src/main/resources" charset="UTF-8" />
     <file url="file://$PROJECT_DIR$/loopra/src/main/java" charset="UTF-8" />
     <file url="file://$PROJECT_DIR$/src/main/java" charset="UTF-8" />
     <file url="file://$PROJECT_DIR$/src/main/resources" charset="UTF-8" />
-    <file url="file://$PROJECT_DIR$/workflow-project/05-后端开发代码/src/main/java" charset="UTF-8" />
   </component>
 </project>

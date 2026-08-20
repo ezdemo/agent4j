@@ -4,6 +4,7 @@ import org.junit.jupiter.api.Test;
 import org.noear.snack4.ONode;
 import org.noear.solon.ai.chat.tool.FunctionToolDesc;
 import site.sorghum.loopra.bin.agent.context.ConversationContext;
+import site.sorghum.loopra.bin.agent.environment.SessionEnvironment;
 import site.sorghum.loopra.bin.agent.model.ChatMessage;
 import site.sorghum.loopra.bin.agent.model.UserMessage;
 import site.sorghum.loopra.bin.agent.prompt.PromptPrefix;
@@ -207,7 +208,7 @@ class ToolCallValidatorTest {
             }
         };
         registry.setDisabledTools(Set.of());
-        registry.setRefreshContext(Paths.get(".").toAbsolutePath(), null, null, List.of());
+        registry.setEnvironment(SessionEnvironment.local(Paths.get(".").toAbsolutePath()));
         registry.register(tool);
         return registry;
     }
