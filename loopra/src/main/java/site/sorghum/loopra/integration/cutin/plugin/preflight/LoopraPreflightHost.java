@@ -10,8 +10,6 @@ public interface LoopraPreflightHost {
 
     UserMessage sanitizePreflightMessage(UserMessage message);
 
-    void setCurrentTurnUserText(String text);
-
     void appendPreflightUserMessage(UserMessage message);
 
     void clearSuspendedCutinState();

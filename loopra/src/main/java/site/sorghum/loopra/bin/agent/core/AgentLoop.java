@@ -282,7 +282,6 @@ public class AgentLoop implements
     private volatile DefaultLoopContext suspendedCutinContext;
     private volatile LoopState suspendedCutinState;
     private volatile LoopState runningCutinState;
-    private volatile String currentTurnUserText = "";
 
     /**
      * 查询主循环是否正在执行。
@@ -1037,11 +1036,6 @@ public class AgentLoop implements
     }
 
     @Override
-    public void setCurrentTurnUserText(String text) {
-        currentTurnUserText = text == null ? "" : text;
-    }
-
-    @Override
     public void appendPreflightUserMessage(UserMessage message) {
         ctx.addUser(message);
     }
@@ -1301,8 +1295,7 @@ public class AgentLoop implements
             UUID.randomUUID().toString(),
             CutinMessageBridge.toCutin(ctx.buildMessages()),
             Map.of(
-                "sessionId", sessionId == null ? "" : sessionId,
-                "loopraUserMessage", currentTurnUserText
+                "sessionId", sessionId == null ? "" : sessionId
             ),
             Budget.unlimited(),
             workingDirectory()

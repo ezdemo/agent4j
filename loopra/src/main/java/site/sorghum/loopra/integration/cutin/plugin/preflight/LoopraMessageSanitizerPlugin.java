@@ -25,14 +25,12 @@ public final class LoopraMessageSanitizerPlugin implements LoopPlugin {
     public StepResult execute(LoopContext context) {
         UserMessage message = LoopraPreflight.input(context);
         if (message == null) {
-            host.setCurrentTurnUserText("");
             context.putVariable("loopraUserMessage", "");
             return StepResult.Continue.INSTANCE;
         }
         UserMessage sanitized = host.sanitizePreflightMessage(message);
         context.putArtifact(LoopraPreflight.INPUT_ARTIFACT, sanitized);
         String text = sanitized != null && sanitized.hasContent() ? sanitized.getText() : "";
-        host.setCurrentTurnUserText(text);
         context.putVariable("loopraUserMessage", text);
         return StepResult.Continue.INSTANCE;
     }
