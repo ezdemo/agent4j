@@ -9,6 +9,7 @@ import site.sorghum.cutin.core.context.Usage;
 import site.sorghum.cutin.core.json.JsonSupport;
 import site.sorghum.cutin.core.model.ModelCallRequest;
 import site.sorghum.cutin.core.model.ModelResponse;
+import site.sorghum.cutin.core.model.ModelStreamPhase;
 import site.sorghum.cutin.core.model.StreamChunk;
 import site.sorghum.cutin.core.tool.ToolDefinition;
 
@@ -492,6 +493,132 @@ class RealModelProvidersTest {
             assertEquals(1, last.get().toolCalls().size(), () -> "last=" + last.get());
             assertEquals("read", last.get().toolCalls().get(0).toolId());
             assertEquals("b.txt", last.get().toolCalls().get(0).arguments().get("path"));
+        } finally {
+            server.stop(0);
+        }
+    }
+
+    /** Responses 应立即暴露思考开始阶段，但不把密文放进增量内容。 */
+    @Test
+    void responsesProviderMarksReasoningStartedWithoutExposingCiphertext() throws Exception {
+        AtomicReference<String> requestBody = new AtomicReference<>();
+        HttpServer server = streamingServer("/responses", requestBody, """
+            data: {"type":"response.output_item.added","output_index":0,"item":{"type":"reasoning","id":"rs_1","summary":[]}}
+
+            data: {"type":"response.output_item.done","output_index":0,"item":{"type":"reasoning","id":"rs_1","encrypted_content":"secret-ciphertext","summary":[]}}
+
+            data: {"type":"response.completed","response":{"usage":{"input_tokens":2,"output_tokens":3}}}
+
+            data: [DONE]
+
+            """);
+        server.start();
+        try {
+            ModelProviderConfig config = new ModelProviderConfig(
+                "responses",
+                "http://127.0.0.1:" + server.getAddress().getPort(),
+                "key",
+                "gpt-5",
+                Map.of()
+            );
+            OpenAiResponsesProvider provider = new OpenAiResponsesProvider(config);
+            ModelCallRequest request = new ModelCallRequest(
+                "gpt-5",
+                List.of(new Message("user", "hi")),
+                List.of(),
+                Map.of("reasoningEffort", "high")
+            );
+
+            List<StreamChunk> chunks;
+            try (Stream<StreamChunk> stream = provider.stream(request)) {
+                chunks = stream.toList();
+            }
+
+            assertTrue(chunks.stream().anyMatch(chunk ->
+                chunk.phases().contains(ModelStreamPhase.REASONING_STARTED)));
+            assertEquals(1, chunks.stream().filter(chunk ->
+                chunk.phases().contains(ModelStreamPhase.REASONING_STARTED)).count());
+            assertTrue(chunks.get(0).phases().contains(ModelStreamPhase.REASONING_STARTED),
+                "思考开始阶段应在 reasoning item added 时立即交付");
+            assertTrue(chunks.stream().noneMatch(chunk ->
+                String.valueOf(chunk.content()).contains("secret-ciphertext")
+                    || String.valueOf(chunk.reasoning()).contains("secret-ciphertext")));
+            assertEquals("reasoning.encrypted_content",
+                JsonSupport.text(JsonSupport.read(requestBody.get()), "", "include", 0));
+        } finally {
+            server.stop(0);
+        }
+    }
+
+    /** Chat Completions 应在首个 reasoning delta 前交付通用推理开始阶段。 */
+    @Test
+    void chatCompletionsProviderMarksReasoningStartedOnce() throws Exception {
+        AtomicReference<String> requestBody = new AtomicReference<>();
+        HttpServer server = streamingServer("/chat/completions", requestBody, """
+            data: {"choices":[{"delta":{"reasoning_content":"先分析"}}]}
+
+            data: {"choices":[{"delta":{"reasoning_content":"再处理"}}]}
+
+            data: {"choices":[{"delta":{"content":"完成"}}]}
+
+            data: [DONE]
+
+            """);
+        server.start();
+        try {
+            ModelProviderConfig config = new ModelProviderConfig(
+                "chat", "http://127.0.0.1:" + server.getAddress().getPort(),
+                "key", "reasoning-model", Map.of()
+            );
+            OpenAiChatCompletionsProvider provider = new OpenAiChatCompletionsProvider(config);
+            List<StreamChunk> chunks;
+            try (Stream<StreamChunk> stream = provider.stream(new ModelCallRequest(
+                "reasoning-model", List.of(new Message("user", "hi")), List.of(), Map.of()))) {
+                chunks = stream.toList();
+            }
+
+            assertEquals(1, chunks.stream().filter(chunk ->
+                chunk.phases().contains(ModelStreamPhase.REASONING_STARTED)).count());
+            assertTrue(chunks.get(0).phases().contains(ModelStreamPhase.REASONING_STARTED));
+            assertEquals("先分析", chunks.get(1).reasoning());
+        } finally {
+            server.stop(0);
+        }
+    }
+
+    /** Anthropic 应在 thinking block start 时立即交付通用推理开始阶段。 */
+    @Test
+    void anthropicProviderMarksReasoningStartedAtBlockStart() throws Exception {
+        AtomicReference<String> requestBody = new AtomicReference<>();
+        HttpServer server = streamingServer("/v1/messages", requestBody, """
+            data: {"type":"message_start","message":{"usage":{"input_tokens":2,"output_tokens":0}}}
+
+            data: {"type":"content_block_start","index":0,"content_block":{"type":"thinking","thinking":"","signature":""}}
+
+            data: {"type":"content_block_delta","index":0,"delta":{"type":"thinking_delta","thinking":"先分析"}}
+
+            data: {"type":"content_block_stop","index":0}
+
+            data: {"type":"message_stop"}
+
+            """);
+        server.start();
+        try {
+            ModelProviderConfig config = new ModelProviderConfig(
+                "anthropic", "http://127.0.0.1:" + server.getAddress().getPort(),
+                "key", "claude", Map.of()
+            );
+            AnthropicMessagesProvider provider = new AnthropicMessagesProvider(config);
+            List<StreamChunk> chunks;
+            try (Stream<StreamChunk> stream = provider.stream(new ModelCallRequest(
+                "claude", List.of(new Message("user", "hi")), List.of(), Map.of()))) {
+                chunks = stream.toList();
+            }
+
+            assertEquals(1, chunks.stream().filter(chunk ->
+                chunk.phases().contains(ModelStreamPhase.REASONING_STARTED)).count());
+            assertTrue(chunks.get(0).phases().contains(ModelStreamPhase.REASONING_STARTED));
+            assertEquals("先分析", chunks.get(1).reasoning());
         } finally {
             server.stop(0);
         }

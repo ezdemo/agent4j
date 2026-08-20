@@ -297,6 +297,10 @@ public final class OpenAiChatCompletionsProvider implements ModelProvider {
             reasoning = JsonSupport.text(delta, null, "reasoning");
         }
         if (reasoning != null && !reasoning.isEmpty()) {
+            if (state.markReasoningStarted()) {
+                builder.add(new StreamChunk("", Usage.ZERO)
+                    .withPhase(ModelStreamPhase.REASONING_STARTED));
+            }
             builder.add(new StreamChunk("", reasoning, List.of(), List.of(), Usage.ZERO, Map.of(), false));
         }
         String content = JsonSupport.text(delta, null, "content");
@@ -356,6 +360,8 @@ public final class OpenAiChatCompletionsProvider implements ModelProvider {
         private String error;
         /** 最近一次上报的累计用量，流尾统一交付。 */
         private Usage usage = Usage.ZERO;
+        /** 是否已发出本次响应的推理开始阶段。 */
+        private boolean reasoningStarted;
         /** 全部原始 SSE 数据行。 */
         private final StringBuilder raw = new StringBuilder();
         private final site.sorghum.cutin.core.model.ModelHttpExchange exchange;
@@ -364,6 +370,12 @@ public final class OpenAiChatCompletionsProvider implements ModelProvider {
 
         private Accumulator(site.sorghum.cutin.core.model.ModelHttpExchange exchange) {
             this.exchange = exchange;
+        }
+
+        private boolean markReasoningStarted() {
+            if (reasoningStarted) return false;
+            reasoningStarted = true;
+            return true;
         }
 
         /** 按 index 累加流式工具调用增量片段。 */

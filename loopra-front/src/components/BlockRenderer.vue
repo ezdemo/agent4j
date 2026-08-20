@@ -18,6 +18,24 @@
       <div v-if="block.showContent" class="reasoning-text" v-html="getReasoningHtml(block)"></div>
     </div>
 
+    <!-- 加密推理沿用普通思考折叠样式，展开后只显示固定文案 -->
+    <div v-else-if="block.type === 'reasoning_started'" class="block-reasoning">
+      <div class="reasoning-head" @click="block.showContent = !block.showContent">
+        <span class="default-icon" v-html="THINKING_ICON"></span>
+        <span>思考</span>
+        <span class="default-icon"
+              v-html="CHEVRON_DOWN_ICON"
+              :style="{
+                transform: block.showContent ? 'rotate(180deg)' : 'rotate(0deg)',
+                display: 'inline-block',
+                transition: 'transform 0.25s ease',
+                lineHeight: 0
+              }">
+        </span>
+      </div>
+      <div v-if="block.showContent" class="reasoning-text" role="status">加密思考</div>
+    </div>
+
     <!-- 内容 -->
     <div v-else-if="block.type === 'content' && block.content" class="block-content" v-html="fmt(block.content)"></div>
 
@@ -175,6 +193,25 @@
                 </span>
               </div>
               <div v-if="pathItemExpanded[getPathItemKey(block._groupId, ibi)]" class="reasoning-text" v-html="fmt(ib.content)"></div>
+            </div>
+          </div>
+          <!-- 内层加密思考 -->
+          <div v-else-if="ib.type === 'reasoning_started'" class="tool-group-item-block">
+            <div class="block-reasoning">
+              <div class="reasoning-head" @click="togglePathItem(block._groupId, ibi)">
+                <span class="default-icon" v-html="THINKING_ICON"></span>
+                <span>思考</span>
+                <span class="default-icon"
+                      v-html="CHEVRON_DOWN_ICON"
+                      :style="{
+                        transform: pathItemExpanded[getPathItemKey(block._groupId, ibi)] ? 'rotate(180deg)' : 'rotate(0deg)',
+                        display: 'inline-block',
+                        transition: 'transform 0.25s ease',
+                        lineHeight: 0
+                      }">
+                </span>
+              </div>
+              <div v-if="pathItemExpanded[getPathItemKey(block._groupId, ibi)]" class="reasoning-text" role="status">加密思考</div>
             </div>
           </div>
           <!-- 内层工具 -->
@@ -418,6 +455,22 @@
             </div>
             <div v-if="sb.showContent" class="reasoning-text" v-html="fmt(sb.content)"></div>
           </div>
+          <div v-else-if="sb.type === 'reasoning_started'" class="block-reasoning">
+            <div class="reasoning-head" @click="sb.showContent = !sb.showContent">
+              <span class="default-icon" v-html="THINKING_ICON"></span>
+              <span>思考</span>
+              <span class="default-icon"
+                    v-html="CHEVRON_DOWN_ICON"
+                    :style="{
+                      transform: sb.showContent ? 'rotate(180deg)' : 'rotate(0deg)',
+                      display: 'inline-block',
+                      transition: 'transform 0.25s ease',
+                      lineHeight: 0
+                    }">
+              </span>
+            </div>
+            <div v-if="sb.showContent" class="reasoning-text" role="status">加密思考</div>
+          </div>
           <!-- 子代理内层 content -->
           <div v-else-if="sb.type === 'content' && sb.content" class="block-content" v-html="fmt(sb.content)"></div>
         </div>
@@ -581,7 +634,10 @@ const isTerminalResponseBlock = (block) => {
   return block.type === 'tool_call' && (block.name === 'finish' || block.name === 'ask_choice')
 }
 
-/** 将连续 reasoning + tool_call(非 finish) 合并为 path_group */
+const isReasoningBlock = block => block?.type === 'reasoning' || block?.type === 'reasoning_started'
+const isPathBlock = block => isReasoningBlock(block) || (block?.type === 'tool_call' && block.name !== 'finish')
+
+/** 将连续思考块 + tool_call(非 finish) 合并为 path_group */
 const processedBlocks = computed(() => {
   const src = props.blocks
   if (!src || src.length === 0) return []
@@ -589,26 +645,26 @@ const processedBlocks = computed(() => {
   let i = 0
   while (i < src.length) {
     const b = src[i]
-    // 收集连续的 reasoning + tool_call(非 finish)
-    if (b.type === 'reasoning' || (b.type === 'tool_call' && b.name !== 'finish')) {
+    // 收集连续的普通/加密思考 + tool_call(非 finish)
+    if (isPathBlock(b)) {
       const group = [b]
       let j = i + 1
       while (j < src.length) {
         const nb = src[j]
-        if (nb.type === 'reasoning' || (nb.type === 'tool_call' && nb.name !== 'finish')) {
+        if (isPathBlock(nb)) {
           group.push(nb)
           j++
         } else {
           break
         }
       }
-      // 不管几个都合并为 path_group（单个 reasoning 也要折叠）
+      // 不管几个都合并为 path_group（单个思考块也要折叠）
       const gid = `pg-${i}`
       // 工作流工具在 path_group 中自动展开
       // (已移到 watchEffect 中处理，避免 computed 内修改 reactive 状态)
       const toolCount = group.filter(x => x.type === 'tool_call').length
-      const thinkCount = group.filter(x => x.type === 'reasoning').length
-      const pathNames = group.map(x => x.type === 'reasoning' ? 'think' : x.name).join(' → ')
+      const thinkCount = group.filter(isReasoningBlock).length
+      const pathNames = group.map(x => isReasoningBlock(x) ? 'think' : x.name).join(' → ')
       // Unique tool names for inline display (Cowork style)
       const uniqueToolNames = [...new Set(group.filter(x => x.type === 'tool_call').map(x => x.name))].join(' › ')
       const allDone = group.filter(x => x.type === 'tool_call').every(t => t.status === '成功')

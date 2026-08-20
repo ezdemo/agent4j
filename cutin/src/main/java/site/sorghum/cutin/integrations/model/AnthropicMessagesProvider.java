@@ -337,10 +337,15 @@ public final class AnthropicMessagesProvider implements ModelProvider {
                     state.inputUsage = usage;
                 }
             }
-            case "content_block_start" -> state.contentBlockStart(
-                JsonSupport.child(chunk, "content_block"),
-                JsonSupport.intValue(chunk, 0, "index")
-            );
+            case "content_block_start" -> {
+                if (state.contentBlockStart(
+                    JsonSupport.child(chunk, "content_block"),
+                    JsonSupport.intValue(chunk, 0, "index")
+                )) {
+                    builder.add(new StreamChunk("", Usage.ZERO)
+                        .withPhase(ModelStreamPhase.REASONING_STARTED));
+                }
+            }
             case "content_block_delta" -> {
                 ONode delta = JsonSupport.child(chunk, "delta");
                 String deltaType = JsonSupport.text(delta, "", "type");
@@ -354,6 +359,10 @@ public final class AnthropicMessagesProvider implements ModelProvider {
                     case "thinking_delta" -> {
                         String thinking = JsonSupport.text(delta, "", "thinking");
                         if (!thinking.isEmpty()) {
+                            if (state.markReasoningStarted()) {
+                                builder.add(new StreamChunk("", Usage.ZERO)
+                                    .withPhase(ModelStreamPhase.REASONING_STARTED));
+                            }
                             state.appendThinking(thinking);
                             builder.add(new StreamChunk(
                                 "",
@@ -367,7 +376,13 @@ public final class AnthropicMessagesProvider implements ModelProvider {
                         }
                     }
                     case "signature_delta" -> state.appendSignature(JsonSupport.text(delta, "", "signature"));
-                    case "redacted_thinking_delta" -> state.appendRedacted(JsonSupport.text(delta, "", "data"));
+                    case "redacted_thinking_delta" -> {
+                        if (state.markReasoningStarted()) {
+                            builder.add(new StreamChunk("", Usage.ZERO)
+                                .withPhase(ModelStreamPhase.REASONING_STARTED));
+                        }
+                        state.appendRedacted(JsonSupport.text(delta, "", "data"));
+                    }
                     case "input_json_delta" -> state.appendArguments(
                         JsonSupport.intValue(chunk, 0, "index"),
                         JsonSupport.text(delta, "", "partial_json")
@@ -449,6 +464,8 @@ public final class AnthropicMessagesProvider implements ModelProvider {
         private final site.sorghum.cutin.core.model.ModelHttpExchange exchange;
         /** 正在累积的 thinking 块。 */
         private ONode activeThinkingBlock;
+        /** 是否已发出本次响应的推理开始阶段。 */
+        private boolean reasoningStarted;
 
         private Accumulator(site.sorghum.cutin.core.model.ModelHttpExchange exchange) {
             this.exchange = exchange;
@@ -459,9 +476,9 @@ public final class AnthropicMessagesProvider implements ModelProvider {
         private final Map<Integer, ToolCallBuilder> toolCalls = new LinkedHashMap<>();
 
         /** 内容块开始时登记 thinking 或 tool_use 的元信息。 */
-        private void contentBlockStart(ONode block, int index) {
+        private boolean contentBlockStart(ONode block, int index) {
             if (block == null || block.isNull()) {
-                return;
+                return false;
             }
             String type = JsonSupport.text(block, "", "type");
             if ("thinking".equals(type) || "redacted_thinking".equals(type)) {
@@ -480,10 +497,10 @@ public final class AnthropicMessagesProvider implements ModelProvider {
                     active.set("data", data);
                 }
                 activeThinkingBlock = active;
-                return;
+                return markReasoningStarted();
             }
             if (!"tool_use".equals(type)) {
-                return;
+                return false;
             }
             ToolCallBuilder builder = toolCalls.computeIfAbsent(index, ignored -> new ToolCallBuilder());
             String id = JsonSupport.text(block, "", "id");
@@ -494,6 +511,13 @@ public final class AnthropicMessagesProvider implements ModelProvider {
             if (!name.isEmpty()) {
                 builder.name = name;
             }
+            return false;
+        }
+
+        private boolean markReasoningStarted() {
+            if (reasoningStarted) return false;
+            reasoningStarted = true;
+            return true;
         }
 
         /** 追加 thinking 增量文本。 */

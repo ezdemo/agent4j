@@ -106,6 +106,10 @@ public class SseEmitter {
         send("reasoning", escapeJson(token));
     }
 
+    public void sendReasoningStarted() {
+        send("reasoning_started", "{}");
+    }
+
     public void sendToolCall(String name, String args) {
         ONode node = ONode.ofJson("{}").asObject();
         node.set("name", name);

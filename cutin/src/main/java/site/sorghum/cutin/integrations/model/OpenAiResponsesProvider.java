@@ -297,6 +297,14 @@ public final class OpenAiResponsesProvider implements ModelProvider {
                 if (item != null && item.isObject()) {
                     if ("reasoning".equals(JsonSupport.text(item, "", "type"))) {
                         state.captureReasoning(item);
+                        boolean itemStarted = "response.output_item.added".equals(type);
+                        boolean encryptedContentAvailable =
+                            !JsonSupport.text(item, "", "encrypted_content").isEmpty();
+                        if ((itemStarted || encryptedContentAvailable)
+                            && state.markReasoningStarted()) {
+                            builder.add(new StreamChunk("", Usage.ZERO)
+                                .withPhase(ModelStreamPhase.REASONING_STARTED));
+                        }
                     }
                     state.setOutputItem(
                         JsonSupport.intValue(chunk, 0, "output_index"),
@@ -384,6 +392,8 @@ public final class OpenAiResponsesProvider implements ModelProvider {
         private boolean completed;
         /** 用量是否已通过增量块交付过。 */
         private boolean usageDelivered;
+        /** 是否已发出本次响应的推理开始阶段。 */
+        private boolean reasoningStarted;
         /** 全部原始 SSE 数据行。 */
         private final StringBuilder raw = new StringBuilder();
         private final site.sorghum.cutin.core.model.ModelHttpExchange exchange;
@@ -394,6 +404,14 @@ public final class OpenAiResponsesProvider implements ModelProvider {
 
         private Accumulator(site.sorghum.cutin.core.model.ModelHttpExchange exchange) {
             this.exchange = exchange;
+        }
+
+        private boolean markReasoningStarted() {
+            if (reasoningStarted) {
+                return false;
+            }
+            reasoningStarted = true;
+            return true;
         }
 
         private void captureReasoning(ONode item) {

@@ -328,6 +328,7 @@ import ReqSelect from '../components/ReqSelect.vue'
 import {configAPI, requirementAPI} from '../services/api'
 import {md} from '../utils/highlight'
 import {sanitize} from '../utils/sanitize'
+import {hasEncryptedReasoning} from '../utils/chatHistory'
 
 // ============ 常量 ============
 const COLUMNS = [
@@ -502,6 +503,9 @@ function toChatLogMessages(rawMessages) {
       lastAssistantItem.time = fmtTime(m.timestamp)
     }
     if (m.reasoning_content) lastAssistantItem.blocks.push({ type: 'reasoning', content: m.reasoning_content, showContent: false })
+    if (hasEncryptedReasoning(m.response_reasoning || m.responseReasoning)) {
+      lastAssistantItem.blocks.push({type: 'reasoning_started', showContent: false})
+    }
     if (m.tool_calls) for (const tc of m.tool_calls) {
       let name = tc.function?.name || tc.name || ''
       let args = tc.function?.arguments || tc.arguments || ''

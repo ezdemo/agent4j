@@ -45,6 +45,10 @@ public interface AgentOutput {
      */
     void onReasoning(String reasoning);
 
+    /** 模型已经开始思考，但思考文本此刻可能尚不可用。 */
+    default void onReasoningStarted() {
+    }
+
     /**
      * 工具调用事件
      */
