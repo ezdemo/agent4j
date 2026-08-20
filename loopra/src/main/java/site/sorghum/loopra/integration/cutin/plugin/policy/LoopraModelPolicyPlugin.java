@@ -144,6 +144,11 @@ public final class LoopraModelPolicyPlugin implements LoopPlugin {
     }
 
     private boolean isReadOnly(String toolId) {
+        // 优先用 cutin 的 ToolDefinition 元数据，兼容插件禁用后 legacy 为空的场景
+        try {
+            var def = host.getCutinTools() != null ? host.getCutinTools().find(toolId).orElse(null) : null;
+            if (def != null) return def.definition().metadata().readOnly();
+        } catch (Exception ignored) {}
         FunctionTool tool = host.getToolRegistry().get(toolId);
         return tool != null && ToolMetadata.isReadOnly(tool);
     }

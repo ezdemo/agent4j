@@ -23,6 +23,13 @@ public final class DefaultToolRegistry implements ToolRegistry {
 
     /** {@inheritDoc} */
     @Override
+    public boolean unregister(String toolId, Tool tool) {
+        // 仅当当前映射仍是该实例时移除，避免误删后来覆盖的同 id 工具
+        return tools.remove(toolId, tool);
+    }
+
+    /** {@inheritDoc} */
+    @Override
     public Optional<Tool> find(String toolId) {
         return Optional.ofNullable(tools.get(toolId));
     }

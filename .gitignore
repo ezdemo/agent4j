@@ -76,3 +76,4 @@ venv/
 /.codex/config.toml
 
 /.commandcode/
+/loopra/.loopra/
