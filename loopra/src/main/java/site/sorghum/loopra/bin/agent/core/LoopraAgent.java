@@ -635,6 +635,11 @@ public class LoopraAgent {
      * <p>仅关闭自建的 SessionStore；上层注入的共享存储由注入方管理生命周期。</p>
      */
     public void dispose() {
+        // 主循环仍在运行时先请求中断，避免 dispose 后推理循环继续执行工具（停止请求将无法再命中它）
+        if (loop != null && loop.isRunning()) {
+            log.info("[dispose] Agent 主循环仍在运行，先请求中断");
+            loop.requestUserAbort();
+        }
         // 注销 Dami 事件监听
         if (configListener != null) {
             try {
