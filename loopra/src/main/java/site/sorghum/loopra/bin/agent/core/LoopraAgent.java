@@ -339,6 +339,14 @@ public class LoopraAgent {
     }
 
     /**
+     * 标记会话标题已生成（用户手动重命名后调用），
+     * 避免后续回合开始时用首条消息自动覆盖用户自定义的名称。
+     */
+    public void markSessionTitleGenerated() {
+        sessionService.setTitleGenerated(true);
+    }
+
+    /**
      * 查询当前 Agent 是否正在执行推理回合。
      *
      * @return true 表示主循环正在运行

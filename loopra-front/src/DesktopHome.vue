@@ -166,6 +166,10 @@
         @contextmenu.prevent
       >
         <template v-if="contextMenu.type === 'session'">
+          <button type="button" @click="chooseContextAction('rename-session')">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M17 3a2.85 2.83 0 1 1 4 4L7.5 20.5 2 22l1.5-5.5Z"/></svg>
+            重命名会话
+          </button>
           <button class="danger" type="button" @click="chooseContextAction('delete-session')">
             <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M4 7h16M10 11v6M14 11v6M6 7l1 13h10l1-13M9 7V4h6v3"/></svg>
             删除会话
@@ -193,11 +197,36 @@
         </template>
       </div>
     </Teleport>
+
+    <Teleport to="body">
+      <div
+        v-if="renameDialog.visible"
+        class="desktop-rename-mask"
+        @click.self="closeRenameDialog"
+      >
+        <div class="desktop-rename-dialog" role="dialog" aria-label="重命名会话">
+          <h3>重命名会话</h3>
+          <input
+            ref="renameInput"
+            v-model="renameDialog.value"
+            type="text"
+            maxlength="100"
+            placeholder="输入新的会话名称"
+            @keydown.enter="confirmRename"
+            @keydown.esc="closeRenameDialog"
+          />
+          <div class="desktop-rename-actions">
+            <button type="button" class="desktop-rename-cancel" @click="closeRenameDialog">取消</button>
+            <button type="button" class="desktop-rename-confirm" :disabled="!renameDialog.value.trim() || renaming" @click="confirmRename">确定</button>
+          </div>
+        </div>
+      </div>
+    </Teleport>
   </section>
 </template>
 
 <script setup>
-import {computed, onBeforeUnmount, onMounted, reactive, ref, watch} from 'vue'
+import {computed, nextTick, onBeforeUnmount, onMounted, reactive, ref, watch} from 'vue'
 import {ReloadOutlined} from '@ant-design/icons-vue'
 import {message} from 'ant-design-vue'
 import {sessionsAPI} from './services/api'
@@ -211,7 +240,7 @@ const props = defineProps({
   refreshKey: { type: Number, default: 0 },
   refreshing: { type: Boolean, default: false }
 })
-const emit = defineEmits(['select-workspace', 'new-session', 'open-session', 'open-skills', 'open-requirement-board', 'open-tools', 'open-sub-agents', 'open-settings', 'toggle-theme', 'add-workspace', 'refresh', 'delete-session', 'clear-workspace', 'clear-old-sessions', 'delete-workspace', 'delete-workspaces', 'reorder-workspaces'])
+const emit = defineEmits(['select-workspace', 'new-session', 'open-session', 'open-skills', 'open-requirement-board', 'open-tools', 'open-sub-agents', 'open-settings', 'toggle-theme', 'add-workspace', 'refresh', 'delete-session', 'delete-sessions', 'clear-workspace', 'clear-old-sessions', 'delete-workspace', 'delete-workspaces', 'reorder-workspaces', 'session-renamed'])
 
 const query = ref('')
 const sessions = ref([])
@@ -222,6 +251,10 @@ const draggingHash = ref('')
 const dragOverHash = ref('')
 const dragOverBefore = ref(false)
 const contextMenu = reactive({ visible: false, type: '', item: null, x: 0, y: 0 })
+// 会话重命名弹窗
+const renameDialog = reactive({ visible: false, item: null, value: '' })
+const renaming = ref(false)
+const renameInput = ref(null)
 const activeWorkspace = computed(() => props.workspaces.find((workspace) => workspace.hash === props.activeWorkspaceHash))
 const filteredSessions = computed(() => {
   const keyword = query.value.trim().toLowerCase()
@@ -494,10 +527,50 @@ function chooseContextAction(action) {
     void copyWorkspacePath(item)
     return
   }
+  if (action === 'rename-session') {
+    openRenameDialog(item)
+    return
+  }
   if (action === 'delete-session') emit('delete-session', item)
   else if (action === 'clear-workspace') emit('clear-workspace', item)
   else if (action === 'clear-old-sessions') emit('clear-old-sessions', item)
   else if (action === 'delete-workspace') emit('delete-workspace', item)
+}
+
+// ============ 会话重命名 ============
+function openRenameDialog(session) {
+  renameDialog.item = session
+  renameDialog.value = session?.title || session?.name || ''
+  renameDialog.visible = true
+  nextTick(() => renameInput.value?.focus())
+}
+
+function closeRenameDialog() {
+  if (renaming.value) return
+  renameDialog.visible = false
+  renameDialog.item = null
+  renameDialog.value = ''
+}
+
+async function confirmRename() {
+  const item = renameDialog.item
+  const value = renameDialog.value.trim()
+  if (!item || !value || renaming.value) return
+  renaming.value = true
+  try {
+    const response = await sessionsAPI.renameSession(item.name, item.workspaceHash, value)
+    if (!response.success) throw new Error(response.message || '重命名失败')
+    message.success('会话已重命名')
+    renameDialog.visible = false
+    renameDialog.item = null
+    emit('session-renamed', { workspaceHash: item.workspaceHash, sessionName: item.name, title: value })
+    emit('refresh')
+    await loadSessions()
+  } catch (error) {
+    message.error('重命名失败：' + (error.message || '未知错误'))
+  } finally {
+    renaming.value = false
+  }
 }
 
 async function loadSessions() {
@@ -540,7 +613,10 @@ watch(sessions, (list) => {
   }
 })
 function onWindowKeydown(event) {
-  if (event.key === 'Escape') closeContextMenu()
+  if (event.key === 'Escape') {
+    closeContextMenu()
+    if (renameDialog.visible) closeRenameDialog()
+  }
 }
 onMounted(() => {
   window.addEventListener('click', closeContextMenu)
@@ -577,6 +653,15 @@ onBeforeUnmount(() => {
 .desktop-home-heading .desktop-multi-toggle { display: inline-flex; align-items: center; justify-content: center; width: 24px; height: 24px; padding: 3px; box-sizing: border-box; flex: 0 0 24px; color: var(--fg-3, #727987); }.desktop-home-heading .desktop-multi-toggle:hover { background: var(--bg-3, #f2f3f5); color: var(--fg, #202124); }.desktop-home-heading .desktop-multi-toggle.active { background: color-mix(in srgb, var(--accent) 14%, transparent); color: var(--accent); }.desktop-multi-toggle svg { width: 15px; height: 15px; }
 .desktop-heading-actions .desktop-select-all { display: inline-flex; align-items: center; justify-content: center; height: 24px; padding: 2px 8px; border-radius: 5px; background: var(--bg-3, #f2f3f5); color: var(--fg-2, #525866); font-size: 12px; font-weight: 600; }.desktop-heading-actions .desktop-select-all:hover { background: var(--bg-4, #e8e9eb); color: var(--fg, #202124); }
 .desktop-context-menu { position: fixed; z-index: 1000; width: 156px; padding: 4px; border: 1px solid var(--border, #e5e7eb); border-radius: 6px; background: var(--bg, #fff); box-shadow: var(--shadow-lg, 0 10px 28px rgba(0, 0, 0, 0.16)); }.desktop-context-menu button { width: 100%; height: 32px; display: flex; align-items: center; gap: 8px; padding: 0 8px; border: 0; border-radius: 4px; background: transparent; color: var(--fg-2, #525866); font: inherit; font-size: 13px; text-align: left; cursor: pointer; }.desktop-context-menu button:hover { color: var(--fg, #202124); background: var(--bg-3, #f2f3f5); }.desktop-context-menu button.danger { color: #c2413b; }.desktop-context-menu button.danger:hover { color: #b42318; background: rgba(220, 38, 38, 0.09); }.desktop-context-menu svg { width: 15px; height: 15px; }.desktop-context-menu-divider { height: 1px; margin: 4px; background: var(--border, #e5e7eb); }
+.desktop-rename-mask { position: fixed; inset: 0; z-index: 1100; display: flex; align-items: center; justify-content: center; background: rgba(15, 17, 20, 0.4); }
+.desktop-rename-dialog { width: 320px; padding: 18px; border-radius: 10px; background: var(--bg, #fff); box-shadow: var(--shadow-lg, 0 10px 28px rgba(0, 0, 0, 0.16)); box-sizing: border-box; }
+.desktop-rename-dialog h3 { margin: 0 0 12px; font-size: 14px; font-weight: 650; color: var(--fg, #202124); }
+.desktop-rename-dialog input { width: 100%; height: 34px; padding: 0 10px; border: 1px solid var(--border, #e5e7eb); border-radius: 6px; outline: none; background: var(--bg-2, #fafafa); color: var(--fg, #202124); font: inherit; font-size: 13px; box-sizing: border-box; }
+.desktop-rename-dialog input:focus { border-color: var(--accent, #4f7cff); }
+.desktop-rename-actions { display: flex; justify-content: flex-end; gap: 8px; margin-top: 14px; }
+.desktop-rename-actions button { height: 30px; padding: 0 14px; border: 0; border-radius: 6px; font: inherit; font-size: 13px; cursor: pointer; }
+.desktop-rename-cancel { background: var(--bg-3, #f2f3f5); color: var(--fg-2, #525866); }.desktop-rename-cancel:hover { background: var(--bg-4, #e8e9eb); }
+.desktop-rename-confirm { background: var(--accent, #4f7cff); color: #fff; }.desktop-rename-confirm:hover { filter: brightness(1.05); }.desktop-rename-confirm:disabled { opacity: 0.55; cursor: not-allowed; }
 @media (max-width: 1000px) { .desktop-home { --project-column: 220px; --column-gap: 24px; padding-inline: 24px; } }
 @media (max-width: 720px) { .desktop-home { --project-column: 1fr; --column-gap: 24px; padding: 18px 18px 22px; overflow: auto; }.desktop-home-search { margin-left: 0; margin-bottom: 16px; }.desktop-home-grid { flex: initial; grid-template-columns: 1fr; overflow: visible; }.desktop-project-list, .desktop-session-timeline { overflow: visible; } }
 </style>

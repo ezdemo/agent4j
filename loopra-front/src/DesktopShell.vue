@@ -176,6 +176,7 @@
         @refresh="refreshHome"
         @delete-session="confirmDeleteSession"
         @delete-sessions="confirmDeleteSessions"
+        @session-renamed="onSessionRenamed"
         @clear-workspace="confirmClearWorkspace"
         @clear-old-sessions="confirmClearOldSessions"
         @delete-workspace="confirmDeleteWorkspace"
@@ -984,6 +985,14 @@ const handleDeleteConfirmAction = (action) => {
   else if (kind === 'clearOldSessions') void performClearOldSessions(payload)
   else if (kind === 'deleteWorkspace') void performDeleteWorkspace(payload)
   else if (kind === 'deleteWorkspaces') void performDeleteWorkspaces(payload)
+}
+
+function onSessionRenamed({ workspaceHash, sessionName, title }) {
+  if (!sessionName || !title) return
+  // 同步已打开标签页的标题，保持与列表一致
+  tabs.value = tabs.value.map((tab) =>
+    tab.sessionName === sessionName && tab.workspaceHash === workspaceHash ? { ...tab, title } : tab
+  )
 }
 
 function confirmDeleteSession(session) {
