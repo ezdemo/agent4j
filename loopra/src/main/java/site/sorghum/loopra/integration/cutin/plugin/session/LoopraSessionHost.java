@@ -10,9 +10,10 @@ public interface LoopraSessionHost {
     void endCutinLoop();
 
     /**
-      * 在新的 cutin 回合开始时执行一次。人工审批重入时用户消息为空，
-      * 宿主不能把它当作新的用户回合。
-     */
+      * 在用户消息清洗完成后（preflight-sanitize 节点之后）执行一次，
+      * 传入清洗后的消息文本。HITL 人工审批重入不经过 sanitize 节点，
+      * 因此不会重复触发 —— 重入不属于新的用户回合。
+      */
     void beforeTurn(String userMessage);
 
     void afterTurn();

@@ -9,6 +9,7 @@ import site.sorghum.cutin.core.loop.LoopResult;
 import site.sorghum.cutin.core.plugin.AgentPlugin;
 import site.sorghum.cutin.core.plugin.LoopPlugin;
 import site.sorghum.cutin.core.plugin.LoopRegistrar;
+import site.sorghum.loopra.integration.cutin.plugin.preflight.LoopraPreflight;
 
 /**
  * 将 Loopra 生命周期与会话提交统一接入 cutin。
@@ -43,11 +44,6 @@ public final class LoopraSessionPlugin implements LoopPlugin {
             @Override
             public void run(LoopEvent event) {
                 host.beginCutinLoop();
-                Object raw = event.attributes().get("context");
-                String userMessage = raw instanceof site.sorghum.cutin.core.context.DefaultLoopContext context
-                        ? String.valueOf(context.variables().getOrDefault("loopraUserMessage", ""))
-                        : "";
-                host.beforeTurn(userMessage);
             }
         });
         registrar.registerHook(new Hook() {
@@ -66,7 +62,23 @@ public final class LoopraSessionPlugin implements LoopPlugin {
                 host.endCutinLoop();
             }
         });
+        registrar.registerInterceptor(InterceptPoint.AFTER_STEP, 1000, this::onAfterSanitize);
         registrar.registerInterceptor(InterceptPoint.AFTER_TURN, 1000, this::onAfterTurn);
+    }
+
+    /**
+     * 用户消息清洗（preflight-sanitize 节点）完成后触发回合开始回调：
+     * 此时 {@code loopraUserMessage} 变量已由 sanitizer 写入，
+     * 标题生成/会话名分配基于清洗后的消息文本。
+     * HITL 人工审批重入从检查点直接进入 tool 节点，不经过 sanitize 节点，天然不会重复触发。
+     */
+    private InterceptDecision onAfterSanitize(InterceptContext context) {
+        if (!LoopraPreflight.SANITIZE_NODE.equals(context.nodeId())) {
+            return InterceptDecision.pass();
+        }
+        Object raw = context.context().variables().get("loopraUserMessage");
+        host.beforeTurn(raw == null ? "" : String.valueOf(raw));
+        return InterceptDecision.pass();
     }
 
     private InterceptDecision onAfterTurn(InterceptContext context) {
