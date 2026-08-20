@@ -727,6 +727,12 @@ export const systemAPI = {
   }
 }
 
+// Cutin/Loopra 插件运行时 API
+export const pluginAPI = {
+  list: () => api.get('/plugins'),
+  setEnabled: (id, enabled) => api.post(`/plugins/${encodeURIComponent(id)}/toggle`, {enabled})
+}
+
 // OpenAPI 管理 API
 export const openApiAPI = {
     getSources: () => {

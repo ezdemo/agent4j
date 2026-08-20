@@ -8,7 +8,7 @@ import site.sorghum.cutin.core.plugin.LoopRegistrar;
 import site.sorghum.loopra.bin.agent.model.UserMessage;
 
 /** 根据当前模型能力清洗主图前置节点中的多模态用户消息。 */
-@AgentPlugin(id = "loopra-preflight-message-sanitizer")
+@AgentPlugin(id = "loopra-preflight-message-sanitizer", remark = "按模型能力清洗多模态消息，避免请求格式不兼容。")
 public final class LoopraMessageSanitizerPlugin implements LoopPlugin {
 
     private final LoopraPreflightHost host;

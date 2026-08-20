@@ -13,7 +13,7 @@ import java.util.ArrayList;
 import java.util.List;
 
 /** 在模型调用前修复不满足兼容 API 约束的消息。 */
-@AgentPlugin(id = "loopra-message-healing")
+@AgentPlugin(id = "loopra-message-healing", remark = "修复不符合模型接口约束的历史消息，提升兼容性。")
 public final class LoopraMessageHealingPlugin implements LoopPlugin {
 
     @Override

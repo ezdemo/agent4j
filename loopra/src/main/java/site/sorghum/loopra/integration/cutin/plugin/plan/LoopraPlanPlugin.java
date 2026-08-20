@@ -9,7 +9,7 @@ import site.sorghum.cutin.core.plugin.LoopRegistrar;
 /**
   * 把待定计划持久化变为 cutin 插件边界。
  */
-@AgentPlugin(id = "loopra-plan")
+@AgentPlugin(id = "loopra-plan", remark = "维护任务计划状态，支持计划提交与执行跟踪。")
 public final class LoopraPlanPlugin implements LoopPlugin {
 
     private final LoopraPlanHost host;

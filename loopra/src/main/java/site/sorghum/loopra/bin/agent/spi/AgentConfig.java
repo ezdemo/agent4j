@@ -2,6 +2,7 @@ package site.sorghum.loopra.bin.agent.spi;
 
 import java.util.List;
 import java.util.Map;
+import java.util.Set;
 
 /**
  * AgentLoop 内核所需的只读配置视图（SPI）。
@@ -77,6 +78,11 @@ public interface AgentConfig {
 
     /** HITL auto 模式的白名单工具列表。 */
     List<String> autoWhitelist();
+
+    /** 全局禁用的 Loop 插件 ID；默认全部启用。 */
+    default Set<String> disabledPlugins() {
+        return Set.of();
+    }
 
     /**
      * 模型渠道视图（对应具体实现中的 ModelChannel）。

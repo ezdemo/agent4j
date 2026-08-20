@@ -12,7 +12,7 @@ import site.sorghum.cutin.core.plugin.LoopRegistrar;
 /**
   * 把每个模型步骤新增的 token 用量上报给 Loopra 宿主。
  */
-@AgentPlugin(id = "loopra-usage")
+@AgentPlugin(id = "loopra-usage", remark = "统计模型调用的 Token 用量与费用信息。")
 public final class LoopraUsagePlugin implements LoopPlugin {
 
     private static final String LAST_REPORTED_KEY = "loopraLastReportedUsage";

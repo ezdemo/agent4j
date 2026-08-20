@@ -11,7 +11,7 @@ import site.sorghum.cutin.core.plugin.LoopRegistrar;
 /**
   * 在每次模型请求前执行 Loopra 的消息准备与上下文折叠。
  */
-@AgentPlugin(id = "loopra-compaction")
+@AgentPlugin(id = "loopra-compaction", remark = "在上下文接近上限时整理历史消息，释放可用上下文。")
 public final class LoopraCompactionPlugin implements LoopPlugin {
 
     private final LoopraCompactionHost host;

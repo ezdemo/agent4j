@@ -113,6 +113,23 @@ public final class PluginBeanManager implements PluginContext {
         rebuildBeans();
     }
 
+    /** 返回当前管理器内全部插件的只读运行状态。 */
+    public synchronized List<PluginState> pluginStates() {
+        return plugins.stream()
+            .sorted(Comparator.comparingInt(PluginEntry::order).thenComparing(entry -> entry.id))
+            .map(entry -> new PluginState(
+                entry.id,
+                entry.plugin.getClass().getName(),
+                entry.order,
+                entry.active
+            ))
+            .toList();
+    }
+
+    /** 单个插件实例的通用运行状态，不包含宿主产品语义。 */
+    public record PluginState(String id, String className, int order, boolean active) {
+    }
+
     @Override
     @SuppressWarnings("unchecked")
     public synchronized <T> T getBean(Class<T> type) {

@@ -15,7 +15,7 @@ import site.sorghum.loopra.tool.LogLevel;
   * 工具批次生命周期插件：批次边界对其他插件可见，
   * 超时/取消事件走同一条拦截链。
  */
-@AgentPlugin(id = "loopra-tool-batch")
+@AgentPlugin(id = "loopra-tool-batch", remark = "汇总并跟踪一批并行工具调用的执行状态。")
 public final class LoopraToolBatchPlugin implements LoopPlugin {
 
     private final LoopraToolBatchHost host;

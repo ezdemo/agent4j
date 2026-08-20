@@ -15,7 +15,7 @@ import site.sorghum.loopra.bin.tool.ToolMetadata;
 /**
   * Loopra 面向工具的策略：工具执行前的计划模式只读约束与 StormBreaker 抑制。
  */
-@AgentPlugin(id = "loopra-tool-policy")
+@AgentPlugin(id = "loopra-tool-policy", remark = "按安全策略检查和约束工具调用。")
 public final class LoopraToolPolicyPlugin implements LoopPlugin {
 
     private final LoopraPolicyHost host;

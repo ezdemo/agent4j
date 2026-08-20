@@ -9,7 +9,7 @@ import site.sorghum.loopra.bin.agent.model.UserMessage;
 import site.sorghum.loopra.integration.cutin.CutinMessageBridge;
 
 /** 把清洗后的用户消息追加到 Loopra 与 Cutin 主图上下文。 */
-@AgentPlugin(id = "loopra-preflight-user-message")
+@AgentPlugin(id = "loopra-preflight-user-message", remark = "把用户消息同步到 Loopra 与 Cutin 的上下文。")
 public final class LoopraUserMessagePlugin implements LoopPlugin {
 
     private final LoopraPreflightHost host;
