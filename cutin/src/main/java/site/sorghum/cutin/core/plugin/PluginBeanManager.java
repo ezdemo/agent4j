@@ -8,7 +8,9 @@ import site.sorghum.cutin.core.model.ModelProvider;
 import site.sorghum.cutin.core.tool.Tool;
 import site.sorghum.cutin.core.tool.ToolProvider;
 
+import java.io.IOException;
 import java.lang.reflect.InvocationTargetException;
+import java.net.URLClassLoader;
 import java.nio.file.Path;
 import java.util.*;
 
@@ -19,6 +21,8 @@ public final class PluginBeanManager implements PluginContext {
     private final Map<Class<?>, Object> beansByType = new HashMap<>();
     private final Map<String, Object> ordinaryBeans = new HashMap<>();
     private final List<PluginEntry> plugins = new ArrayList<>();
+    /** 外置插件类加载器引用计数：归零时关闭，避免影响共享同一 jar 的其他插件。 */
+    private final Map<URLClassLoader, Integer> loaderRefs = new IdentityHashMap<>();
     private boolean started;
 
     public PluginBeanManager(LoopRegistrar registrar) {
@@ -35,23 +39,35 @@ public final class PluginBeanManager implements PluginContext {
     }
 
     public synchronized void registerPlugin(LoopPlugin plugin) {
+        registerPlugin(plugin, null);
+    }
+
+    /**
+     * 注册外置插件并绑定其类加载器。
+     *
+     * <p>卸载时若加载器不再被其他插件引用则一并关闭。</p>
+     */
+    public synchronized void registerPlugin(LoopPlugin plugin, URLClassLoader loader) {
         Objects.requireNonNull(plugin, "plugin");
         String id = pluginId(plugin);
         if (beansById.containsKey(id)) {
             throw new IllegalStateException("duplicate plugin id: " + id);
         }
         AgentPlugin annotation = plugin.getClass().getAnnotation(AgentPlugin.class);
-        PluginEntry entry = new PluginEntry(annotation == null ? 0 : annotation.order(), id, plugin);
+        PluginEntry entry = new PluginEntry(annotation == null ? 0 : annotation.order(), id, plugin, loader);
         plugins.add(entry);
+        retainLoader(loader);
         rebuildBeans();
         if (started) {
             startEntry(entry);
         }
     }
 
+    /** 从指定路径发现外置插件包并注册；类加载器由管理器持有，卸载时释放。 */
     public void discover(Path pluginPackage) {
-        for (LoopPlugin plugin : new PluginPackageLoader().load(pluginPackage)) {
-            registerPlugin(plugin);
+        PluginPackageLoader.LoadedPackage loaded = new PluginPackageLoader().load(pluginPackage);
+        for (LoopPlugin plugin : loaded.plugins()) {
+            registerPlugin(plugin, loaded.classLoader());
         }
     }
 
@@ -105,11 +121,12 @@ public final class PluginBeanManager implements PluginContext {
             () -> { throw new IllegalArgumentException("unknown plugin: " + id); });
     }
 
-    /** 移除插件实例；移除前会先停止并释放全部扩展。 */
+    /** 移除插件实例；移除前会先停止并释放全部扩展与类加载器。 */
     public synchronized void unregisterPlugin(String id) {
         PluginEntry entry = findEntry(id).orElseThrow(() -> new IllegalArgumentException("unknown plugin: " + id));
         stopEntry(entry);
         plugins.remove(entry);
+        releaseLoader(entry.loader);
         rebuildBeans();
     }
 
@@ -215,17 +232,48 @@ public final class PluginBeanManager implements PluginContext {
         }
     }
 
+    /** 登记类加载器引用。 */
+    private void retainLoader(URLClassLoader loader) {
+        if (loader != null) {
+            loaderRefs.merge(loader, 1, Integer::sum);
+        }
+    }
+
+    /** 释放类加载器引用；归零时关闭以真正卸载外置插件类。 */
+    private void releaseLoader(URLClassLoader loader) {
+        if (loader == null) {
+            return;
+        }
+        Integer count = loaderRefs.get(loader);
+        if (count == null) {
+            return;
+        }
+        if (count <= 1) {
+            loaderRefs.remove(loader);
+            try {
+                loader.close();
+            } catch (IOException ignored) {
+                // 关闭失败不影响卸载流程；未关闭的加载器会随 GC 回收
+            }
+        } else {
+            loaderRefs.put(loader, count - 1);
+        }
+    }
+
     private static final class PluginEntry {
         private final int order;
         private final String id;
         private final LoopPlugin plugin;
+        /** 外置插件的类加载器；内置插件为 null。 */
+        private final URLClassLoader loader;
         private final List<Registration> registrations = new ArrayList<>();
         private boolean active;
 
-        private PluginEntry(int order, String id, LoopPlugin plugin) {
+        private PluginEntry(int order, String id, LoopPlugin plugin, URLClassLoader loader) {
             this.order = order;
             this.id = id;
             this.plugin = plugin;
+            this.loader = loader;
         }
 
         int order() { return order; }

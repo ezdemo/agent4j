@@ -81,6 +81,9 @@ class PluginMarketplaceInstallerTest {
 
             assertEquals(LoopResult.Status.COMPLETED, result.status());
             assertTrue(result.finalSnapshot().variables().containsKey("packagePluginApplied"));
+
+            // 卸载插件以关闭类加载器，避免 Windows 下临时目录因文件锁无法删除
+            manager.unregisterPlugin("package-sample");
         } finally {
             server.stop(0);
         }

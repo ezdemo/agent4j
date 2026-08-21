@@ -46,6 +46,7 @@ import site.sorghum.loopra.integration.cutin.CutinMessageBridge;
 import site.sorghum.loopra.integration.cutin.plugin.compaction.LoopraCompactionHost;
 import site.sorghum.loopra.integration.cutin.plugin.compaction.LoopraCompactionPlugin;
 import site.sorghum.loopra.integration.cutin.plugin.LoopraPluginRuntime;
+import site.sorghum.loopra.integration.cutin.plugin.external.ExternalPluginStore;
 import site.sorghum.loopra.integration.cutin.plugin.exit.LoopraExitHost;
 import site.sorghum.loopra.integration.cutin.plugin.exit.LoopraExitPlugin;
 import site.sorghum.loopra.integration.cutin.plugin.httplog.LoopraHttpLogPlugin;
@@ -396,6 +397,8 @@ public class AgentLoop implements
         plugins.registerPlugin(new LoopraSessionPlugin(this));
         plugins.registerPlugin(new LoopraPlanPlugin(this));
         plugins.registerPlugin(new LoopraToolBatchPlugin(this));
+        // 外置插件：startAll 前按清单加载，与内置插件同场竞技
+        new ExternalPluginStore().loadInto(plugins);
         plugins.startAll();
         LoopraPluginRuntime.attach(plugins, config == null ? Set.of() : config.disabledPlugins());
         return plugins;

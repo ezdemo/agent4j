@@ -4,6 +4,7 @@ import site.sorghum.cutin.core.plugin.AgentPlugin;
 import site.sorghum.cutin.core.plugin.PluginBeanManager;
 import site.sorghum.cutin.core.plugin.PluginBeanManager.PluginState;
 import site.sorghum.cutin.core.plugin.LoopPlugin;
+import site.sorghum.cutin.core.plugin.PluginPackageLoader;
 import site.sorghum.loopra.integration.cutin.plugin.compaction.LoopraCompactionPlugin;
 import site.sorghum.loopra.integration.cutin.plugin.exit.LoopraExitPlugin;
 import site.sorghum.loopra.integration.cutin.plugin.httplog.LoopraHttpLogPlugin;
@@ -25,6 +26,7 @@ import site.sorghum.loopra.integration.cutin.plugin.usage.LoopraTokenSpeedPlugin
 import site.sorghum.loopra.integration.cutin.plugin.usage.LoopraUsagePlugin;
 
 import java.lang.ref.WeakReference;
+import java.nio.file.Path;
 import java.util.ArrayList;
 import java.util.Collection;
 import java.util.Comparator;
@@ -96,6 +98,57 @@ public final class LoopraPluginRuntime {
     /** 主动解除登记；弱引用仍作为异常释放时的兜底。 */
     public static synchronized void detach(PluginBeanManager manager) {
         MANAGERS.removeIf(reference -> reference.get() == null || reference.get() == manager);
+    }
+
+    /**
+     * 把外置插件 jar 热注册到全部存活的 AgentLoop。
+     *
+     * <p>每个管理器使用独立的类加载器实例与插件实例，互不影响；
+     * 返回注册失败的 AgentLoop 数量（0 表示全部成功）。</p>
+     */
+    public static synchronized int registerExternalEverywhere(Path jar) {
+        cleanupManagers();
+        int failures = 0;
+        for (PluginBeanManager manager : liveManagers()) {
+            try {
+                PluginPackageLoader.LoadedPackage loaded = new PluginPackageLoader().load(jar);
+                for (LoopPlugin plugin : loaded.plugins()) {
+                    manager.registerPlugin(plugin, loaded.classLoader());
+                }
+                catalog(manager);
+            } catch (RuntimeException exception) {
+                failures++;
+            }
+        }
+        return failures;
+    }
+
+    /** 从全部存活的 AgentLoop 注销指定 id 的外置插件。 */
+    public static synchronized void unregisterExternalEverywhere(String pluginId) {
+        cleanupManagers();
+        for (PluginBeanManager manager : liveManagers()) {
+            boolean present = manager.pluginStates().stream()
+                .anyMatch(state -> state.id().equals(pluginId));
+            if (present) {
+                try {
+                    manager.unregisterPlugin(pluginId);
+                } catch (RuntimeException ignored) {
+                    // 单个实例注销失败不影响其他实例；状态可通过查询接口诊断
+                }
+            }
+        }
+    }
+
+    /** 判断指定 id 是否为内置插件，用于外置插件安装时的冲突检测。 */
+    public static synchronized boolean isBuiltIn(String pluginId) {
+        for (Class<? extends LoopPlugin> type : BUILT_INS) {
+            AgentPlugin annotation = type.getAnnotation(AgentPlugin.class);
+            String builtInId = annotation == null ? null : annotation.id();
+            if (pluginId.equals(builtInId)) {
+                return true;
+            }
+        }
+        return false;
     }
 
     /** 从持久化配置初始化策略；不会启动或停止尚未登记的实例。 */
