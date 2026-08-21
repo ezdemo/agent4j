@@ -274,7 +274,7 @@
 
         <div class="input-actions">
           <slot name="session-actions"></slot>
-          <div class="composer-tools-menu">
+        <div class="composer-tools-menu" :class="{ 'tools-open': toolsMenuOpen }" @mouseenter="openToolsMenu" @mouseleave="scheduleCloseToolsMenu">
             <button type="button" class="upload-btn composer-tools-trigger"
                     title="更多输入工具" aria-label="更多输入工具" aria-haspopup="menu">
               <PaperClipOutlined />
@@ -290,7 +290,7 @@
                 <FileTextOutlined />
                 <span><strong>{{ planMode ? '退出计划模式' : '计划模式' }}</strong><small>先生成计划，确认后执行</small></span>
               </button>
-              <div class="composer-tools-branch project-tools-branch" @mouseenter="openProjectPicker">
+              <div class="composer-tools-branch project-tools-branch" :class="{ 'branch-active': activeToolsBranch === 'project' }" @mouseenter="openToolsBranch('project'); openProjectPicker()" @mouseleave="scheduleCloseToolsBranch">
                 <button type="button" class="composer-tools-primary" role="menuitem" aria-haspopup="menu">
                   <svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M3 7h7l2 2h9v10H3z"/><path d="M3 7V5h7l2 2"/></svg>
                   <span><strong>关联项目</strong><small>{{ selectedProjects.length ? `已选 ${selectedProjects.length} 个` : '添加本轮联动项目' }}</small></span>
@@ -311,7 +311,7 @@
                   </div>
                 </div>
               </div>
-              <div class="composer-tools-branch skill-tools-branch" @mouseenter="openSkillPicker">
+              <div class="composer-tools-branch skill-tools-branch" :class="{ 'branch-active': activeToolsBranch === 'skill' }" @mouseenter="openToolsBranch('skill'); openSkillPicker()" @mouseleave="scheduleCloseToolsBranch">
                 <button type="button" class="composer-tools-primary" role="menuitem" aria-haspopup="menu">
                   <svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M14.7 6.3a1 1 0 0 0 0 1.4l1.6 1.6a1 1 0 0 0 1.4 0l3.77-3.77a6 6 0 0 1-7.94 7.94l-6.91 6.91a2.12 2.12 0 0 1-3-3l6.91-6.91a6 6 0 0 1 7.94-7.94l-3.76 3.76z"/></svg>
                   <span><strong>技能</strong><small>{{ selectedSkills.length ? `已选 ${selectedSkills.length} 个` : '为本轮选择技能' }}</small></span>
@@ -332,7 +332,7 @@
                   </div>
                 </div>
               </div>
-              <div class="composer-tools-branch permission-tools-branch">
+              <div class="composer-tools-branch permission-tools-branch" :class="{ 'branch-active': activeToolsBranch === 'permission' }" @mouseenter="openToolsBranch('permission')" @mouseleave="scheduleCloseToolsBranch">
                 <button type="button" class="composer-tools-primary" role="menuitem" aria-haspopup="menu">
                   <svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/></svg>
                   <span><strong>权限模式</strong><small>{{ permissionLabel }}</small></span>
@@ -1555,6 +1555,36 @@ const clearSelectedSkills = () => {
   emit('switchSkill', [])
 }
 
+// ============= 更多输入工具菜单（hover 宽限期：离开后延迟收起，避免移到二级面板时弹框瞬失） =============
+const toolsMenuOpen = ref(false)
+const activeToolsBranch = ref('') // '' | 'project' | 'skill' | 'permission'
+let toolsMenuTimer = null
+let toolsBranchTimer = null
+
+const openToolsMenu = () => {
+  if (toolsMenuTimer) { clearTimeout(toolsMenuTimer); toolsMenuTimer = null }
+  toolsMenuOpen.value = true
+}
+const scheduleCloseToolsMenu = () => {
+  if (toolsMenuTimer) clearTimeout(toolsMenuTimer)
+  toolsMenuTimer = setTimeout(() => {
+    toolsMenuTimer = null
+    toolsMenuOpen.value = false
+    activeToolsBranch.value = ''
+  }, 250)
+}
+const openToolsBranch = (name) => {
+  if (toolsBranchTimer) { clearTimeout(toolsBranchTimer); toolsBranchTimer = null }
+  activeToolsBranch.value = name
+}
+const scheduleCloseToolsBranch = () => {
+  if (toolsBranchTimer) clearTimeout(toolsBranchTimer)
+  toolsBranchTimer = setTimeout(() => {
+    toolsBranchTimer = null
+    activeToolsBranch.value = ''
+  }, 250)
+}
+
 const openSkillPicker = async () => {
   if (showSkillPicker.value && availableSkills.value.length > 0) return
   showSkillPicker.value = true
@@ -1793,6 +1823,8 @@ const updateReasoningEffort = (index) => {
   const next = effortOptions[nextIndex]
   if (!next) return
   reasoningEffortIndex.value = nextIndex
+  // 一拉动滑块，自定义值立即作废，回到滑块指向的档位
+  customReasoningEffort.value = ''
 }
 const commitReasoningEffort = (index) => {
   updateReasoningEffort(index)
@@ -1892,6 +1924,8 @@ onMounted(() => {
 onBeforeUnmount(() => {
   stopChecklistPolling()
   if (fileMentionSearchTimer) clearTimeout(fileMentionSearchTimer)
+  if (toolsMenuTimer) clearTimeout(toolsMenuTimer)
+  if (toolsBranchTimer) clearTimeout(toolsBranchTimer)
   document.removeEventListener('click', handleOutside)
   window.removeEventListener('blur', rememberInputFocus)
   window.removeEventListener('focus', restoreInputFocus)
@@ -2442,7 +2476,7 @@ defineExpose({focus: () => inputField.value?.focus(), addFileContext, addElement
   content: '';
 }
 
-.composer-tools-menu:hover .composer-tools-submenu {
+.composer-tools-menu.tools-open .composer-tools-submenu {
   opacity: 1;
   visibility: visible;
   pointer-events: auto;
@@ -2468,7 +2502,7 @@ defineExpose({focus: () => inputField.value?.focus(), addFileContext, addElement
 .composer-tools-primary:hover,
 .composer-tools-primary:focus-visible,
 .composer-tools-primary.active,
-.composer-tools-branch:hover > .composer-tools-primary {
+.composer-tools-branch.branch-active > .composer-tools-primary {
   background: var(--bg-3);
   color: var(--accent);
   outline: none;
@@ -2551,7 +2585,7 @@ defineExpose({focus: () => inputField.value?.focus(), addFileContext, addElement
   content: '';
 }
 
-.composer-tools-branch:hover > .composer-tools-nested {
+.composer-tools-branch.branch-active > .composer-tools-nested {
   opacity: 1;
   visibility: visible;
   pointer-events: auto;
