@@ -15,10 +15,11 @@ import java.util.Locale;
 /**
  * /plugin — 管理外置插件。
  * <p>
- * 支持通过 JAR 直链一行命令安装插件，安装后立即热注册到全部存活 AgentLoop，
+ * 支持通过 JAR 直链或本地 jar 路径一行命令安装插件，安装后立即热注册到全部存活 AgentLoop，
  * 并持久化到 ~/.loopra/plugins/installed.json，重启后自动加载：
  * <pre>
- * /plugin add https://example.com/my-plugin-1.0.0.jar   安装（重复执行同 id 视为更新）
+ * /plugin add https://example.com/my-plugin-1.0.0.jar   安装（直链下载）
+ * /plugin add D:\builds\my-plugin-1.0.0.jar             安装（本地 jar 复制）
  * /plugin list                                          列出已安装外置插件
  * /plugin remove my-plugin                              卸载
  * /plugin disable my-plugin                             停用（不删除文件）
@@ -51,7 +52,7 @@ public class PluginCommand implements ChatCommand {
 
     @Override
     public String getDescription() {
-        return "/plugin      外置插件管理：add <jar直链> / list / remove <id> / enable|disable <id>";
+        return "/plugin      外置插件管理：add <jar直链|本地jar路径> / list / remove <id> / enable|disable <id>";
     }
 
     @Override
@@ -86,10 +87,10 @@ public class PluginCommand implements ChatCommand {
     /** 安装外置插件。 */
     private void doInstall(String url) {
         if (url == null || url.isBlank()) {
-            log.info("用法: /plugin add https://host/path/my-plugin-1.0.0.jar");
+            log.info("用法: /plugin add https://host/path/my-plugin-1.0.0.jar 或本地路径 D:\\builds\\my-plugin-1.0.0.jar");
             return;
         }
-        log.info("[plugin] 正在下载并安装: {} ...", url);
+        log.info("[plugin] 正在安装: {} ...", url);
         ExternalPluginStore.InstalledPlugin plugin = store.install(url);
         log.info("[plugin] ✅ 安装完成: {} v{} (sha256={}...)", plugin.id(), plugin.version(),
             plugin.sha256().substring(0, Math.min(12, plugin.sha256().length())));
