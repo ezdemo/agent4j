@@ -14,6 +14,7 @@ import java.net.InetSocketAddress;
 import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
 import java.nio.file.Path;
+import java.util.List;
 import java.util.jar.JarEntry;
 import java.util.jar.JarOutputStream;
 
@@ -67,6 +68,8 @@ class ExternalPluginStoreTest {
         assertEquals(url, plugin.sourceUrl());
         assertTrue(store.find("sample").isPresent());
         assertEquals(64, plugin.sha256().length());
+        // 清单应记录 jar 内实际声明的插件 id
+        assertEquals(List.of("sample"), plugin.pluginIds());
 
         PluginBeanManager manager = new PluginBeanManager(new site.sorghum.cutin.core.plugin.DefaultLoopRegistrar());
         store.loadInto(manager);
@@ -77,6 +80,30 @@ class ExternalPluginStoreTest {
         store.uninstall("sample");
         assertTrue(store.installed().isEmpty());
         assertFalse(Files.exists(tempDir.resolve("sample-1.0.jar")));
+    }
+
+    /** 本地 jar 路径安装：复制入库、推断 id/version、可被管理器加载。 */
+    @Test
+    void installsFromLocalJarPath(@TempDir Path sourceDir) throws Exception {
+        Path localJar = sourceDir.resolve("local-plugin-2.5.jar");
+        Files.write(localJar, buildPluginJar());
+
+        InstalledPlugin plugin = store.install(localJar.toString());
+
+        assertEquals("local-plugin", plugin.id());
+        assertEquals("2.5", plugin.version());
+        assertEquals(localJar.toAbsolutePath().toString(), plugin.sourceUrl());
+        assertTrue(store.find("local-plugin").isPresent());
+        assertTrue(Files.exists(tempDir.resolve("local-plugin-2.5.jar")));
+        // 文件名推断 id 与 jar 内声明 id 不同时，清单应以声明 id 为注销依据
+        assertEquals(List.of("sample"), plugin.pluginIds());
+
+        PluginBeanManager manager = new PluginBeanManager(new site.sorghum.cutin.core.plugin.DefaultLoopRegistrar());
+        store.loadInto(manager);
+        assertTrue(manager.pluginStates().stream().anyMatch(s -> s.id().equals("sample")));
+
+        manager.unregisterPlugin("sample");
+        store.uninstall("local-plugin");
     }
 
     /** 停用后 loadInto 跳过该插件；重新启用后恢复加载。 */
@@ -113,13 +140,15 @@ class ExternalPluginStoreTest {
         assertFalse(manager.pluginStates().stream().anyMatch(s -> s.id().equals("sample")));
     }
 
-    /** 非 .jar 结尾的来源被拒绝；不存在的插件卸载报错。 */
+    /** 非 .jar 结尾的来源被拒绝；不存在的本地路径或插件卸载目标报错。 */
     @Test
     void validatesSourceAndUninstallTarget() {
         assertThrows(IllegalArgumentException.class,
             () -> store.install(baseUrl() + "/sample-1.0.zip"));
         assertThrows(IllegalArgumentException.class,
             () -> store.install("ftp://example.com/sample-1.0.jar"));
+        assertThrows(IllegalArgumentException.class,
+            () -> store.install(tempDir.resolve("missing-1.0.jar").toString()));
         assertThrows(IllegalArgumentException.class,
             () -> store.uninstall("not-exists"));
     }

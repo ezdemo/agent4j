@@ -32,8 +32,13 @@ import java.util.Optional;
  * <code>~/.loopra/plugins/installed.json</code>；AgentLoop 启动时按清单自动加载，
  * 运行中安装/卸载会实时广播到全部存活的 AgentLoop。</p>
  *
- * <p>来源仅支持以 {@code .jar} 结尾的 HTTP(S) 直链；插件 id 与版本从文件名
- * {@code {id}-{version}.jar} 推断，推断不出版本时记为 {@code unknown}。</p>
+ * <p>来源支持两种形式：</p>
+ * <ul>
+ *   <li>以 {@code .jar} 结尾的 HTTP(S) 直链 — 下载后入库</li>
+ *   <li>本地 {@code .jar} 文件路径 — 复制后入库（适合开发调试）</li>
+ * </ul>
+ *
+ * <p>插件 id 与版本从文件名 {@code {id}-{version}.jar} 推断，推断不出版本时记为 {@code unknown}。</p>
  */
 @Slf4j
 public final class ExternalPluginStore {
@@ -59,11 +64,12 @@ public final class ExternalPluginStore {
     /**
      * 已安装外置插件记录。
      *
-     * @param id          插件 id（从文件名推断）
+     * @param id          插件 id（从文件名推断，用于清单管理）
      * @param version     版本（从文件名推断，推断不出为 unknown）
-     * @param sourceUrl   安装来源直链
+     * @param sourceUrl   安装来源直链或本地路径
      * @param fileName    本地 jar 文件名
      * @param sha256      安装时的文件摘要，启动加载前校验
+     * @param pluginIds   jar 内实际声明的 LoopPlugin id 列表（运行时注销依据）
      * @param enabled     是否随启动加载
      * @param installedAt 安装时间戳（毫秒）
      */
@@ -73,9 +79,17 @@ public final class ExternalPluginStore {
         String sourceUrl,
         String fileName,
         String sha256,
+        List<String> pluginIds,
         boolean enabled,
         long installedAt
     ) {
+
+        /** 兼容旧清单：pluginIds 缺失时回退到文件名推断 id。 */
+        public InstalledPlugin {
+            if (pluginIds == null) {
+                pluginIds = List.of(id);
+            }
+        }
     }
 
     /** 清单持久化结构。 */
@@ -100,16 +114,16 @@ public final class ExternalPluginStore {
     // ==================== 安装 / 卸载 ====================
 
     /**
-     * 从 JAR 直链安装插件：下载、计算摘要、写入清单并热注册到全部存活 AgentLoop。
+     * 从 JAR 直链或本地 jar 路径安装插件：获取文件、计算摘要、写入清单并热注册到全部存活 AgentLoop。
      *
      * <p>重复安装同一 id 视为更新：先移除旧版本再安装。</p>
      *
-     * @param sourceUrl 以 .jar 结尾的 HTTP(S) 直链
+     * @param sourceUrl 以 .jar 结尾的 HTTP(S) 直链或本地 jar 文件路径
      * @return 安装记录
      */
     public synchronized InstalledPlugin install(String sourceUrl) {
-        String url = requireJarLink(sourceUrl);
-        String[] idAndVersion = inferIdAndVersion(url);
+        String source = requireJarSource(sourceUrl);
+        String[] idAndVersion = inferIdAndVersion(source);
         if (LoopraPluginRuntime.isBuiltIn(idAndVersion[0])) {
             throw new IllegalArgumentException("插件 id 与内置插件冲突: " + idAndVersion[0]);
         }
@@ -119,23 +133,32 @@ public final class ExternalPluginStore {
         manifest.plugins.stream().filter(p -> p.id().equals(idAndVersion[0]))
             .forEach(old -> removeQuietly(old));
 
-        Path jar = download(url, idAndVersion[0], idAndVersion[1]);
-        InstalledPlugin plugin = new InstalledPlugin(
-            idAndVersion[0], idAndVersion[1], url,
-            jar.getFileName().toString(), sha256(jar), true, System.currentTimeMillis());
-
-        // 先在本地验证可发现插件，再落清单，避免坏包污染配置
+        Path jar = acquireJar(source, idAndVersion[0], idAndVersion[1]);
+        // 先在本地验证可发现插件并收集实际声明 id，再落清单，避免坏包污染配置
+        List<String> declaredIds = new ArrayList<>();
         try (PluginPackageLoader.LoadedPackage loaded = new PluginPackageLoader().load(jar)) {
             if (loaded.plugins().isEmpty()) {
                 throw new IllegalStateException("no LoopPlugin found in jar: " + jar.getFileName());
             }
-            loaded.plugins().forEach(p -> log.info("[plugin] 发现外置插件: {} ({})", p.id(), p.getClass().getName()));
+            loaded.plugins().forEach(p -> {
+                declaredIds.add(p.id());
+                log.info("[plugin] 发现外置插件: {} ({})", p.id(), p.getClass().getName());
+            });
         } catch (IOException ignored) {
             // 验证用的加载器关闭失败不影响安装流程
         } catch (RuntimeException exception) {
-            removeQuietly(plugin);
+            // 坏包不入库：删除已复制/下载的副本后抛出
+            try {
+                Files.deleteIfExists(jar);
+            } catch (IOException ignored2) {
+                // 清理失败不影响原始异常抛出
+            }
             throw exception;
         }
+        InstalledPlugin plugin = new InstalledPlugin(
+            idAndVersion[0], idAndVersion[1], source,
+            jar.getFileName().toString(), sha256(jar), List.copyOf(declaredIds),
+            true, System.currentTimeMillis());
 
         manifest.plugins.removeIf(p -> p.id().equals(plugin.id()));
         manifest.plugins.add(plugin);
@@ -145,7 +168,7 @@ public final class ExternalPluginStore {
             log.warn("[plugin] 外置插件 {} 已入清单，但 {} 个运行中实例热注册失败（新会话将正常加载）",
                 plugin.id(), failures);
         }
-        log.info("[plugin] 外置插件已安装: {} v{} <- {}", plugin.id(), plugin.version(), url);
+        log.info("[plugin] 外置插件已安装: {} v{} <- {}", plugin.id(), plugin.version(), source);
         return plugin;
     }
 
@@ -159,8 +182,11 @@ public final class ExternalPluginStore {
         if (target.isEmpty()) {
             throw new IllegalArgumentException("unknown external plugin: " + id);
         }
-        LoopraPluginRuntime.unregisterExternalEverywhere(id);
-        removeQuietly(target.get());
+        InstalledPlugin removed = target.get();
+        for (String declaredId : removed.pluginIds()) {
+            LoopraPluginRuntime.unregisterExternalEverywhere(declaredId);
+        }
+        removeQuietly(removed);
         manifest.plugins.removeIf(p -> p.id().equals(id));
         saveManifest(manifest);
         log.info("[plugin] 外置插件已卸载: {}", id);
@@ -178,14 +204,16 @@ public final class ExternalPluginStore {
             return target;
         }
         InstalledPlugin updated = new InstalledPlugin(target.id(), target.version(), target.sourceUrl(),
-            target.fileName(), target.sha256(), enabled, target.installedAt());
+            target.fileName(), target.sha256(), target.pluginIds(), enabled, target.installedAt());
         manifest.plugins.removeIf(p -> p.id().equals(id));
         manifest.plugins.add(updated);
         saveManifest(manifest);
         if (enabled) {
             LoopraPluginRuntime.registerExternalEverywhere(pluginDirectory.resolve(target.fileName()));
         } else {
-            LoopraPluginRuntime.unregisterExternalEverywhere(id);
+            for (String declaredId : target.pluginIds()) {
+                LoopraPluginRuntime.unregisterExternalEverywhere(declaredId);
+            }
         }
         log.info("[plugin] 外置插件已{}: {}", enabled ? "启用" : "禁用", id);
         return updated;
@@ -225,37 +253,66 @@ public final class ExternalPluginStore {
 
     // ==================== 内部实现 ====================
 
-    /** 校验并规范化直链：必须以 .jar 结尾。 */
-    private static String requireJarLink(String sourceUrl) {
+    /** 校验并规范化插件来源：以 .jar 结尾的 HTTP(S) 直链或本地 jar 文件路径。 */
+    private static String requireJarSource(String sourceUrl) {
         if (sourceUrl == null || sourceUrl.isBlank()) {
             throw new IllegalArgumentException("插件来源不能为空");
         }
         String trimmed = sourceUrl.trim();
-        String lower = trimmed.toLowerCase();
-        int query = lower.indexOf('?');
-        String pathPart = query >= 0 ? lower.substring(0, query) : lower;
-        if (!pathPart.endsWith(".jar")) {
-            throw new IllegalArgumentException("仅支持以 .jar 结尾的直链: " + trimmed);
+        if (trimmed.startsWith("http://") || trimmed.startsWith("https://")) {
+            String lower = trimmed.toLowerCase();
+            int query = lower.indexOf('?');
+            String pathPart = query >= 0 ? lower.substring(0, query) : lower;
+            if (!pathPart.endsWith(".jar")) {
+                throw new IllegalArgumentException("仅支持以 .jar 结尾的直链: " + trimmed);
+            }
+            return trimmed;
         }
-        if (!trimmed.startsWith("http://") && !trimmed.startsWith("https://")) {
-            throw new IllegalArgumentException("插件来源必须是 http(s) 直链: " + trimmed);
+        // 本地路径：校验存在且是普通文件
+        Path local = Paths.get(trimmed);
+        if (!Files.isRegularFile(local)) {
+            throw new IllegalArgumentException("本地插件 jar 不存在: " + trimmed);
         }
-        return trimmed;
+        if (!local.getFileName().toString().toLowerCase().endsWith(".jar")) {
+            throw new IllegalArgumentException("仅支持以 .jar 结尾的插件文件: " + trimmed);
+        }
+        return local.toAbsolutePath().toString();
     }
 
-    /** 从直链文件名 {id}-{version}.jar 推断 id 与版本。 */
-    static String[] inferIdAndVersion(String url) {
-        String path = url.toLowerCase();
+    /** 从来源文件名 {id}-{version}.jar 推断 id 与版本（兼容 / 与 \ 分隔符）。 */
+    static String[] inferIdAndVersion(String source) {
+        String path = source.toLowerCase();
         int query = path.indexOf('?');
         if (query >= 0) {
             path = path.substring(0, query);
         }
-        String fileName = path.substring(path.lastIndexOf('/') + 1, path.length() - ".jar".length());
+        int nameStart = Math.max(path.lastIndexOf('/'), path.lastIndexOf('\\'));
+        String fileName = path.substring(nameStart + 1, path.length() - ".jar".length());
         int split = fileName.lastIndexOf('-');
         if (split > 0) {
             return new String[]{fileName.substring(0, split), fileName.substring(split + 1)};
         }
         return new String[]{fileName, "unknown"};
+    }
+
+    /** 获取插件 jar 到安装目录：URL 走下载，本地路径走复制；返回本地路径。 */
+    private Path acquireJar(String source, String id, String version) {
+        if (source.startsWith("http://") || source.startsWith("https://")) {
+            return download(source, id, version);
+        }
+        return copyLocalJar(Paths.get(source));
+    }
+
+    /** 复制本地 jar 到安装目录，返回本地路径。 */
+    private Path copyLocalJar(Path source) {
+        try {
+            Files.createDirectories(pluginDirectory);
+            Path target = pluginDirectory.resolve(source.getFileName().toString());
+            Files.copy(source, target, java.nio.file.StandardCopyOption.REPLACE_EXISTING);
+            return target;
+        } catch (IOException exception) {
+            throw new IllegalStateException("插件 jar 复制失败: " + source, exception);
+        }
     }
 
     /** 下载 jar 到安装目录，返回本地路径。 */
