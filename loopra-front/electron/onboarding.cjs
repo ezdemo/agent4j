@@ -1,5 +1,5 @@
 // 引导页（Onboarding）文件级 IPC：扫描外部 Agent 目录、导入 Skills（复制/硬链接）、
-// 迁移会话与 AGENTS.md、解析外部 MCP 配置文件。
+// 迁移 AGENTS.md、解析外部 MCP 配置文件。
 // 所有业务操作（模型配置/MCP 注册/Skills 刷新/会话列表）由渲染层复用服务端 REST 接口，
 // 本模块仅负责渲染层无权访问的本地文件系统操作。
 const { app, dialog, ipcMain } = require('electron')
@@ -7,7 +7,6 @@ const fs = require('fs')
 const path = require('path')
 
 // 限制常量
-const MAX_SESSION_FILE_BYTES = 50 * 1024 * 1024 // 单个会话文件最大 50MB
 const MAX_MCP_CONFIG_BYTES = 8 * 1024 * 1024 // MCP 配置文件最大 8MB（~/.claude.json 可能较大）
 const MAX_TEXT_PREVIEW_BYTES = 256 * 1024 // 文本预览最大 256KB
 const MAX_SCAN_DEPTH = 5 // 目录递归扫描深度
@@ -46,7 +45,6 @@ function loopraDirs() {
   return {
     configDir,
     skillsDir: path.join(configDir, 'skills'),
-    sessionsDir: path.join(configDir, 'sessions'),
     homeDir
   }
 }
@@ -99,13 +97,12 @@ function parseSkillMeta(skillMdPath, fallbackName) {
   return meta
 }
 
-// 递归扫描目录：Skills（SKILL.md）、会话（*.jsonl）、AGENTS.md、MCP 配置
+// 递归扫描目录：Skills（SKILL.md）、AGENTS.md、MCP 配置
 function scanAgentDir(rootDir) {
   if (!rootDir || typeof rootDir !== 'string' || !fs.existsSync(rootDir) || !fs.statSync(rootDir).isDirectory()) {
     throw new Error('所选目录不存在或不可读')
   }
   const skills = []
-  const sessions = []
   const agentsMd = []
   const mcpConfigs = []
   const seenSkills = new Set()
@@ -140,13 +137,7 @@ function scanAgentDir(rootDir) {
       }
       if (!entry.isFile()) continue
       const lower = entry.name.toLowerCase()
-      if (lower.endsWith('.jsonl')) {
-        let size = 0
-        try { size = fs.statSync(fullPath).size } catch {}
-        if (size > 0 && size <= MAX_SESSION_FILE_BYTES) {
-          sessions.push({ name: entry.name.replace(/\.jsonl$/i, ''), path: fullPath, size, mtime: fileMtime(fullPath) })
-        }
-      } else if (lower === 'agents.md' || lower === 'agent.md' || lower === 'claude.md') {
+      if (lower === 'agents.md' || lower === 'agent.md' || lower === 'claude.md') {
         agentsMd.push({ name: entry.name, path: fullPath })
       } else if (lower === 'mcp.json' || lower === '.mcp.json') {
         mcpConfigs.push({ name: entry.name, path: fullPath })
@@ -163,12 +154,7 @@ function scanAgentDir(rootDir) {
       mcpConfigs.push({ name: '.claude.json', path: claudeJson })
     }
   }
-  sessions.sort((a, b) => (b.mtime || 0) - (a.mtime || 0))
-  return { skills, sessions, agentsMd, mcpConfigs }
-}
-
-function fileMtime(filePath) {
-  try { return fs.statSync(filePath).mtimeMs } catch { return 0 }
+  return { skills, agentsMd, mcpConfigs }
 }
 
 // ==================== 导入 Skills（复制/硬链接） ====================
@@ -227,289 +213,9 @@ function importSkill(sourceDir, name, mode, skillsDir) {
   }
 }
 
-// ==================== 迁移会话 ====================
-
-// ==================== 会话格式识别与转换 ====================
-
-// 常见 Agent 会话格式与 Loopra 消息格式的转换支持：
-// - Loopra 原生：每行 { role, content|contentParts, tool_calls, tool_call_id, timestamp(毫秒) }
-// - Claude Code（~/.claude/projects/**/*.jsonl）：每行 { type, message:{role,content}, timestamp(ISO) }
-// - Codex CLI（~/.codex/sessions/*.jsonl）：文本行 { timestamp, role, content } 或 { type:'response_item', payload }
-
-const MAX_SESSION_LINES = 50000 // 单会话转换行数上限，超出拒绝导入
-const FORMAT_SAMPLE_LINES = 20 // 格式检测采样行数
-
-// 统一时间戳为毫秒数字（Loopra 消息格式）：数字原样保留，ISO 字符串转 epoch ms，无效丢弃。
-// 服务端 ChatMessage 仅解析数字时间戳，ISO 字符串会被静默忽略。
-function normalizeTimestamp(value) {
-  if (typeof value === 'number' && Number.isFinite(value)) return value
-  if (typeof value === 'string' && value.trim()) {
-    const ms = Date.parse(value)
-    if (Number.isFinite(ms)) return ms
-  }
-  return null
-}
-
-function detectSessionFormat(lines) {
-  const counts = { loopra: 0, claude: 0, codex: 0, unknown: 0 }
-  const samples = lines.slice(0, FORMAT_SAMPLE_LINES)
-  for (const line of samples) {
-    let obj
-    try {
-      obj = JSON.parse(line)
-    } catch {
-      counts.unknown += 1
-      continue
-    }
-    if (!obj || typeof obj !== 'object') {
-      counts.unknown += 1
-      continue
-    }
-    // Claude Code：type(user/assistant/system) + message 对象
-    if (typeof obj.type === 'string' && ['user', 'assistant', 'system'].includes(obj.type) && obj.message && typeof obj.message === 'object') {
-      counts.claude += 1
-      continue
-    }
-    // Codex：response_item 事件，或带 ISO 时间戳的 role 文本行
-    if (obj.type === 'response_item' && obj.payload && typeof obj.payload === 'object') {
-      counts.codex += 1
-      continue
-    }
-    if (typeof obj.role === 'string' && typeof obj.content === 'string' && typeof obj.timestamp === 'string') {
-      counts.codex += 1
-      continue
-    }
-    // Loopra 原生：role + content（时间戳为毫秒数字或缺失）
-    if (typeof obj.role === 'string' && (typeof obj.content === 'string' || Array.isArray(obj.content))) {
-      counts.loopra += 1
-      continue
-    }
-    counts.unknown += 1
-  }
-  const best = Object.entries(counts).sort((a, b) => b[1] - a[1])[0]
-  return best && best[1] > 0 ? best[0] : 'unknown'
-}
-
-const FORMAT_NAMES = { loopra: 'Loopra', claude: 'Claude Code', codex: 'Codex' }
-
-// 提取消息 content 中的纯文本（处理 string / parts 数组）
-function extractTextContent(content) {
-  if (typeof content === 'string') return content
-  if (!Array.isArray(content)) return ''
-  const texts = []
-  for (const part of content) {
-    if (!part || typeof part !== 'object') continue
-    if (typeof part.text === 'string') texts.push(part.text)
-  }
-  return texts.join('\n')
-}
-
-// Claude Code 行 → Loopra ChatMessage（无有效内容返回 null）
-function convertClaudeLine(obj) {
-  const msg = obj.message
-  if (!msg || typeof msg !== 'object') return null
-  const role = msg.role
-  const parts = Array.isArray(msg.content) ? msg.content
-    : (typeof msg.content === 'string' ? [{ type: 'text', text: msg.content }] : [])
-  if (parts.length === 0) return null
-
-  const out = { role: ['user', 'assistant', 'system'].includes(role) ? role : 'user' }
-  const ts = normalizeTimestamp(obj.timestamp)
-  if (ts != null) out.timestamp = ts
-
-  if (out.role === 'assistant') {
-    const text = extractTextContent(parts)
-    const toolUses = parts.filter((p) => p && p.type === 'tool_use')
-    if (toolUses.length) {
-      out.content = text
-      out.tool_calls = toolUses.map((p) => ({
-        id: p.id || 'unknown',
-        type: 'function',
-        function: {
-          name: p.name || 'unknown',
-          arguments: typeof p.input === 'string' ? p.input : JSON.stringify(p.input || {})
-        }
-      }))
-      return out
-    }
-    if (text) {
-      out.content = text
-      return out
-    }
-    return null
-  }
-
-  if (out.role === 'user') {
-    const toolResults = parts.filter((p) => p && p.type === 'tool_result')
-    if (toolResults.length) {
-      // 每条工具结果生成一条 user 消息（携带 tool_call_id），多个结果拆多条保持原语义
-      const converted = []
-      for (const p of toolResults) {
-        const resultText = typeof p.content === 'string' ? p.content : extractTextContent(p.content)
-        if (!resultText) continue
-        const item = { role: 'user', content: resultText }
-        if (p.tool_use_id) item.tool_call_id = p.tool_use_id
-        converted.push(item)
-      }
-      return converted.length ? converted : null
-    }
-    const text = extractTextContent(parts)
-    if (text) {
-      out.content = text
-      return out
-    }
-    return null
-  }
-
-  // system
-  const text = extractTextContent(parts)
-  if (text) {
-    out.content = text
-    return out
-  }
-  return null
-}
-
-// Codex 行 → Loopra ChatMessage（无有效内容返回 null）
-function convertCodexLine(obj) {
-  // 文本行：{ timestamp(ISO), role, content }
-  if (typeof obj.role === 'string' && typeof obj.content === 'string' && obj.content.trim()) {
-    const out = { role: obj.role === 'assistant' || obj.role === 'system' ? obj.role : 'user', content: obj.content }
-    const ts = normalizeTimestamp(obj.timestamp)
-    if (ts != null) out.timestamp = ts
-    return out
-  }
-  if (obj.type !== 'response_item' || !obj.payload || typeof obj.payload !== 'object') return null
-  const p = obj.payload
-  if (p.type === 'message') {
-    const text = extractTextContent(p.content)
-    if (!text) return null
-    const out = { role: p.role === 'user' ? 'user' : 'assistant', content: text }
-    const ts = normalizeTimestamp(obj.timestamp)
-    if (ts != null) out.timestamp = ts
-    return out
-  }
-  if (p.type === 'function_call') {
-    const out = {
-      role: 'assistant',
-      content: '',
-      tool_calls: [{
-        id: p.call_id || p.id || 'unknown',
-        type: 'function',
-        function: {
-          name: p.name || 'unknown',
-          arguments: typeof p.arguments === 'string' ? p.arguments : JSON.stringify(p.arguments || {})
-        }
-      }]
-    }
-    const ts = normalizeTimestamp(obj.timestamp)
-    if (ts != null) out.timestamp = ts
-    return out
-  }
-  if (p.type === 'function_call_output') {
-    const text = typeof p.output === 'string' ? p.output : JSON.stringify(p.output || '')
-    if (!text) return null
-    const out = { role: 'user', content: text }
-    if (p.call_id) out.tool_call_id = p.call_id
-    const ts = normalizeTimestamp(obj.timestamp)
-    if (ts != null) out.timestamp = ts
-    return out
-  }
-  return null // reasoning / local_shell_call 等事件跳过
-}
-
-// 转换整份会话内容，返回可写行的数组与统计
-function convertSessionLines(lines, format) {
-  const output = []
-  let converted = 0
-  let skipped = 0
-  for (const line of lines) {
-    let obj
-    try {
-      obj = JSON.parse(line)
-    } catch {
-      skipped += 1
-      continue
-    }
-    const result = format === 'claude' ? convertClaudeLine(obj) : convertCodexLine(obj)
-    if (!result) {
-      skipped += 1
-      continue
-    }
-    if (Array.isArray(result)) {
-      for (const item of result) {
-        output.push(JSON.stringify(item))
-        converted += 1
-      }
-    } else {
-      output.push(JSON.stringify(result))
-      converted += 1
-    }
-  }
-  return { lines: output, converted, skipped }
-}
-
+// 迁移 AGENTS.md 时清理文件名，也用于 MCP 服务器名等安全命名
 function sanitizeName(name) {
   return String(name || '').replace(/[<>:"/\\|?*\u0000-\u001f]/g, '_').trim().slice(0, 120)
-}
-
-// 导入外部会话 JSONL 到 ~/.loopra/workspace/<workspaceHash>/sessions/（与服务端 WorkspaceManager.getSessionsDir 一致），
-// 同名自动加后缀。自动识别格式：Loopra 原生原样复制；Claude Code / Codex 转换为 Loopra 消息格式。
-function importSessionFile(srcPath, workspaceHash, sessionName) {
-  const hash = sanitizeName(workspaceHash)
-  if (!hash) return { ok: false, name: sessionName, error: '工作区标识无效' }
-  if (!srcPath || !fs.existsSync(srcPath) || !fs.statSync(srcPath).isFile()) {
-    return { ok: false, name: sessionName, error: '会话文件不存在' }
-  }
-  const size = fs.statSync(srcPath).size
-  if (size > MAX_SESSION_FILE_BYTES) {
-    return { ok: false, name: sessionName, error: `会话文件超过 ${MAX_SESSION_FILE_BYTES / 1024 / 1024}MB 限制` }
-  }
-
-  // 读取并检测格式，非 Loopra 格式自动转换
-  const raw = fs.readFileSync(srcPath, 'utf8')
-  const lines = raw.split(/\r?\n/).map((l) => l.trim()).filter(Boolean)
-  if (lines.length === 0) {
-    return { ok: false, name: sessionName, error: '会话文件为空' }
-  }
-  if (lines.length > MAX_SESSION_LINES) {
-    return { ok: false, name: sessionName, error: `会话行数超过 ${MAX_SESSION_LINES} 行限制` }
-  }
-  const format = detectSessionFormat(lines)
-  let content = ''
-  let converted = 0
-  let skipped = 0
-  if (format === 'loopra') {
-    content = lines.join('\n')
-  } else if (format === 'claude' || format === 'codex') {
-    const result = convertSessionLines(lines, format)
-    content = result.lines.join('\n')
-    converted = result.converted
-    skipped = result.skipped
-    if (!content) {
-      return { ok: false, name: sessionName, error: `未能从 ${FORMAT_NAMES[format]} 会话中提取有效消息` }
-    }
-  } else {
-    return { ok: false, name: sessionName, error: '无法识别的会话格式（支持 Loopra / Claude Code / Codex）' }
-  }
-  // 目标目录必须与服务端会话存储一致：~/.loopra/workspace/<hash>/sessions/
-  // （GET /api/sessions 只读取该目录；此前写到 ~/.loopra/sessions/<hash>/ 导致导入后不可见）
-  const dir = path.join(loopraDirs().configDir, 'workspace', hash, 'sessions')
-  fs.mkdirSync(dir, { recursive: true })
-  let targetName = sanitizeName(sessionName) || 'imported-session'
-  let targetPath = path.join(dir, `${targetName}.jsonl`)
-  let counter = 2
-  while (fs.existsSync(targetPath)) {
-    targetName = `${sanitizeName(sessionName) || 'imported-session'}(${counter})`
-    targetPath = path.join(dir, `${targetName}.jsonl`)
-    counter += 1
-  }
-  try {
-    fs.writeFileSync(targetPath, content, 'utf8')
-    return { ok: true, name: targetName, path: targetPath, format, converted, skipped }
-  } catch (error) {
-    return { ok: false, name: targetName, error: error.message || '写入失败' }
-  }
 }
 
 // ==================== 迁移 AGENTS.md ====================
@@ -702,11 +408,10 @@ function registerOnboardingIpc(ipcMainRef, options = {}) {
   // 引导页所需本地目录信息 + 外部 Agent 候选目录
   ipcMainRef.handle('onboarding-get-dirs', (event) => {
     assertOnboardingSender(event)
-    const { configDir, skillsDir, sessionsDir, homeDir } = loopraDirs()
+    const { configDir, skillsDir, homeDir } = loopraDirs()
     return {
       configDir,
       skillsDir,
-      sessionsDir,
       homeDir,
       candidateAgentDirs: CANDIDATE_AGENT_DIRS.map((item) => {
         const fullPath = expandHome(item.dir)
@@ -754,18 +459,6 @@ function registerOnboardingIpc(ipcMainRef, options = {}) {
       String(item?.name || ''),
       mode,
       skillsDir
-    ))
-  })
-
-  // 迁移会话：{ files: [{path, name}], workspaceHash }
-  ipcMainRef.handle('onboarding-import-sessions', (event, payload = {}) => {
-    assertOnboardingSender(event)
-    const files = Array.isArray(payload.files) ? payload.files : []
-    const workspaceHash = String(payload.workspaceHash || '')
-    return files.map((file) => importSessionFile(
-      String(file?.path || ''),
-      workspaceHash,
-      String(file?.name || '')
     ))
   })
 
