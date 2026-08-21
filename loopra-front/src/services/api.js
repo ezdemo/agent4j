@@ -438,9 +438,10 @@ export const sessionsAPI = {
     return api.get(`/sessions/${sessionPathName(name)}`)
   },
   
-  // 重命名会话 - PUT /api/sessions/{name}
-  renameSession: (name, newName) => {
-    return api.put(`/sessions/${sessionPathName(name)}`, { name: newName })
+  // 重命名会话（修改显示名称） - PUT /api/sessions/{name}/title?workspaceHash=xxx  body: { title }
+  renameSession: (name, workspaceHash, title) => {
+    const params = workspaceHash ? { workspaceHash } : {}
+    return api.put(`/sessions/${sessionPathName(name)}/title`, { title }, { params })
   },
   
   // 导出会话 - GET /api/sessions/{name}/export

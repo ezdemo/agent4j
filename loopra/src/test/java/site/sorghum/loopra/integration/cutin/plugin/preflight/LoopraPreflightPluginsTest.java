@@ -32,7 +32,7 @@ class LoopraPreflightPluginsTest {
 
         assertEquals(LoopResult.Status.COMPLETED, result.status());
         assertEquals("resumed", result.finalSnapshot().variables().get(LoopraPreflight.RESULT_VARIABLE));
-        assertEquals(List.of("sanitize", "text:continue", "resume"), host.calls);
+        assertEquals(List.of("sanitize", "resume"), host.calls);
         assertTrue(graph.context.messages().isEmpty());
     }
 
@@ -46,7 +46,7 @@ class LoopraPreflightPluginsTest {
         LoopResult result = graph.engine.run(graph.program, graph.context).result().get(5, TimeUnit.SECONDS);
 
         assertEquals(LoopResult.Status.COMPLETED, result.status());
-        assertEquals(List.of("sanitize", "text:cleaned", "append", "clear"), host.calls);
+        assertEquals(List.of("sanitize", "append", "clear"), host.calls);
         assertEquals("cleaned", graph.context.messages().get(0).content());
     }
 
@@ -90,11 +90,6 @@ class LoopraPreflightPluginsTest {
         public UserMessage sanitizePreflightMessage(UserMessage message) {
             calls.add("sanitize");
             return sanitized == null ? message : sanitized;
-        }
-
-        @Override
-        public void setCurrentTurnUserText(String text) {
-            calls.add("text:" + text);
         }
 
         @Override

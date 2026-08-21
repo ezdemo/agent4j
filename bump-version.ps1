@@ -35,9 +35,9 @@ if ($c -ne $old) {
     Write-Host "  [OK] pom.xml"
 } else { Write-Host "  [--] pom.xml (unchanged)" }
 
-# 2. cutin-core/pom.xml, loopra/pom.xml
-foreach ($module in @("cutin-core", "loopra")) {
-    $path = Join-Path $root "$module/pom.xml"
+# 2. loopra/pom.xml
+$path = Join-Path $root "loopra/pom.xml"
+if (Test-Path $path) {
     $c = [System.IO.File]::ReadAllText($path, [System.Text.Encoding]::UTF8)
     $old = $c
     $re = [regex]'(?<=<artifactId>loopra</artifactId>\s*\r?\n\s*<version>)\d[\d.]*-?[A-Z]*(?=</version>)'
@@ -45,21 +45,9 @@ foreach ($module in @("cutin-core", "loopra")) {
     if ($c -ne $old) {
         $c = $c.TrimStart([char]0xFEFF)
         [System.IO.File]::WriteAllText($path, $c, $utf8NoBom)
-        Write-Host "  [OK] $module/pom.xml"
-    } else { Write-Host "  [--] $module/pom.xml (unchanged)" }
-}
-
-
-# 4. loopra/pom.xml
-$path = Join-Path $root "loopra/pom.xml"
-$c = [System.IO.File]::ReadAllText($path, [System.Text.Encoding]::UTF8)
-$old = $c
-$c = $re.Replace($c, $Version)
-if ($c -ne $old) {
-    $c = $c.TrimStart([char]0xFEFF)
-    [System.IO.File]::WriteAllText($path, $c, $utf8NoBom)
-    Write-Host "  [OK] loopra/pom.xml"
-} else { Write-Host "  [--] loopra/pom.xml (unchanged)" }
+        Write-Host "  [OK] loopra/pom.xml"
+    } else { Write-Host "  [--] loopra/pom.xml (unchanged)" }
+} else { Write-Host "  [--] loopra/pom.xml (not found)" }
 
 # 4.1 loopra/dependency-reduced-pom.xml
 $path = Join-Path $root "loopra/dependency-reduced-pom.xml"

@@ -7,7 +7,8 @@ import {sessionsAPI} from './services/api'
 
 vi.mock('./services/api', () => ({
   sessionsAPI: {
-    list: vi.fn().mockResolvedValue({success: true, data: []})
+    list: vi.fn().mockResolvedValue({success: true, data: []}),
+    renameSession: vi.fn().mockResolvedValue({success: true, data: '新名称'})
   }
 }))
 
@@ -474,6 +475,126 @@ describe('DesktopHome 会话多选删除', () => {
     await wrapper.setProps({refreshKey: 1})
     await flushPromises()
     expect(wrapper.find('.desktop-delete-selected').exists()).toBe(false)
+    expect(wrapper.findAll('.desktop-session')).toHaveLength(3)
+  })
+})
+
+describe('DesktopHome 会话重命名', () => {
+  let wrapper
+
+  beforeEach(() => {
+    sessionsAPI.renameSession.mockClear()
+  })
+
+  function mountWithSessions(sessions) {
+    sessionsAPI.list.mockResolvedValue({success: true, data: sessions})
+    wrapper = mountHome()
+  }
+
+  afterEach(() => {
+    wrapper.unmount()
+  })
+
+  it('会话右键菜单提供重命名入口，弹窗预填当前显示名称', async () => {
+    mountWithSessions([{name: 's1', title: '会话一', mtime: Date.now()}])
+    await flushPromises()
+    await wrapper.find('.desktop-session').trigger('contextmenu', {clientX: 200, clientY: 200})
+
+    const menu = document.body.querySelector('.desktop-context-menu')
+    expect(menu).not.toBeNull()
+    expect(menu.textContent).toContain('重命名会话')
+
+    const renameButton = [...menu.querySelectorAll('button')].find((b) => b.textContent.includes('重命名会话'))
+    await renameButton.click()
+    await flushPromises()
+
+    const dialog = document.body.querySelector('.desktop-rename-dialog')
+    expect(dialog).not.toBeNull()
+    expect(dialog.querySelector('input').value).toBe('会话一')
+  })
+
+  it('确认重命名：调用 renameSession 并发出 session-renamed / refresh', async () => {
+    mountWithSessions([{name: 's1', title: '会话一', mtime: Date.now()}])
+    await flushPromises()
+    await wrapper.find('.desktop-session').trigger('contextmenu', {clientX: 200, clientY: 200})
+    const menu = document.body.querySelector('.desktop-context-menu')
+    const renameButton = [...menu.querySelectorAll('button')].find((b) => b.textContent.includes('重命名会话'))
+    await renameButton.click()
+    await flushPromises()
+
+    const input = document.body.querySelector('.desktop-rename-dialog input')
+    input.value = '新名称'
+    input.dispatchEvent(new Event('input'))
+    const confirm = [...document.body.querySelectorAll('.desktop-rename-dialog button')].find((b) => b.textContent.includes('确定'))
+    await confirm.click()
+    await flushPromises()
+
+    expect(sessionsAPI.renameSession).toHaveBeenCalledWith('s1', 'h1', '新名称')
+    expect(wrapper.emitted('session-renamed')[0][0]).toEqual({workspaceHash: 'h1', sessionName: 's1', title: '新名称'})
+    expect(wrapper.emitted('refresh')).toBeTruthy()
+  })
+
+  it('取消重命名不调用接口', async () => {
+    mountWithSessions([{name: 's1', title: '会话一', mtime: Date.now()}])
+    await flushPromises()
+    await wrapper.find('.desktop-session').trigger('contextmenu', {clientX: 200, clientY: 200})
+    const menu = document.body.querySelector('.desktop-context-menu')
+    const renameButton = [...menu.querySelectorAll('button')].find((b) => b.textContent.includes('重命名会话'))
+    await renameButton.click()
+    await flushPromises()
+
+    const cancel = [...document.body.querySelectorAll('.desktop-rename-dialog button')].find((b) => b.textContent.includes('取消'))
+    await cancel.click()
+    await flushPromises()
+
+    expect(sessionsAPI.renameSession).not.toHaveBeenCalled()
+    expect(document.body.querySelector('.desktop-rename-dialog')).toBeNull()
+  })
+})
+
+describe('DesktopHome 会话列表时间字段', () => {
+  let wrapper
+
+  function mountWithSessions(sessions) {
+    sessionsAPI.list.mockResolvedValue({success: true, data: sessions})
+    wrapper = mountHome()
+  }
+
+  afterEach(() => {
+    wrapper.unmount()
+  })
+
+  it('每行末尾显示时间：今天 HH:mm、昨天「昨天」、跨年 Y/M/D，title 为完整日期时间', async () => {
+    const today = Date.now()
+    const d = new Date(today)
+    const pad = (n) => String(n).padStart(2, '0')
+    mountWithSessions([
+      {name: 'today', title: '今天会话', mtime: today},
+      {name: 'yesterday', title: '昨天会话', mtime: today - 86400000},
+      {name: 'old', title: '更早会话', mtime: new Date('2024-03-15T10:00:00').getTime()}
+    ])
+    await flushPromises()
+
+    // 未选中项目时加载全部 3 个项目（h1/h2/h3），同一组内按时间降序、项目顺序稳定
+    const times = wrapper.findAll('.desktop-session-time')
+    expect(times).toHaveLength(9)
+    const todayText = `${pad(d.getHours())}:${pad(d.getMinutes())}`
+    expect(times[0].text()).toBe(todayText)
+    expect(times[1].text()).toBe(todayText)
+    expect(times[2].text()).toBe(todayText)
+    expect(times[3].text()).toBe('昨天')
+    expect(times[4].text()).toBe('昨天')
+    expect(times[5].text()).toBe('昨天')
+    expect(times[6].text()).toBe('2024/3/15')
+    expect(times[8].text()).toBe('2024/3/15')
+    expect(times[0].attributes('title')).toBe(`${d.getFullYear()}/${pad(d.getMonth() + 1)}/${pad(d.getDate())} ${todayText}`)
+  })
+
+  it('无 mtime 的会话不渲染时间字段', async () => {
+    mountWithSessions([{name: 'no-time', title: '无时间'}])
+    await flushPromises()
+    // 每个项目都有一条无时间会话（共 3 行），但均不渲染时间
+    expect(wrapper.findAll('.desktop-session-time')).toHaveLength(0)
     expect(wrapper.findAll('.desktop-session')).toHaveLength(3)
   })
 })

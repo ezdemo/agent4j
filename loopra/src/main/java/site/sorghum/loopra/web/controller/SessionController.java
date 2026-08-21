@@ -103,6 +103,22 @@ public class SessionController {
         return ApiResponse.ok(new SessionWorktreeModeDTO(workspaceHash, name, worktreeMode, mergeMode));
     }
 
+    @ApiOperation(value = "重命名会话", notes = "修改会话显示名称（标题）；会话文件标识保持不变")
+    @Put
+    @Mapping("/{name}/title")
+    public ApiResponse<String> renameSession(
+            @ApiParam(value = "会话名称（文件标识）") @Path("name") String name,
+            @ApiParam(value = "项目 hash", required = true) @Param(value = "workspaceHash", required = true) String workspaceHash,
+            @ApiParam(value = "请求体：{title: 新的会话名称}") @Body SessionRenameRequest request) {
+        if (!agentService.isReady()) throw new ServiceException(WebErrorMessages.AGENT_NOT_READY);
+        if (request == null || request.getTitle() == null || request.getTitle().isBlank()) {
+            throw new ServiceException("新会话名称不能为空");
+        }
+        String workspacePath = agentService.resolveProjectHashOrThrow(workspaceHash);
+        String newTitle = agentService.renameSession(workspacePath, name, request.getTitle());
+        return ApiResponse.ok(newTitle);
+    }
+
     @ApiOperation(value = "切换会话隔离分支模式", notes = "开启后该会话的 AI 文件操作落在隔离 git worktree 中；正在运行的会话不允许切换")
     @Put
     @Mapping("/{name}/worktree")

@@ -43,6 +43,8 @@ class LoopraHostPluginTest {
         assertEquals(LoopResult.Status.COMPLETED, result.status());
         assertEquals(1, host.begins.get());
         assertEquals(1, host.ends.get());
+        // 无 sanitize 节点的循环不应触发回合开始回调
+        assertEquals(0, host.beforeTurns.get());
     }
 
     @Test
@@ -91,6 +93,7 @@ class LoopraHostPluginTest {
     private static final class LifecycleStub implements LoopraSessionHost {
         private final AtomicInteger begins = new AtomicInteger();
         private final AtomicInteger ends = new AtomicInteger();
+        private final AtomicInteger beforeTurns = new AtomicInteger();
 
         @Override
         public void beginCutinLoop() {
@@ -104,6 +107,7 @@ class LoopraHostPluginTest {
 
         @Override
         public void beforeTurn(String userMessage) {
+            beforeTurns.incrementAndGet();
         }
 
         @Override

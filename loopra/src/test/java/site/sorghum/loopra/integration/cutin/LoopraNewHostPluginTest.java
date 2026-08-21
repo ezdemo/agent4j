@@ -16,6 +16,7 @@ import site.sorghum.loopra.integration.cutin.plugin.plan.LoopraPlanHost;
 import site.sorghum.loopra.integration.cutin.plugin.plan.LoopraPlanPlugin;
 import site.sorghum.loopra.integration.cutin.plugin.recovery.LoopraErrorRecoveryHost;
 import site.sorghum.loopra.integration.cutin.plugin.recovery.LoopraErrorRecoveryPlugin;
+import site.sorghum.loopra.integration.cutin.plugin.preflight.LoopraPreflight;
 import site.sorghum.loopra.integration.cutin.plugin.session.LoopraSessionHost;
 import site.sorghum.loopra.integration.cutin.plugin.session.LoopraSessionPlugin;
 import site.sorghum.loopra.integration.cutin.plugin.toolbatch.LoopraToolBatchHost;
@@ -81,7 +82,7 @@ class LoopraNewHostPluginTest {
     }
 
     @Test
-    void sessionPluginFiresAfterTurn() {
+    void sessionPluginFiresBeforeAndAfterTurn() {
         DefaultLoopEngine engine = new DefaultLoopEngine();
         SessionStub host = new SessionStub();
         PluginBeanManager manager = new PluginBeanManager(engine.registrar());
@@ -89,12 +90,18 @@ class LoopraNewHostPluginTest {
         manager.startAll();
 
         LoopProgram program = LoopProgram.builder("session")
+            .node(LoopraPreflight.SANITIZE_NODE, NodeType.CODE, context -> {
+                context.putVariable("loopraUserMessage", "帮我分析项目");
+                return StepResult.Continue.INSTANCE;
+            })
             .node("out", NodeType.OUTPUT, Steps.finish())
-            .start("out")
+            .next(LoopraPreflight.SANITIZE_NODE, "out")
+            .start(LoopraPreflight.SANITIZE_NODE)
             .build();
         engine.run(program, engine.newContext("ctx", Map.of())).result().join();
 
         assertEquals(1, host.beforeTurns.get());
+        assertEquals("帮我分析项目", host.messages.get(0));
         assertEquals(1, host.afterTurns.get());
     }
 
@@ -192,10 +199,12 @@ class LoopraNewHostPluginTest {
 
         private final AtomicInteger beforeTurns = new AtomicInteger();
         private final AtomicInteger afterTurns = new AtomicInteger();
+        private final List<String> messages = new CopyOnWriteArrayList<>();
 
         @Override
         public void beforeTurn(String userMessage) {
             beforeTurns.incrementAndGet();
+            messages.add(userMessage);
         }
 
         @Override

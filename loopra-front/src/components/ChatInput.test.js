@@ -272,6 +272,24 @@ describe('ChatInput reasoning effort', () => {
     expect(wrapper.emitted('switchReasoningEffort')).toEqual([['low']])
     wrapper.unmount()
   })
+
+  it('clears the custom effort once the slider is dragged', async () => {
+    const wrapper = mountInput({currentReasoningEffort: 'max'})
+
+    await wrapper.find('.model-actions > .reasoning-effort-selector .effort-btn').trigger('click')
+    const customInput = wrapper.find('.chat-reasoning-custom input')
+    await customInput.setValue('xhigh2')
+    expect(wrapper.find('.chat-reasoning-value').text()).toContain('自定义')
+
+    const slider = wrapper.find('.chat-reasoning-input')
+    slider.element.value = '4'
+    await slider.trigger('input')
+    expect(wrapper.find('.chat-reasoning-value').text()).toContain('超高')
+
+    await slider.trigger('change')
+    expect(wrapper.emitted('switchReasoningEffort')).toEqual([['xhigh']])
+    wrapper.unmount()
+  })
 })
 
 describe('ChatInput fast mode', () => {
