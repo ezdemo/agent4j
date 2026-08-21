@@ -551,3 +551,50 @@ describe('DesktopHome 会话重命名', () => {
     expect(document.body.querySelector('.desktop-rename-dialog')).toBeNull()
   })
 })
+
+describe('DesktopHome 会话列表时间字段', () => {
+  let wrapper
+
+  function mountWithSessions(sessions) {
+    sessionsAPI.list.mockResolvedValue({success: true, data: sessions})
+    wrapper = mountHome()
+  }
+
+  afterEach(() => {
+    wrapper.unmount()
+  })
+
+  it('每行末尾显示时间：今天 HH:mm、昨天「昨天」、跨年 Y/M/D，title 为完整日期时间', async () => {
+    const today = Date.now()
+    const d = new Date(today)
+    const pad = (n) => String(n).padStart(2, '0')
+    mountWithSessions([
+      {name: 'today', title: '今天会话', mtime: today},
+      {name: 'yesterday', title: '昨天会话', mtime: today - 86400000},
+      {name: 'old', title: '更早会话', mtime: new Date('2024-03-15T10:00:00').getTime()}
+    ])
+    await flushPromises()
+
+    // 未选中项目时加载全部 3 个项目（h1/h2/h3），同一组内按时间降序、项目顺序稳定
+    const times = wrapper.findAll('.desktop-session-time')
+    expect(times).toHaveLength(9)
+    const todayText = `${pad(d.getHours())}:${pad(d.getMinutes())}`
+    expect(times[0].text()).toBe(todayText)
+    expect(times[1].text()).toBe(todayText)
+    expect(times[2].text()).toBe(todayText)
+    expect(times[3].text()).toBe('昨天')
+    expect(times[4].text()).toBe('昨天')
+    expect(times[5].text()).toBe('昨天')
+    expect(times[6].text()).toBe('2024/3/15')
+    expect(times[8].text()).toBe('2024/3/15')
+    expect(times[0].attributes('title')).toBe(`${d.getFullYear()}/${pad(d.getMonth() + 1)}/${pad(d.getDate())} ${todayText}`)
+  })
+
+  it('无 mtime 的会话不渲染时间字段', async () => {
+    mountWithSessions([{name: 'no-time', title: '无时间'}])
+    await flushPromises()
+    // 每个项目都有一条无时间会话（共 3 行），但均不渲染时间
+    expect(wrapper.findAll('.desktop-session-time')).toHaveLength(0)
+    expect(wrapper.findAll('.desktop-session')).toHaveLength(3)
+  })
+})
