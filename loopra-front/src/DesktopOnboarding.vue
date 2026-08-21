@@ -33,7 +33,7 @@
         <!-- 步骤 0：欢迎 -->
         <section v-if="currentStep === 0" class="ob-page">
           <h2 class="ob-page-title">欢迎使用 Loopra 桌面版</h2>
-          <p class="ob-page-desc">几步完成基础配置，把其他 Agent 工具中的会话、Skills、AGENTS.md / CLAUDE.md 与 MCP 配置迁移过来。</p>
+          <p class="ob-page-desc">几步完成基础配置，把其他 Agent 工具中的 Skills、AGENTS.md / CLAUDE.md 与 MCP 配置迁移过来。</p>
 
           <div class="ob-service-card" :class="serviceOk ? 'ok' : ''">
             <span class="ob-service-dot" />
@@ -57,71 +57,8 @@
           <p class="ob-hint">引导页仅完成基础配置，之后可在主界面「设置」中继续调整。</p>
         </section>
 
-        <!-- 步骤 1：迁移会话 -->
+        <!-- 步骤 1：设置模型 -->
         <section v-else-if="currentStep === 1" class="ob-page">
-          <h2 class="ob-page-title">迁移会话</h2>
-          <p class="ob-page-desc">从其他 Agent 工具（Claude Code / Codex / Cursor 等）的会话记录中选择要迁移的会话，复制到当前项目。目标项目：<b class="ob-path">{{ workspacePath || '未获取到' }}</b></p>
-
-          <div class="ob-field">
-            <label class="ob-field-label">选择源目录</label>
-            <div class="ob-dir-row">
-              <button
-                v-for="dir in dirs?.candidateAgentDirs || []"
-                :key="dir.dir"
-                type="button"
-                class="ob-chip"
-                :class="{ active: sourceDir === dir.path }"
-                :disabled="!dir.exists || busy"
-                @click="chooseDir(dir.path)"
-              >
-                {{ dir.label }}
-              </button>
-              <button type="button" class="ob-chip ob-chip-browse" :disabled="busy" @click="chooseDir('')">浏览...</button>
-            </div>
-            <div v-if="sourceDir" class="ob-dir-current">已选择：<span class="ob-path">{{ sourceDir }}</span></div>
-          </div>
-
-          <div v-if="scanning" class="ob-loading">正在扫描会话文件...</div>
-
-          <div v-else-if="scanResult" class="ob-list-card">
-            <div class="ob-list-head">
-              <span>发现 {{ scanResult.sessions.length }} 个会话文件</span>
-              <label v-if="scanResult.sessions.length" class="ob-check-all">
-                <input v-model="sessionsAllChecked" type="checkbox" @change="toggleSessionsAll" />
-                全选
-              </label>
-            </div>
-            <div v-if="!scanResult.sessions.length" class="ob-empty">未在所选目录发现会话文件（*.jsonl）</div>
-            <div v-for="session in scanResult.sessions" :key="session.path" class="ob-list-item">
-              <label class="ob-item-label">
-                <input v-model="sessionsSelected" type="checkbox" :value="session" />
-                <span class="ob-item-main">
-                  <span class="ob-item-name">{{ session.name }}</span>
-                  <span class="ob-item-meta">{{ formatSize(session.size) }} · {{ formatTime(session.mtime) }}</span>
-                </span>
-              </label>
-            </div>
-          </div>
-
-          <div v-if="sessionsResult" class="ob-result-card">
-            <div v-for="r in sessionsResult" :key="r.name" class="ob-result-row" :class="r.ok ? 'ok' : 'err'">
-              <span class="ob-result-mark">{{ r.ok ? '✓' : '✕' }}</span>
-              <span class="ob-item-name">{{ r.name }}</span>
-              <span class="ob-result-msg">{{ r.ok ? sessionResultText(r) : (r.error || '导入失败') }}</span>
-            </div>
-          </div>
-
-          <div v-if="!workspaceHash" class="ob-hint">未获取到项目信息（核心服务可能尚未就绪），暂时无法迁移会话。</div>
-
-          <div class="ob-action-row">
-            <button class="btn btn-primary" :disabled="busy || !sessionsSelected.length || !workspaceHash" @click="importSessions">
-              {{ sessionsSelected.length ? `迁移 ${sessionsSelected.length} 个会话` : '迁移会话' }}
-            </button>
-          </div>
-        </section>
-
-        <!-- 步骤 2：设置模型 -->
-        <section v-else-if="currentStep === 2" class="ob-page">
           <h2 class="ob-page-title">设置模型</h2>
           <p class="ob-page-desc">配置 API 地址与密钥，探测可用模型并选择默认模型。保存后立即生效。</p>
 
@@ -161,8 +98,8 @@
           </div>
         </section>
 
-        <!-- 步骤 3：导入 Skills -->
-        <section v-else-if="currentStep === 3" class="ob-page">
+        <!-- 步骤 2：导入 Skills -->
+        <section v-else-if="currentStep === 2" class="ob-page">
           <h2 class="ob-page-title">导入 Skills</h2>
           <p class="ob-page-desc">扫描外部 Agent 目录中的技能（含 SKILL.md 的目录），选择后导入到 Loopra 技能库。</p>
 
@@ -238,8 +175,8 @@
           </div>
         </section>
 
-        <!-- 步骤 4：迁移规则文件（AGENTS.md / CLAUDE.md） -->
-        <section v-else-if="currentStep === 4" class="ob-page">
+        <!-- 步骤 3：迁移规则文件（AGENTS.md / CLAUDE.md） -->
+        <section v-else-if="currentStep === 3" class="ob-page">
           <h2 class="ob-page-title">迁移 AGENTS.md / CLAUDE.md</h2>
           <p class="ob-page-desc">从其他 Agent 导入规则文件。推荐写入 Loopra 全局规则 <b class="ob-path">~/.loopra/loopra.md</b>，也可写入当前项目根目录作为项目规则。</p>
 
@@ -325,8 +262,8 @@
           </div>
         </section>
 
-        <!-- 步骤 5：迁移 MCP -->
-        <section v-else-if="currentStep === 5" class="ob-page">
+        <!-- 步骤 4：迁移 MCP -->
+        <section v-else-if="currentStep === 4" class="ob-page">
           <h2 class="ob-page-title">迁移 MCP</h2>
           <p class="ob-page-desc">从外部 Agent 的 MCP 配置文件解析服务器列表，勾选后逐条注册到 Loopra。支持 .claude.json / mcp.json / config.toml。</p>
 
@@ -388,17 +325,16 @@
           </div>
         </section>
 
-        <!-- 步骤 6：完成 -->
+        <!-- 步骤 5：完成 -->
         <section v-else class="ob-page">
           <h2 class="ob-page-title">完成！</h2>
           <p class="ob-page-desc">以下是本次引导的完成情况：</p>
 
           <div class="ob-summary-card">
-            <div class="ob-summary-row"><span>迁移会话</span><span>{{ summaryText(stepDone[1], sessionsOkCount) }}</span></div>
-            <div class="ob-summary-row"><span>设置模型</span><span>{{ summaryText(stepDone[2], selectedModel ? `当前：${selectedModel}` : '') }}</span></div>
-            <div class="ob-summary-row"><span>导入 Skills</span><span>{{ summaryText(stepDone[3], skillsOkCount) }}</span></div>
-            <div class="ob-summary-row"><span>迁移规则文件</span><span>{{ summaryText(stepDone[4], agentsMdResult?.ok ? '已迁移' : '') }}</span></div>
-            <div class="ob-summary-row"><span>迁移 MCP</span><span>{{ summaryText(stepDone[5], mcpOkCount) }}</span></div>
+            <div class="ob-summary-row"><span>设置模型</span><span>{{ summaryText(stepDone[1], selectedModel ? `当前：${selectedModel}` : '') }}</span></div>
+            <div class="ob-summary-row"><span>导入 Skills</span><span>{{ summaryText(stepDone[2], skillsOkCount) }}</span></div>
+            <div class="ob-summary-row"><span>迁移规则文件</span><span>{{ summaryText(stepDone[3], agentsMdResult?.ok ? '已迁移' : '') }}</span></div>
+            <div class="ob-summary-row"><span>迁移 MCP</span><span>{{ summaryText(stepDone[4], mcpOkCount) }}</span></div>
           </div>
 
           <p class="ob-hint">点击「完成」关闭引导页，开始使用 Loopra。未完成的步骤随时可通过主窗口标题栏的引导按钮重新打开。</p>
@@ -407,11 +343,11 @@
     </div>
 
     <footer class="ob-footer">
-      <button v-if="currentStep > 0 && currentStep < 6" class="btn" :disabled="busy" @click="goToStep(currentStep - 1)">上一步</button>
+      <button v-if="currentStep > 0 && currentStep < 5" class="btn" :disabled="busy" @click="goToStep(currentStep - 1)">上一步</button>
       <span class="ob-footer-spacer" />
-      <button v-if="currentStep > 0 && currentStep < 6" class="btn btn-ghost" :disabled="busy" @click="skipStep">跳过</button>
+      <button v-if="currentStep > 0 && currentStep < 5" class="btn btn-ghost" :disabled="busy" @click="skipStep">跳过</button>
       <button class="btn btn-primary" :disabled="busy || (currentStep === 0 && serviceChecking)" @click="nextStep">
-        {{ currentStep === 6 ? '完成' : '下一步' }}
+        {{ currentStep === 5 ? '完成' : '下一步' }}
       </button>
     </footer>
   </div>
@@ -421,20 +357,15 @@
 import {ref, reactive, computed, onMounted, watch} from 'vue'
 import {message} from 'ant-design-vue'
 import {useAppStore} from './stores/app'
-import {configAPI, sessionsAPI, mcpAPI, agentAPI, systemAPI} from './services/api'
+import {configAPI, mcpAPI, agentAPI, systemAPI} from './services/api'
 import {platform} from './services/platform'
 
 const store = useAppStore()
 const theme = computed(() => store.settings.theme)
 
-const steps = ['欢迎', '迁移会话', '设置模型', '导入 Skills', '迁移规则文件', '迁移 MCP', '完成']
+const steps = ['欢迎', '设置模型', '导入 Skills', '迁移规则文件', '迁移 MCP', '完成']
 
 const features = [
-  {
-    title: '迁移会话',
-    desc: '从其他 Agent 工具导入历史会话',
-    icon: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M4 17 10 11 13 14 16 9"/><polyline points="16 4 20 4 20 8"/><path d="M4 4h6"/><path d="M20 16v4H4"/></svg>'
-  },
   {
     title: '设置模型',
     desc: '配置 API 地址并选择默认模型',
@@ -467,11 +398,7 @@ const serviceOk = ref(false)
 const serviceChecking = ref(true)
 const servicePort = ref(0)
 
-// 会话迁移
-const sessionsSelected = ref([])
-const sessionsAllChecked = ref(false)
-const sessionsResult = ref(null)
-const workspaceHash = ref('')
+// 工作区信息（迁移规则文件到项目时需要目标路径）
 const workspacePath = ref('')
 
 // 模型设置
@@ -541,7 +468,6 @@ const mcpConfigCandidates = computed(() => {
 // 自动检测到的常见 Agent 全局规则文件（Codex / Claude Code 等）
 const candidateRuleFiles = computed(() => (dirs.value?.candidateRuleFiles || []).filter((f) => f.exists))
 
-const sessionsOkCount = computed(() => (sessionsResult.value || []).filter((r) => r.ok).length)
 const skillsOkCount = computed(() => (skillsResult.value || []).filter((r) => r.ok).length)
 const mcpOkCount = computed(() => (mcpResults.value || []).filter((r) => r.ok).length)
 
@@ -551,15 +477,15 @@ function isStepDone(idx) {
 
 function goToStep(idx) {
   if (busy.value) return
-  if (idx >= 0 && idx <= 6) currentStep.value = idx
+  if (idx >= 0 && idx <= 5) currentStep.value = idx
 }
 
 function skipStep() {
-  if (currentStep.value < 6) currentStep.value += 1
+  if (currentStep.value < 5) currentStep.value += 1
 }
 
 function nextStep() {
-  if (currentStep.value < 6) currentStep.value += 1
+  if (currentStep.value < 5) currentStep.value += 1
   else finishOnboarding()
 }
 
@@ -602,7 +528,7 @@ async function checkService() {
   } finally {
     serviceChecking.value = false
     // 服务已就绪后补拉项目信息（首次运行时引导窗口可能早于服务启动完成）
-    if (serviceOk.value && (!workspacePath.value || !workspaceHash.value)) {
+    if (serviceOk.value && !workspacePath.value) {
       void loadWorkspaceInfo()
     }
   }
@@ -630,9 +556,7 @@ async function chooseDir(dirPath) {
   try {
     scanResult.value = await onboarding()?.scanDir(target)
     // 目录变更后旧选中项/旧结果指向已不存在的文件，清空避免误导入上一目录的文件
-    sessionsSelected.value = []
     skillsSelected.value = []
-    sessionsResult.value = null
     skillsResult.value = null
   } catch (e) {
     message.error('扫描失败：' + (e.message || '未知错误'))
@@ -654,51 +578,7 @@ function pathBasename(filePath) {
   return parts[parts.length - 1] || ''
 }
 
-// ==================== 步骤 1：迁移会话 ====================
-
-function toggleSessionsAll() {
-  if (sessionsAllChecked.value) {
-    sessionsSelected.value = scanResult.value.sessions.map((s) => ({path: s.path, name: s.name}))
-  } else {
-    sessionsSelected.value = []
-  }
-}
-
-watch(() => sessionsSelected.value.length, (len) => {
-  const total = scanResult.value?.sessions?.length || 0
-  sessionsAllChecked.value = total > 0 && len === total
-})
-
-async function importSessions() {
-  if (!sessionsSelected.value.length) {
-    message.warning('请先勾选要迁移的会话')
-    return
-  }
-  busy.value = true
-  try {
-    const result = await onboarding()?.importSessions({
-      files: toPlain(sessionsSelected.value),
-      workspaceHash: workspaceHash.value
-    })
-    sessionsResult.value = result || []
-    const okCount = sessionsResult.value.filter((r) => r.ok).length
-    if (okCount > 0) {
-      stepDone[1] = true
-      try {
-        await sessionsAPI.list(workspaceHash.value)
-      } catch {}
-      message.success(`已导入 ${okCount} 个会话`)
-    } else {
-      message.warning('会话导入失败，请查看下方结果')
-    }
-  } catch (e) {
-    message.error('导入失败：' + (e.message || '未知错误'))
-  } finally {
-    busy.value = false
-  }
-}
-
-// ==================== 步骤 2：设置模型 ====================
+// ==================== 步骤 1：设置模型 ====================
 
 async function loadCurrentModel() {
   try {
@@ -800,7 +680,7 @@ async function saveModel() {
     existingChannelSecret.value = true
     modelForm.apiKey = ''
     modelSaved.value = true
-    stepDone[2] = true
+    stepDone[1] = true
     message.success('模型配置已保存并生效')
   } catch (e) {
     message.error('保存失败：' + (e.message || '未知错误'))
@@ -809,7 +689,7 @@ async function saveModel() {
   }
 }
 
-// ==================== 步骤 3：导入 Skills ====================
+// ==================== 步骤 2：导入 Skills ====================
 
 function toggleSkillsAll() {
   if (skillsAllChecked.value) {
@@ -838,7 +718,7 @@ async function importSkills() {
     skillsResult.value = result || []
     const okCount = skillsResult.value.filter((r) => r.ok).length
     if (okCount > 0) {
-      stepDone[3] = true
+      stepDone[2] = true
       try {
         await agentAPI.getSkills() // 服务端自带技能池刷新
       } catch {}
@@ -853,7 +733,7 @@ async function importSkills() {
   }
 }
 
-// ==================== 步骤 4：迁移 AGENTS.md ====================
+// ==================== 步骤 3：迁移 AGENTS.md ====================
 
 async function selectAgentsMd(file, targetMode) {
   agentsMdSelected.value = file
@@ -917,7 +797,7 @@ async function importAgentsMd() {
 
     agentsMdResult.value = result
     if (result?.ok) {
-      stepDone[4] = true
+      stepDone[3] = true
       message.success(`${agentsMdFileName.value} 已迁移到 ${agentsMdTargetMode.value === 'global' ? '全局规则' : '当前项目'}`)
     } else {
       message.warning(result?.error || '迁移失败')
@@ -929,7 +809,7 @@ async function importAgentsMd() {
   }
 }
 
-// ==================== 步骤 5：迁移 MCP ====================
+// ==================== 步骤 4：迁移 MCP ====================
 
 async function parseMcpFile(filePath) {
   mcpConfigFile.value = filePath
@@ -956,7 +836,7 @@ function toggleMcpAll() {
   for (const server of parsedServers.value) server.selected = mcpAllChecked.value
 }
 
-// 单个勾选变化时反向同步“全选”状态（与会话/Skills 步骤保持一致）
+// 单个勾选变化时反向同步“全选”状态（与 Skills 步骤保持一致）
 watch(() => parsedServers.value.map((s) => s.selected), (selected) => {
   mcpAllChecked.value = selected.length > 0 && selected.every(Boolean)
 })
@@ -1016,7 +896,7 @@ async function importMcp() {
     mcpResults.value = results
     const okCount = results.filter((r) => r.ok).length
     if (okCount > 0) {
-      stepDone[5] = true
+      stepDone[4] = true
       message.success(`已迁移 ${okCount} 个 MCP 服务器`)
     }
   } finally {
@@ -1033,34 +913,6 @@ function mcpServerDesc(server) {
 
 // ==================== 工具函数 ====================
 
-function formatSize(bytes) {
-  if (!Number.isFinite(bytes) || bytes <= 0) return ''
-  if (bytes < 1024) return `${bytes}B`
-  if (bytes < 1024 * 1024) return `${(bytes / 1024).toFixed(1)}KB`
-  return `${(bytes / 1024 / 1024).toFixed(1)}MB`
-}
-
-function formatTime(ms) {
-  if (!Number.isFinite(ms) || ms <= 0) return ''
-  try {
-    return new Date(ms).toLocaleString()
-  } catch {
-    return ''
-  }
-}
-
-const SESSION_FORMAT_LABELS = { loopra: 'Loopra', claude: 'Claude Code', codex: 'Codex' }
-
-// 会话导入结果描述：Loopra 原样导入；Claude Code / Codex 显示转换与跳过统计
-function sessionResultText(r) {
-  if (!r || !r.format) return '已导入'
-  const label = SESSION_FORMAT_LABELS[r.format] || r.format
-  let text = `已导入（${label}`
-  if (r.converted) text += `，转换 ${r.converted} 条`
-  if (r.skipped) text += `，跳过 ${r.skipped} 条`
-  return text + '）'
-}
-
 function summaryText(done, detail) {
   if (done) return detail || '已完成'
   return '已跳过'
@@ -1068,7 +920,7 @@ function summaryText(done, detail) {
 
 // 进入需要项目信息的步骤时，若信息缺失则重试加载（服务可能刚启动完成）
 watch(currentStep, (step) => {
-  if ((step === 1 || step === 4) && (!workspacePath.value || !workspaceHash.value)) {
+  if (step === 3 && !workspacePath.value) {
     void loadWorkspaceInfo()
   }
 })
@@ -1081,11 +933,8 @@ onMounted(async () => {
 
 async function loadWorkspaceInfo() {
   try {
-    const [wsRes, listRes] = await Promise.all([configAPI.getWorkspace(), configAPI.listWorkspaces()])
-    const currentPath = wsRes.data
-    workspacePath.value = currentPath || ''
-    const found = (listRes.data || []).find((w) => w.path === currentPath)
-    workspaceHash.value = found?.hash || ''
+    const wsRes = await configAPI.getWorkspace()
+    workspacePath.value = wsRes.data || ''
   } catch {}
 }
 </script>

@@ -487,7 +487,7 @@ function openUpdateWindow() {
   return updateWindow
 }
 
-// 引导页窗口：独立窗口承载首次使用引导流程（迁移会话/设置模型/导入 Skills/迁移 AGENTS.md/MCP）
+// 引导页窗口：独立窗口承载首次使用引导流程（设置模型/导入 Skills/迁移 AGENTS.md/MCP）
 function openOnboardingWindow() {
   if (onboardingWindow && !onboardingWindow.isDestroyed()) {
     onboardingWindow.show()
