@@ -150,7 +150,8 @@
                   <svg v-if="selectedSessionKeys.has(sessionKey(session))" width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3"><polyline points="20 6 9 17 4 12"/></svg>
                 </span>
                 <span class="desktop-monogram desktop-session-monogram" :class="badgeTone(workspaceNameOf(session.workspaceHash))">{{ initial(workspaceNameOf(session.workspaceHash)) }}</span>
-                <span>{{ session.title || session.name }}</span>
+                <span class="desktop-session-name">{{ session.title || session.name }}</span>
+                <span v-if="formatSessionTime(session)" class="desktop-session-time" :title="formatSessionTime(session, true)">{{ formatSessionTime(session) }}</span>
               </button>
             </div>
           </section>
@@ -299,6 +300,24 @@ function sessionTime(session) {
   if (typeof value === 'number') return value
   const parsed = Date.parse(value)
   return Number.isFinite(parsed) ? parsed : 0
+}
+
+// 会话每行末尾的时间：今天显示 HH:mm，昨天显示「昨天」，今年显示 M/D，更早显示 Y/M/D；full 为 true 时返回完整日期时间（用于悬浮提示）
+function formatSessionTime(session, full = false) {
+  const ts = sessionTime(session)
+  if (!ts) return ''
+  const date = new Date(ts)
+  const now = new Date()
+  const pad = (n) => String(n).padStart(2, '0')
+  const hm = `${pad(date.getHours())}:${pad(date.getMinutes())}`
+  if (full) return `${date.getFullYear()}/${pad(date.getMonth() + 1)}/${pad(date.getDate())} ${hm}`
+  const todayStart = new Date()
+  todayStart.setHours(0, 0, 0, 0)
+  const yesterdayStart = new Date(todayStart.getTime() - 86400000)
+  if (ts >= todayStart.getTime()) return hm
+  if (ts >= yesterdayStart.getTime()) return '昨天'
+  if (date.getFullYear() === now.getFullYear()) return `${date.getMonth() + 1}/${date.getDate()}`
+  return `${date.getFullYear()}/${date.getMonth() + 1}/${date.getDate()}`
 }
 
 function openSession(session) {
@@ -644,7 +663,7 @@ onBeforeUnmount(() => {
 .desktop-project-list:hover::-webkit-scrollbar, .desktop-session-timeline:hover::-webkit-scrollbar { width: 6px; }
 .desktop-project-list:hover::-webkit-scrollbar-thumb, .desktop-session-timeline:hover::-webkit-scrollbar-thumb { background: rgba(80, 88, 102, 0.38); border-radius: 6px; }
 .desktop-project-list:hover::-webkit-scrollbar-track, .desktop-session-timeline:hover::-webkit-scrollbar-track { background: transparent; }
-.desktop-project, .desktop-session { width: 100%; height: 32px; display: flex; align-items: center; gap: 8px; border: 0; border-radius: 5px; background: transparent; color: var(--fg-2, #525866); font: inherit; font-size: 13px; text-align: left; cursor: pointer; padding: 0 8px; box-sizing: border-box; }.desktop-project:hover, .desktop-session:hover, .desktop-project.active { background: var(--bg-3, #f2f3f5); color: var(--fg, #202124); }.desktop-project > span:last-child, .desktop-session > span:last-child { overflow: hidden; white-space: nowrap; text-overflow: ellipsis; }.desktop-project.selected, .desktop-session.selected { background: var(--bg-3, #f2f3f5); color: var(--fg, #202124); }.desktop-project-check, .desktop-session-check { width: 15px; height: 15px; display: inline-flex; align-items: center; justify-content: center; flex: 0 0 auto; border: 1px solid var(--fg-4, #9ca3af); border-radius: 3px; color: #fff; opacity: 0; transition: opacity .12s ease, background-color .12s ease, border-color .12s ease; }.desktop-project:hover .desktop-project-check, .desktop-project.selected .desktop-project-check, .desktop-session:hover .desktop-session-check, .desktop-session.selected .desktop-session-check { opacity: 1; }.desktop-project-check.checked, .desktop-session-check.checked { background: var(--accent, #4f7cff); border-color: var(--accent, #4f7cff); opacity: 1; }.desktop-session { font-weight: 400; }.desktop-home-muted { padding: 12px 8px; color: var(--fg-4, #9ca3af); font-size: 12px; }
+    .desktop-project, .desktop-session { width: 100%; height: 32px; display: flex; align-items: center; gap: 8px; border: 0; border-radius: 5px; background: transparent; color: var(--fg-2, #525866); font: inherit; font-size: 13px; text-align: left; cursor: pointer; padding: 0 8px; box-sizing: border-box; }.desktop-project:hover, .desktop-session:hover, .desktop-project.active { background: var(--bg-3, #f2f3f5); color: var(--fg, #202124); }.desktop-project > span:last-child, .desktop-session-name { overflow: hidden; white-space: nowrap; text-overflow: ellipsis; min-width: 0; flex: 1; }.desktop-project.selected, .desktop-session.selected { background: var(--bg-3, #f2f3f5); color: var(--fg, #202124); }.desktop-session-time { flex: 0 0 auto; margin-left: auto; color: var(--fg-4, #9ca3af); font-size: 12px; font-variant-numeric: tabular-nums; white-space: nowrap; pointer-events: none; }.desktop-project-check, .desktop-session-check { width: 15px; height: 15px; display: inline-flex; align-items: center; justify-content: center; flex: 0 0 auto; border: 1px solid var(--fg-4, #9ca3af); border-radius: 3px; color: #fff; opacity: 0; transition: opacity .12s ease, background-color .12s ease, border-color .12s ease; }.desktop-project:hover .desktop-project-check, .desktop-project.selected .desktop-project-check, .desktop-session:hover .desktop-session-check, .desktop-session.selected .desktop-session-check { opacity: 1; }.desktop-project-check.checked, .desktop-session-check.checked { background: var(--accent, #4f7cff); border-color: var(--accent, #4f7cff); opacity: 1; }.desktop-session { font-weight: 400; }.desktop-home-muted { padding: 12px 8px; color: var(--fg-4, #9ca3af); font-size: 12px; }
 .desktop-project.dragging { opacity: 0.55; }.desktop-project.drag-over-before, .desktop-project.drag-over-after { background: var(--accent-bg, var(--bg-3, #f2f3f5)); }.desktop-project.drag-over-before { box-shadow: inset 0 2px 0 0 var(--blue, #52525b); }.desktop-project.drag-over-after { box-shadow: inset 0 -2px 0 0 var(--blue, #52525b); }
 .desktop-monogram { width: 17px; height: 17px; display: inline-flex; align-items: center; justify-content: center; flex: 0 0 auto; border-radius: 4px; color: #fff; font-size: 11px; font-weight: 700; line-height: 1; text-shadow: 0 1px rgba(0, 0, 0, 0.25); box-shadow: inset 0 1px rgba(255, 255, 255, 0.25), 0 1px 1px rgba(0, 0, 0, 0.16); }.desktop-monogram.tone-0 { background: linear-gradient(135deg, #8b95a3, #5e6878); }.desktop-monogram.tone-1 { background: linear-gradient(135deg, #3dd0e8, #18b4d0); }.desktop-monogram.tone-2 { background: linear-gradient(135deg, #ffa86b, #ff7a3d); }.desktop-monogram.tone-3 { background: linear-gradient(135deg, #9aacf5, #6d80e8); }.desktop-monogram.tone-4 { background: linear-gradient(135deg, #6dd49d, #3eb878); }.desktop-monogram.tone-5 { background: linear-gradient(135deg, #f87fb5, #e85a9c); }.desktop-monogram.tone-6 { background: linear-gradient(135deg, #fcd34d, #f5b800); }.desktop-monogram.tone-7 { background: linear-gradient(135deg, #4dd9a6, #20c084); }.desktop-session-monogram { background: linear-gradient(135deg, #737373, #4c4c4c); }
 .desktop-project-footer { display: flex; flex-direction: column; gap: 2px; padding-top: 8px; border-top: 1px solid var(--border, #e8e8e8); flex: 0 0 auto; }.desktop-project-footer-menu { display: grid; gap: 2px; }.desktop-project-footer-menu > button { width: 100%; }.desktop-project-footer-settings { display: flex; align-items: center; }.desktop-project-footer-settings > button { min-width: 0; flex: 1; }.desktop-project-footer-tools { display: flex; align-items: center; gap: 4px; margin-left: auto; }.desktop-project-footer-tools .desktop-sub-agents-button, .desktop-project-footer-tools .desktop-tools-button, .desktop-project-footer-tools .desktop-theme-button { width: 32px; justify-content: center; }.desktop-project-footer button { height: 32px; display: flex; align-items: center; gap: 8px; padding: 0 8px; border: 0; border-radius: 5px; background: transparent; color: var(--fg-3, #727987); font: inherit; font-size: 13px; cursor: pointer; }.desktop-project-footer button:hover { background: var(--bg-3, #f2f3f5); color: var(--fg, #202124); }.desktop-project-footer svg { width: 16px; height: 16px; }
