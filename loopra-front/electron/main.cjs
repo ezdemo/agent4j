@@ -1,5 +1,6 @@
 const { app, BrowserWindow, WebContentsView, dialog, ipcMain, Menu, nativeTheme, shell, Notification } = require('electron')
 const http = require('http')
+const https = require('https')
 const path = require('path')
 const { spawn, execFile, execSync } = require('child_process')
 const { promisify } = require('util')
@@ -336,6 +337,263 @@ function isLoopraGuiInstalled() {
   return [binPath, jarPath].every((filePath) => fs.existsSync(filePath))
 }
 
+// ==================== JRE/JDK 环境检测 ====================
+// 与安装脚本（install.ps1/install.sh）的 Pre-check 保持一致：
+// 优先系统 Java 17+，回退已有捆绑 JRE（~/.loopra-gui/jre25），都不满足时提示安装。
+
+// 解析 java -version 输出，返回主版本号（1.8.x -> 8，17.0.x -> 17）
+function parseJavaMajor(versionText) {
+  const m = /version "([^"]+)"/.exec(versionText || '')
+  if (!m) return 0
+  const first = /^(\d+)/.exec(m[1])
+  if (!first) return 0
+  const major = parseInt(first[1], 10)
+  return major === 1 ? 8 : major
+}
+
+function getJavaVersionInfo(javaPath) {
+  return new Promise((resolve) => {
+    execFile(javaPath, ['-version'], { timeout: 8000, windowsHide: true }, (error, stdout, stderr) => {
+      const raw = String(stderr || stdout || error?.message || '').trim()
+      const m = /version "([^"]+)"/.exec(raw)
+      resolve({ raw, version: m ? m[1] : '', major: parseJavaMajor(raw) })
+    })
+  })
+}
+
+// 定位系统 PATH 上的 java 可执行文件（Windows: where.exe / Unix: which）
+function locateSystemJava() {
+  return new Promise((resolve) => {
+    execFile(isWin ? 'where' : 'which', ['java'], { timeout: 8000, windowsHide: true }, (error, stdout) => {
+      if (error) return resolve('')
+      resolve(String(stdout || '').split(/\r?\n/).map((s) => s.trim()).find(Boolean) || '')
+    })
+  })
+}
+
+// 检测 JRE/JDK 环境，返回系统 Java 与捆绑 JRE 的版本/路径/可用性及当前选用来源
+async function detectJavaStatus() {
+  const { runtimeDir } = getLoopraPaths()
+  const bundledCandidates = isWin
+    ? [path.join(runtimeDir, 'jre25', 'bin', 'java.exe')]
+    : [
+        path.join(runtimeDir, 'jre25', 'bin', 'java'),
+        path.join(runtimeDir, 'jre25', 'Contents', 'Home', 'bin', 'java')
+      ]
+  const bundledPath = bundledCandidates.find((p) => fs.existsSync(p)) || ''
+
+  const systemPath = await locateSystemJava()
+  const [systemInfo, bundledInfo] = await Promise.all([
+    systemPath ? getJavaVersionInfo(systemPath) : Promise.resolve({ version: '', major: 0, raw: '' }),
+    bundledPath ? getJavaVersionInfo(bundledPath) : Promise.resolve({ version: '', major: 0, raw: '' })
+  ])
+
+  const system = {
+    found: !!systemPath && systemInfo.major > 0,
+    path: systemPath,
+    version: systemInfo.version,
+    major: systemInfo.major,
+    raw: systemInfo.raw
+  }
+  const bundled = {
+    found: !!bundledPath && bundledInfo.major > 0,
+    path: bundledPath,
+    version: bundledInfo.version,
+    major: bundledInfo.major,
+    raw: bundledInfo.raw
+  }
+
+  const systemUsable = system.found && system.major >= 17
+  const used = systemUsable ? 'system' : (bundled.found ? 'bundled' : '')
+
+  return {
+    system,
+    bundled,
+    used,
+    usable: systemUsable || bundled.found,
+    requiredMajor: 17,
+    hint: systemUsable
+      ? `使用系统 Java ${system.version}`
+      : bundled.found
+        ? `使用捆绑 JRE ${bundled.version}`
+        : '未检测到可用的 Java 17+，请先安装 JDK 或 JRE'
+  }
+}
+
+// ==================== JRE 25 自动下载安装 ====================
+// 通过 Adoptium assets API 获取最新 JRE 25 的 GitHub 下载直链，
+// 支持 GitHub 直连 / gh-proxy 镜像（与核心服务下载源一致），下载后解压到 ~/.loopra-gui/jre25。
+
+const ADOPTIUM_ASSETS_API = 'https://api.adoptium.net/v3/assets/latest/25/hotspot'
+const GH_PROXY_PREFIX = 'https://gh-proxy.com/'
+
+function getJre25Platform() {
+  let os
+  if (isWin) os = 'windows'
+  else if (process.platform === 'darwin') os = 'mac'
+  else if (process.platform === 'linux') os = 'linux'
+  else return null
+
+  let arch
+  if (process.arch === 'x64') arch = 'x64'
+  else if (process.arch === 'arm64') arch = 'aarch64'
+  else return null
+
+  return { os, arch }
+}
+
+function httpGetJson(url) {
+  return new Promise((resolve, reject) => {
+    https.get(url, { headers: { 'User-Agent': 'Loopra/Desktop' } }, (res) => {
+      if (res.statusCode >= 300 && res.statusCode < 400 && res.headers.location) {
+        res.resume()
+        return httpGetJson(res.headers.location).then(resolve, reject)
+      }
+      if (res.statusCode !== 200) {
+        res.resume()
+        return reject(new Error(`请求失败，HTTP ${res.statusCode}`))
+      }
+      let data = ''
+      res.setEncoding('utf8')
+      res.on('data', (c) => { data += c })
+      res.on('end', () => {
+        try { resolve(JSON.parse(data)) } catch (e) { reject(new Error('解析 Adoptium API 响应失败')) }
+      })
+      res.on('error', reject)
+    }).on('error', reject)
+  })
+}
+
+// 解析最新 JRE 25 的 GitHub 下载直链（assets 接口，query 参数风格）
+async function resolveJre25GitHubAsset(os, arch) {
+  const query = `?os=${os}&architecture=${arch}&image_type=jre&heap_size=normal&vendor=eclipse`
+  const list = await httpGetJson(ADOPTIUM_ASSETS_API + query)
+  const asset = Array.isArray(list) ? list[0] : null
+  const pkg = asset && asset.binary && asset.binary.package
+  if (!pkg || !pkg.link || !pkg.name) throw new Error('未能从 Adoptium API 获取 JRE 25 下载地址')
+  return {
+    githubUrl: pkg.link,
+    fileName: pkg.name,
+    version: (asset.version && (asset.version.openjdk_version || asset.version.semver)) || ''
+  }
+}
+
+// 流式下载文件，onProgress(received, total)
+function downloadFile(url, destPath, onProgress) {
+  return new Promise((resolve, reject) => {
+    const file = fs.createWriteStream(destPath)
+    const cleanup = () => {
+      file.close()
+      fs.unlink(destPath, () => {})
+    }
+    const req = https.get(url, { headers: { 'User-Agent': 'Loopra/Desktop' } }, (res) => {
+      if (res.statusCode >= 300 && res.statusCode < 400 && res.headers.location) {
+        res.resume()
+        cleanup()
+        return downloadFile(res.headers.location, destPath, onProgress).then(resolve, reject)
+      }
+      if (res.statusCode !== 200) {
+        res.resume()
+        cleanup()
+        return reject(new Error(`下载失败，HTTP ${res.statusCode}`))
+      }
+      const total = parseInt(res.headers['content-length'] || '0', 10)
+      let received = 0
+      res.on('data', (chunk) => {
+        received += chunk.length
+        if (onProgress) onProgress(received, total)
+      })
+      res.pipe(file)
+      file.on('finish', () => file.close(() => resolve()))
+      file.on('error', reject)
+    })
+    req.on('error', (err) => { cleanup(); reject(err) })
+  })
+}
+
+async function extractJre25Archive(archivePath, extractDir) {
+  if (archivePath.endsWith('.zip')) {
+    // Windows: 使用系统自带 PowerShell Expand-Archive
+    await execFileAsync('powershell', ['-NoProfile', '-Command', `Expand-Archive -LiteralPath '${archivePath}' -DestinationPath '${extractDir}' -Force`], { windowsHide: true })
+  } else {
+    // macOS/Linux: tar.gz
+    await execFileAsync('tar', ['-xzf', archivePath, '-C', extractDir], { windowsHide: true })
+  }
+}
+
+// 归档根目录通常是 jdk-25.0.x+y-jre，把其中内容整体搬到目标目录
+function installJre25FromExtracted(extractDir, targetDir) {
+  const entries = fs.readdirSync(extractDir).filter((n) => n !== '.' && n !== '..')
+  const root = entries.length === 1 ? path.join(extractDir, entries[0]) : extractDir
+  fs.mkdirSync(targetDir, { recursive: true })
+  for (const name of fs.readdirSync(root)) {
+    const src = path.join(root, name)
+    const dest = path.join(targetDir, name)
+    if (fs.existsSync(dest)) fs.rmSync(dest, { recursive: true, force: true })
+    fs.renameSync(src, dest)
+  }
+}
+
+// 推送 JRE 下载日志 / 进度到启动窗口
+function sendJreLog(line) {
+  if (splashWindow && !splashWindow.isDestroyed()) {
+    splashWindow.webContents.send('jre-download-output', { type: 'log', line })
+  }
+}
+function sendJreProgress(received, total, percent) {
+  if (splashWindow && !splashWindow.isDestroyed()) {
+    splashWindow.webContents.send('jre-download-progress', { received, total, percent })
+  }
+}
+
+// 自动下载并安装最新 JRE 25 到 ~/.loopra-gui/jre25
+async function downloadAndInstallJre25(source) {
+  const tmpDir = path.join(app.getPath('temp'), 'loopra-jre25')
+  fs.mkdirSync(tmpDir, { recursive: true })
+  try {
+    const plat = getJre25Platform()
+    if (!plat) throw new Error(`不支持当前平台 (${process.platform}/${process.arch})`)
+
+    // 1) Adoptium API 获取最新 JRE 25 的 GitHub 直链
+    const asset = await resolveJre25GitHubAsset(plat.os, plat.arch)
+    sendJreLog(`>> 最新版本: ${asset.version || '未知'} (${asset.fileName})`)
+
+    // 2) 拼接直连 / gh-proxy 镜像地址
+    const downloadUrl = source === 'mirror' ? GH_PROXY_PREFIX + asset.githubUrl : asset.githubUrl
+    sendJreLog(`>> 下载源: ${source === 'mirror' ? '镜像 (gh-proxy)' : 'GitHub 直连'}`)
+
+    // 3) 下载（带进度）
+    const archivePath = path.join(tmpDir, asset.fileName)
+    sendJreLog('>> 开始下载 ...')
+    await downloadFile(downloadUrl, archivePath, (received, total) => {
+      const percent = total > 0 ? Math.round((received / total) * 100) : -1
+      sendJreProgress(received, total, percent)
+      if (percent >= 0 && percent % 10 === 0) {
+        sendJreLog(`    下载进度: ${percent}% (${(received / 1048576).toFixed(1)} MB)`)
+      }
+    })
+    sendJreLog(`>> 下载完成 (${(fs.statSync(archivePath).size / 1048576).toFixed(1)} MB)`)
+
+    // 4) 解压
+    const extractDir = path.join(tmpDir, 'extract')
+    fs.mkdirSync(extractDir, { recursive: true })
+    sendJreLog('>> 解压中 ...')
+    await extractJre25Archive(archivePath, extractDir)
+
+    // 5) 安装到 ~/.loopra-gui/jre25
+    const { runtimeDir } = getLoopraPaths()
+    const targetDir = path.join(runtimeDir, 'jre25')
+    sendJreLog(`>> 安装到 ${targetDir} ...`)
+    installJre25FromExtracted(extractDir, targetDir)
+
+    sendJreLog('')
+    sendJreLog('>> ✅ JRE 25 安装完成')
+    return { success: true, version: asset.version, dir: targetDir }
+  } finally {
+    fs.rmSync(tmpDir, { recursive: true, force: true })
+  }
+}
+
 function isLoopraGuiRuntime(commandLine) {
   return /(?:^|[\\/])\.loopra-gui(?:[\\/])/i.test(String(commandLine || ''))
 }
@@ -416,8 +674,10 @@ function createSplashWindow() {
   }
 
   splashWindow = new BrowserWindow({
-    width: 520,
+    width: 780,
     height: 620,
+    minWidth: 720,
+    minHeight: 560,
     useContentSize: true,
     resizable: true,
     frame: false,
@@ -752,7 +1012,27 @@ ipcMain.handle('get_loopra_web_status', async () => {
     running: loopraWebProcess !== null,
     install_dir: runtimeDir,
     config_dir: path.join(app.getPath('home'), '.loopra'),
-    bundled_core: isLoopraCoreBundled()
+    bundled_core: isLoopraCoreBundled(),
+    runtime_version: readLoopraGuiVersion(),
+    desktop_version: app.getVersion().replace(/^v/i, '')
+  }
+})
+
+// JRE/JDK 环境检测：系统 Java 与捆绑 JRE 的版本/路径/可用性（供启动窗口「依赖管理」页展示）
+ipcMain.handle('detect_java_status', async () => {
+  try {
+    return await detectJavaStatus()
+  } catch (error) {
+    console.error('Failed to detect Java status:', error)
+    return {
+      system: { found: false, path: '', version: '', major: 0 },
+      bundled: { found: false, path: '', version: '', major: 0 },
+      used: '',
+      usable: false,
+      requiredMajor: 17,
+      hint: 'Java 环境检测失败: ' + error.message,
+      error: error.message
+    }
   }
 })
 
@@ -1041,6 +1321,46 @@ ipcMain.handle('install_loopra_web_online', async (event, options = {}) => {
   }
 })
 
+// 仅使用安装包内置核心运行时进行本地安装/更新（不做在线回退）。
+// 安装包内置核心时，桌面端与核心服务随版本一起发布，本地更新即可保持同步。
+ipcMain.handle('install_loopra_web_local', async () => {
+  sendInstallLog('='.repeat(50))
+  sendInstallLog('  Loopra 核心服务本地更新')
+  sendInstallLog('='.repeat(50))
+
+  if (!isLoopraCoreBundled()) {
+    sendInstallLog('>> ❌ 当前安装包未内置核心运行时，无法本地安装/更新')
+    throw new Error('当前安装包未内置核心运行时，无法本地安装/更新')
+  }
+
+  sendInstallLog('>> 使用安装包内置核心运行时本地安装/更新（无需下载核心包）')
+  sendInstallLog('>> 桌面运行时将安装到 ~/.loopra-gui，配置继续使用 ~/.loopra')
+  sendInstallLog('')
+  try {
+    await installLoopraCoreLocal()
+    sendInstallLog('')
+    sendInstallLog('>> ✅ Loopra 安装/更新成功！')
+    return { success: true }
+  } catch (error) {
+    sendInstallLog(`>> ❌ 本地安装/更新失败: ${error.message}`)
+    throw error
+  }
+})
+
+// 自动下载并安装最新 JRE 25（Adoptium assets API 获取 GitHub 直链，支持直连/镜像源）
+ipcMain.handle('download_jre25', async (event, options = {}) => {
+  const source = options && options.source === 'mirror' ? 'mirror' : 'normal'
+  sendJreLog('='.repeat(50))
+  sendJreLog('  JRE 25 自动下载安装')
+  sendJreLog('='.repeat(50))
+  try {
+    return await downloadAndInstallJre25(source)
+  } catch (error) {
+    sendJreLog(`>> ❌ ${error.message}`)
+    throw error
+  }
+})
+
 ipcMain.handle('stop_loopra_web', async () => {
   cleanupLoopraWeb()
 })
@@ -1124,13 +1444,6 @@ ipcMain.handle('splash_ready', () => {
   if (!mainWindow || mainWindow.isDestroyed()) createWindow()
   if (splashWindow && !splashWindow.isDestroyed()) splashWindow.close()
   return true
-})
-
-// 启动窗口自适应内容：高度跟随渲染内容变化（渲染端 ResizeObserver 上报），宽度固定
-ipcMain.on('splash-resize', (event, size = {}) => {
-  if (!splashWindow || splashWindow.isDestroyed()) return
-  const height = Math.max(560, Math.min(980, Number(size.height) || 620))
-  splashWindow.setContentSize(520, height)
 })
 
 // 更新窗口管理
