@@ -15,7 +15,7 @@
                 }">
         </span>
       </div>
-      <div v-if="block.showContent" class="reasoning-text" v-html="getReasoningHtml(block)"></div>
+      <div v-if="block.showContent" class="reasoning-text" v-html="getReasoningHtml(block)" @click="onCodeBlockClick"></div>
     </div>
 
     <!-- 加密推理沿用普通思考折叠样式，展开后只显示固定文案 -->
@@ -37,7 +37,7 @@
     </div>
 
     <!-- 内容 -->
-    <div v-else-if="block.type === 'content' && block.content" class="block-content" v-html="fmt(block.content)"></div>
+    <div v-else-if="block.type === 'content' && block.content" class="block-content" v-html="fmt(block.content)" @click="onCodeBlockClick"></div>
 
     <!-- 本轮 AI 实际写入的文件（仅在回复结束后追加） -->
     <div v-else-if="block.type === 'file_changes' && block.changes?.length" class="block-file-changes">
@@ -274,7 +274,7 @@
           <span class="tool-icon default-icon 成功" v-html="CHECK_ICON_SM"></span>
           <code class="tool-name" >最终回答</code>
         </div>
-        <div class="tool-detail finish-content" v-html="fmt(block.result)"></div>
+        <div class="tool-detail finish-content" v-html="fmt(block.result)" @click="onCodeBlockClick"></div>
       </div>
       <!-- finish 执行中 -->
       <div v-else-if="block.name === 'finish' && block.status" class="block-tool">
@@ -516,7 +516,7 @@
 </template>
 
 <script setup>
-import {md} from '../utils/highlight'
+import {md, highlightVersion} from '../utils/highlight'
 import {sanitize} from '../utils/sanitize'
 import {CHECK_ICON_SM, CHEVRON_DOWN_ICON, CIRCLE_ICON, SPINNER_ICON, THINKING_ICON} from '../utils/icons'
 import {LRUCache} from '../utils/cache'
@@ -711,15 +711,16 @@ const truncatePath = (text, max) => {
   return text.length > max ? text.slice(0, max - 1) + '…' : text
 }
 
-// Markdown 渲染缓存
+// Markdown 渲染缓存（含渲染版本：主题切换 / 异步高亮就绪后自动失效并重渲染）
 const renderCache = new LRUCache(200)
 
 const fmt = c => {
   if (!c) return ''
-  const cached = renderCache.get(c)
+  const key = highlightVersion.value + '|' + c
+  const cached = renderCache.get(key)
   if (cached) return cached
-  const result = sanitize(md.parse(c))
-  renderCache.set(c, result)
+  const result = sanitize(md.render(c))
+  renderCache.set(key, result)
   return result
 }
 
@@ -733,6 +734,16 @@ const getReasoningHtml = (block) => {
   block._cachedContent = block.content
   block._cachedHtml = fmt(block.content)
   return block._cachedHtml
+}
+
+// 代码块展开/收起（>6 行折叠；与思考/工具折叠块统一：点击顶部条整行切换；点击复制按钮不触发）
+const onCodeBlockClick = (e) => {
+  if (e.target.closest('.code-copy-btn')) return
+  const top = e.target.closest('.code-block-top')
+  if (!top) return
+  const wrap = top.closest('.code-block-wrap')
+  if (!wrap || !wrap.classList.contains('collapsible')) return
+  wrap.classList.toggle('expanded')
 }
 
 const fmtArgs = a => {
@@ -1027,7 +1038,7 @@ watchEffect(() => {
   background: var(--bg);
   border: 1px solid var(--border);
   border-radius: var(--r);
-  padding: 10px;
+  padding: 8px 10px;
   margin: 6px 0;
   overflow-x: auto;
 }
@@ -1040,6 +1051,7 @@ watchEffect(() => {
 .block-content :deep(pre code) {
   background: none;
   padding: 0;
+  line-height: 1.5;
 }
 
 .block-content :deep(strong) {
@@ -1291,39 +1303,435 @@ watchEffect(() => {
   margin-bottom: 0;
 }
 
-/* 代码块内嵌复制按钮 */
-.block-content :deep(.code-block-wrap) {
+/* 代码块容器：与思考块/执行块同款玻璃卡片 */
+.block-content :deep(.code-block-wrap),
+.finish-content :deep(.code-block-wrap) {
+  position: relative;
   margin: 8px 0;
+  background: var(--glass-bg-2);
+  backdrop-filter: blur(var(--blur-sm));
+  -webkit-backdrop-filter: blur(var(--blur-sm));
+  border: 1px solid var(--glass-border);
+  border-radius: var(--r);
+  overflow: hidden;
 }
 
-.block-content :deep(.code-block-wrap pre) {
+.block-content :deep(.code-block-wrap pre),
+.finish-content :deep(.code-block-wrap pre) {
   position: relative;
   margin: 0 !important;
+  background: none;
+  border: none;
+  border-radius: 0;
 }
 
-.block-content :deep(.code-copy-btn) {
-  position: absolute;
-  top: 6px;
-  right: 6px;
-  opacity: 0;
-  background: var(--bg-2);
-  border: 1px solid var(--border);
-  font-size: 13px;
-  cursor: pointer;
-  padding: 2px 6px;
+/* 复制按钮：位于头部右侧（margin-left: auto 推到最右），常显 */
+.block-content :deep(.code-copy-btn),
+.finish-content :deep(.code-copy-btn) {
+  margin-left: auto;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+  padding: 2px 5px;
+  background: none;
+  border: none;
   border-radius: var(--r-sm);
-  transition: opacity 0.15s;
+  color: var(--fg-4);
+  cursor: pointer;
+  transition: color var(--t), background var(--t);
+}
+
+.block-content :deep(.code-copy-btn:hover),
+.finish-content :deep(.code-copy-btn:hover) {
+  color: var(--fg-1);
+  background: var(--bg-2);
+}
+
+/* ============ 代码块头部行：与执行折叠块 (.tool-head) 同构 ============ */
+/* [代码图标] 语言 行数 + chevron；玻璃卡片底 + 透明头部行，padding/gap/hover 全部同 tool-head */
+.block-content :deep(.code-block-top),
+.finish-content :deep(.code-block-top) {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 8px 10px;
+  font-size: 12px;
+  font-weight: 500;
+  color: var(--fg-3);
+  cursor: pointer;
+  user-select: none;
+  transition: background var(--t);
+}
+
+.block-content :deep(.code-block-top:hover),
+.finish-content :deep(.code-block-top:hover) {
+  background: var(--bg-2);
+}
+
+/* 代码图标：与执行块 tool-icon 同款 20×20 圆角底 */
+.block-content :deep(.code-block-icon),
+.finish-content :deep(.code-block-icon) {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 20px;
+  height: 20px;
+  border-radius: var(--r-sm);
+  color: var(--fg-2);
+  flex-shrink: 0;
+}
+
+/* 代码块语言标识（同执行块 .path-label 样式） */
+.block-content :deep(.code-block-lang),
+.finish-content :deep(.code-block-lang) {
+  font-family: var(--mono);
+  font-size: 12px;
+  font-weight: 600;
   line-height: 1;
-  z-index: 2;
+  color: var(--fg-2);
+  text-transform: lowercase;
+  pointer-events: none;
 }
 
-.block-content :deep(.code-block-wrap pre:hover .code-copy-btn) {
-  opacity: 0.7;
+/* 行数（同执行块 .path-steps 样式） */
+.block-content :deep(.code-block-meta),
+.finish-content :deep(.code-block-meta) {
+  font-size: 10px;
+  font-weight: 400;
+  color: var(--fg-4);
+  flex-shrink: 0;
 }
 
-.block-content :deep(.code-copy-btn:hover) {
-  opacity: 1 !important;
-  background: var(--bg);
+/* chevron（与思考/工具折叠块一致：紧跟文字，展开后旋转 180°） */
+.block-content :deep(.code-block-chevron),
+.finish-content :deep(.code-block-chevron) {
+  display: inline-flex;
+  transition: transform var(--t);
+}
+
+.block-content :deep(.code-block-wrap.expanded .code-block-chevron),
+.finish-content :deep(.code-block-wrap.expanded .code-block-chevron) {
+  transform: rotate(180deg);
+}
+
+/* 头部与代码之间的分割线（同执行块 .tool-detail 的 border-top） */
+.block-content :deep(.code-block-wrap.has-top pre),
+.finish-content :deep(.code-block-wrap.has-top pre) {
+  border-top: 1px solid var(--border);
+}
+
+/* ============ 代码块折叠（>6 行）：默认展示前 6 行 + 底部渐隐 + 头部展开 ============ */
+.block-content :deep(.code-block-wrap.collapsible:not(.expanded) pre),
+.finish-content :deep(.code-block-wrap.collapsible:not(.expanded) pre) {
+  /* 6 行 × 18px 行高 + 上下 padding 16px + 边框 2px */
+  max-height: 126px;
+  overflow-y: hidden;
+}
+
+.block-content :deep(.code-block-wrap.collapsible:not(.expanded)::before),
+.finish-content :deep(.code-block-wrap.collapsible:not(.expanded)::before) {
+  content: '';
+  position: absolute;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  height: 36px;
+  z-index: 1;
+  background: linear-gradient(to top, var(--glass-bg-2), transparent);
+  border-radius: 0 0 var(--r) var(--r);
+  pointer-events: none;
+}
+
+/* 思考内容里的折叠代码块（在思考卡片内，沿用其玻璃底） */
+.reasoning-text :deep(.code-block-wrap) {
+  position: relative;
+  margin: 4px 0;
+}
+
+/* 头部行与执行块 (.tool-head) 一致：8px 10px、hover 背景 */
+.reasoning-text :deep(.code-block-top) {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 8px 10px;
+  font-size: 12px;
+  font-weight: 500;
+  color: var(--fg-3);
+  cursor: pointer;
+  user-select: none;
+  transition: background var(--t);
+}
+
+.reasoning-text :deep(.code-block-top:hover) {
+  background: var(--bg-2);
+}
+
+/* pre 透明化，融入思考卡片玻璃底（无边框分隔） */
+.reasoning-text :deep(.code-block-wrap pre) {
+  background: none;
+  border: none;
+  border-radius: 0;
+}
+
+.reasoning-text :deep(.code-block-lang) {
+  font-family: var(--mono);
+  font-size: 12px;
+  font-weight: 600;
+  line-height: 1;
+  color: var(--fg-2);
+  text-transform: lowercase;
+  pointer-events: none;
+}
+
+.reasoning-text :deep(.code-block-icon) {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 20px;
+  height: 20px;
+  border-radius: var(--r-sm);
+  color: var(--fg-2);
+  flex-shrink: 0;
+}
+
+.reasoning-text :deep(.code-block-meta) {
+  font-size: 10px;
+  font-weight: 400;
+  color: var(--fg-4);
+  flex-shrink: 0;
+}
+
+.reasoning-text :deep(.code-block-wrap.collapsible:not(.expanded) pre) {
+  /* 6 行 × 16.5px 行高 + 上下 padding 12px + 边框 2px */
+  max-height: 113px;
+  overflow-y: hidden;
+}
+
+.reasoning-text :deep(.code-block-wrap.collapsible:not(.expanded)::before) {
+  content: '';
+  position: absolute;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  height: 32px;
+  z-index: 1;
+  background: linear-gradient(to top, var(--glass-bg-2), transparent);
+  border-radius: 0 0 var(--r-sm) var(--r-sm);
+  pointer-events: none;
+}
+
+/* chevron（与思考/工具折叠块一致：紧跟文字，展开后旋转 180°） */
+.reasoning-text :deep(.code-block-chevron) {
+  display: inline-flex;
+  transition: transform var(--t);
+}
+
+.reasoning-text :deep(.code-block-wrap.expanded .code-block-chevron) {
+  transform: rotate(180deg);
+}
+
+/* 头部与代码之间的分割线（同执行块 .tool-detail 的 border-top） */
+.reasoning-text :deep(.code-block-wrap.has-top pre) {
+  border-top: 1px solid var(--border);
+}
+
+/* ============ GitHub 风格排版 ============ */
+.block-content :deep(hr) {
+  border: 0;
+  border-top: 1px solid var(--border);
+  margin: 14px 0;
+}
+
+.block-content :deep(img) {
+  max-width: 100%;
+  border-radius: var(--r);
+}
+
+.block-content :deep(ul), .block-content :deep(ol) {
+  /* 2em 与 GitHub 一致：marker(序号/圆点) 画在 padding 区，太窄会与文字挤压 */
+  padding-left: 2em;
+  margin: 0.4em 0;
+}
+
+.block-content :deep(li) {
+  margin: 0.2em 0;
+}
+
+/* 序号/圆点用次要色，避免与正文同色显得重 */
+.block-content :deep(li::marker) {
+  color: var(--fg-3);
+}
+
+.block-content :deep(li > input[type="checkbox"]) {
+  margin-right: 0.4em;
+  vertical-align: middle;
+  accent-color: var(--accent);
+}
+
+/* 任务列表：checkbox 用负 margin 拉回 marker 区，多行内容与首行对齐（GitHub 同款） */
+.block-content :deep(li.task-list-item) {
+  list-style: none;
+}
+
+.block-content :deep(li.task-list-item > input[type="checkbox"]) {
+  margin: 0 0.35em 0 -1.5em;
+  vertical-align: middle;
+  accent-color: var(--accent);
+}
+
+/* 表格 */
+.block-content :deep(table) {
+  display: block;
+  max-width: 100%;
+  width: max-content;
+  overflow-x: auto;
+  border-collapse: collapse;
+  margin: 8px 0;
+  font-size: 13px;
+  border-radius: var(--r);
+}
+
+.block-content :deep(th), .block-content :deep(td) {
+  border: 1px solid var(--border);
+  padding: 5px 12px;
+  text-align: left;
+}
+
+.block-content :deep(th) {
+  background: var(--bg-2);
+  font-weight: 600;
+}
+
+.block-content :deep(tr:nth-child(2n) td) {
+  background: var(--bg-2);
+}
+
+/* 引用块 */
+.block-content :deep(blockquote) {
+  margin: 8px 0;
+  padding: 4px 14px;
+  border-left: 3px solid var(--border-2);
+  background: var(--bg-2);
+  border-radius: 0 var(--r) var(--r) 0;
+  color: var(--fg-2);
+}
+
+.block-content :deep(blockquote p) {
+  margin: 4px 0;
+}
+
+/* GitHub 告警框（> [!NOTE] 或 :::note） */
+.block-content :deep(.markdown-alert) {
+  display: block;
+  margin: 10px 0;
+  padding: 8px 12px 8px 32px;
+  border: 1px solid var(--border);
+  border-left-width: 3px;
+  border-radius: var(--r);
+  position: relative;
+  font-size: 13px;
+  line-height: 1.55;
+}
+
+.block-content :deep(.markdown-alert > p) {
+  margin: 4px 0;
+}
+
+.block-content :deep(.markdown-alert:first-child > p:first-child) {
+  margin-top: 0;
+}
+
+.block-content :deep(.markdown-alert:last-child > p:last-child) {
+  margin-bottom: 0;
+}
+
+.block-content :deep(.markdown-alert::before) {
+  position: absolute;
+  left: 10px;
+  top: 8px;
+  font-size: 14px;
+  line-height: 1.3;
+}
+
+.block-content :deep(.markdown-alert-note) {
+  color: #0969da;
+  border-color: rgba(9, 105, 218, 0.35);
+  background: rgba(9, 105, 218, 0.06);
+}
+
+.block-content :deep(.markdown-alert-note::before) {
+  content: 'ℹ️';
+}
+
+.block-content :deep(.markdown-alert-tip) {
+  color: #1a7f37;
+  border-color: rgba(26, 127, 55, 0.35);
+  background: rgba(26, 127, 55, 0.06);
+}
+
+.block-content :deep(.markdown-alert-tip::before) {
+  content: '💡';
+}
+
+.block-content :deep(.markdown-alert-important) {
+  color: #8250df;
+  border-color: rgba(130, 80, 223, 0.35);
+  background: rgba(130, 80, 223, 0.06);
+}
+
+.block-content :deep(.markdown-alert-important::before) {
+  content: '❕';
+}
+
+.block-content :deep(.markdown-alert-warning) {
+  color: #9a6700;
+  border-color: rgba(154, 103, 0, 0.35);
+  background: rgba(154, 103, 0, 0.07);
+}
+
+.block-content :deep(.markdown-alert-warning::before) {
+  content: '⚠️';
+}
+
+.block-content :deep(.markdown-alert-caution) {
+  color: #cf222e;
+  border-color: rgba(207, 34, 46, 0.35);
+  background: rgba(207, 34, 46, 0.06);
+}
+
+.block-content :deep(.markdown-alert-caution::before) {
+  content: '⛔';
+}
+
+[data-theme="dark"] .block-content :deep(.markdown-alert-note) {
+  color: #58a6ff;
+  border-color: rgba(88, 166, 255, 0.35);
+  background: rgba(88, 166, 255, 0.08);
+}
+
+[data-theme="dark"] .block-content :deep(.markdown-alert-tip) {
+  color: #3fb950;
+  border-color: rgba(63, 185, 80, 0.35);
+  background: rgba(63, 185, 80, 0.08);
+}
+
+[data-theme="dark"] .block-content :deep(.markdown-alert-important) {
+  color: #d2a8ff;
+  border-color: rgba(210, 168, 255, 0.35);
+  background: rgba(210, 168, 255, 0.08);
+}
+
+[data-theme="dark"] .block-content :deep(.markdown-alert-warning) {
+  color: #d29922;
+  border-color: rgba(210, 153, 34, 0.35);
+  background: rgba(210, 153, 34, 0.08);
+}
+
+[data-theme="dark"] .block-content :deep(.markdown-alert-caution) {
+  color: #ff7b72;
+  border-color: rgba(255, 123, 114, 0.35);
+  background: rgba(255, 123, 114, 0.08);
 }
 
 /* 本轮文件变更 */
@@ -1695,7 +2103,7 @@ watchEffect(() => {
 .choice-desc code {
   background: none;
   padding: 0;
-  font-family: var(--font-mono, 'SF Mono', 'Fira Code', 'Consolas', monospace);
+  font-family: var(--font-mono, 'JetBrains Mono Variable', 'SF Mono', 'Fira Code', 'Consolas', monospace);
   color: var(--color-text-primary, #1a1a2e);
 }
 

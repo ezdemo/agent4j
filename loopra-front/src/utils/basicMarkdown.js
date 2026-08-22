@@ -1,6 +1,10 @@
-import {Marked} from 'marked'
+import MarkdownIt from 'markdown-it'
 
-export const basicMarkdown = new Marked({
+/**
+ * 轻量 Markdown（系统提示词 / 计划预览等不需要代码高亮的场景）
+ */
+export const basicMarkdown = new MarkdownIt({
   breaks: true,
-  gfm: true
+  html: false,
+  linkify: false
 })

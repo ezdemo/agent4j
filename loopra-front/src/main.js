@@ -3,7 +3,8 @@ import {createPinia} from 'pinia'
 import 'ant-design-vue/dist/reset.css'
 import 'katex/dist/katex.min.css' // 数学公式渲染样式（含字体）
 import '@vscode/codicons/dist/codicon.css' // VS Code 图标字体（codicon）
-import './utils/hljsTheme' // 高亮主题（在 main.css 前加载，避免闪烁）
+import '@fontsource-variable/jetbrains-mono' // JetBrains Mono 全局字体（含 @font-face）
+import './utils/highlight' // 高亮初始化（Shiki 预载在模块加载时自动开始，不阻塞首屏）
 import './assets/styles/main.css'
 
 const resolveRootComponent = (page) => {

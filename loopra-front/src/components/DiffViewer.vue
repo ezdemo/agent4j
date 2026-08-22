@@ -96,7 +96,7 @@
 
 <script setup>
 import {computed, nextTick, ref, watch} from 'vue'
-import {detectLanguage, highlightCode} from '../utils/highlight'
+import {detectLanguage, highlightCode, highlightVersion} from '../utils/highlight'
 import {sanitize} from '../utils/sanitize'
 
 const props = defineProps({
@@ -165,6 +165,8 @@ function handleBodyScroll() {
 
 // ---- Diff 左右对比 (Side-by-Side) ----
 const diffPairs = computed(() => {
+  // 主题切换 / 异步高亮就绪后重渲染
+  void highlightVersion.value
   if (!props.diff) return []
   const pairs = parseSideBySide(props.diff)
   // 语法高亮：根据文件扩展名检测语言，逐行高亮
@@ -205,12 +207,16 @@ function navigateHunk(direction) {
 
 // ---- 无 hunk 时，把 diff 当原文展示 ----
 const rawFileLines = computed(() => {
+  // 主题切换 / 异步高亮就绪后重渲染
+  void highlightVersion.value
   if (diffPairs.value.length > 0 || !props.diff) return []
   const lang = detectLanguage(props.file)
   return props.diff.split('\n').map(l => sanitize(highlightCode(l, lang)))
 })
 
 const contentLines = computed(() => {
+  // 主题切换 / 异步高亮就绪后重渲染
+  void highlightVersion.value
   if (props.mode !== 'content') return []
   const lang = detectLanguage(props.file)
   return props.content.split('\n').map(line => sanitize(highlightCode(line, lang)))

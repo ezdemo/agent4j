@@ -278,6 +278,19 @@ function onMsgMouseOut(e) {
 }
 
 function onMsgClick(e) {
+  // 代码复制按钮（sanitize 会剥离内联 onclick，统一走事件委托）
+  const copyBtn = e.target.closest('.code-copy-btn')
+  if (copyBtn) {
+    e.preventDefault()
+    e.stopPropagation()
+    const wrap = copyBtn.closest('.code-block-wrap')
+    const code = wrap?.querySelector('code')?.textContent || ''
+    navigator.clipboard.writeText(code).then(() => {
+      window.dispatchEvent(new CustomEvent('copy-success', {detail: '代码已复制'}))
+    }).catch(() => {})
+    return
+  }
+
   const link = e.target.closest('.ai-link')
   if (!link) return
   e.preventDefault()

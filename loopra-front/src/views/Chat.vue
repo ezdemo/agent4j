@@ -1475,15 +1475,15 @@ window.copyCode = (btn) => {
   })
 }
 
-// 系统提示词和计划预览不需要代码高亮，避免空会话加载完整 highlight.js。
+// 系统提示词和计划预览不需要代码高亮，避免空会话加载完整高亮引擎。
 const fmtPrompt = c => {
   if (!c) return ''
-  return sanitize(basicMarkdown.parse(c))
+  return sanitize(basicMarkdown.render(c))
 }
 
 const fmtPlan = c => {
   if (!c) return ''
-  return sanitize(basicMarkdown.parse(c))
+  return sanitize(basicMarkdown.render(c))
 }
 
 // 复制整条消息内容

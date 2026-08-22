@@ -375,7 +375,7 @@ import {useRouter} from 'vue-router'
 import {message} from 'ant-design-vue'
 import {useConfirm} from './composables/useConfirm'
 import {md} from './utils/highlight'
-import {applyHljsTheme} from './utils/hljsTheme'
+import {applyHighlightTheme} from './utils/highlight'
 import {sanitize} from './utils/sanitize'
 import {useAppStore} from './stores/app'
 import {agentAPI, configAPI, sessionsAPI, systemAPI, toolsAPI} from './services/api'
@@ -410,7 +410,7 @@ const { confirm } = useConfirm()
 
 // 主题：统一从 Pinia store 读写，确保设置页和主页一致
 const theme = computed({ get: () => store.settings.theme, set: (v) => { store.settings.theme = v } })
-watch(theme, applyHljsTheme, {immediate: true})
+watch(theme, applyHighlightTheme, {immediate: true})
 const sideOpen = ref(true)
 const mainView = ref('chat')
 const modelChannelsRequireReload = ref(false)
@@ -651,7 +651,7 @@ const viewSystemPrompt = async () => {
 
 const fmtPrompt = c => {
   if (!c) return ''
-  return sanitize(md.parse(c))
+  return sanitize(md.render(c))
 }
 
 const copyPrompt = () => {

@@ -326,7 +326,7 @@ import {computed, nextTick, onBeforeUnmount, onMounted, reactive, ref, watch} fr
 import ChatMessage from '../components/ChatMessage.vue'
 import ReqSelect from '../components/ReqSelect.vue'
 import {configAPI, requirementAPI} from '../services/api'
-import {md} from '../utils/highlight'
+import {md, highlightVersion} from '../utils/highlight'
 import {sanitize} from '../utils/sanitize'
 import {hasEncryptedReasoning} from '../utils/chatHistory'
 
@@ -358,10 +358,11 @@ const normalizeCommentMarkdown = (source) => {
 const renderComment = (content) => {
   const source = normalizeCommentMarkdown(String(content || ''))
   if (!source) return ''
-  if (commentRenderCache.has(source)) return commentRenderCache.get(source)
-  const html = sanitize(md.parse(source))
+  const key = highlightVersion.value + '|' + source
+  if (commentRenderCache.has(key)) return commentRenderCache.get(key)
+  const html = sanitize(md.render(source))
   if (commentRenderCache.size >= 200) commentRenderCache.delete(commentRenderCache.keys().next().value)
-  commentRenderCache.set(source, html)
+  commentRenderCache.set(key, html)
   return html
 }
 
