@@ -558,9 +558,12 @@ async function downloadAndInstallJre25(source) {
     const asset = await resolveJre25GitHubAsset(plat.os, plat.arch)
     sendJreLog(`>> 最新版本: ${asset.version || '未知'} (${asset.fileName})`)
 
-    // 2) 拼接直连 / gh-proxy 镜像地址
-    const downloadUrl = source === 'mirror' ? GH_PROXY_PREFIX + asset.githubUrl : asset.githubUrl
-    sendJreLog(`>> 下载源: ${source === 'mirror' ? '镜像 (gh-proxy)' : 'GitHub 直连'}`)
+    // 2) 拼接直连 / 镜像下载地址（source 为 'normal' 或镜像前缀 URL；兼容旧值 'mirror' → 默认 gh-proxy）
+    const mirrorPrefix = source && source !== 'normal' && source !== 'mirror'
+      ? String(source).replace(/\/+$/, '') + '/'
+      : (source === 'mirror' ? GH_PROXY_PREFIX : '')
+    const downloadUrl = mirrorPrefix + asset.githubUrl
+    sendJreLog(`>> 下载源: ${mirrorPrefix ? mirrorPrefix.replace(/\/+$/, '') : 'GitHub 直连'}`)
 
     // 3) 下载（带进度）
     const archivePath = path.join(tmpDir, asset.fileName)
@@ -592,6 +595,36 @@ async function downloadAndInstallJre25(source) {
   } finally {
     fs.rmSync(tmpDir, { recursive: true, force: true })
   }
+}
+
+// ==================== 镜像测速 ====================
+// 与 JRE / 更新脚本共用同一份测速目标（release 压缩包，Range 取前 1KB），并发测各镜像延迟。
+// 放在主进程执行：镜像代理大多不支持浏览器跨域，node https 无 CORS 限制。
+
+const MIRROR_TEST_ASSET = 'https://github.com/ezdemo/loopra/releases/download/v26.8.211/loopra-dist.tar.gz'
+
+// 测单个镜像：返回延迟(ms)，失败/超时返回 null
+function measureMirrorLatency(mirrorBase, timeoutMs = 8000) {
+  return new Promise((resolve) => {
+    const url = String(mirrorBase || '').replace(/\/+$/, '') + '/' + MIRROR_TEST_ASSET
+    const start = Date.now()
+    let settled = false
+    const done = (value) => { if (!settled) { settled = true; resolve(value) } }
+    const req = https.get(url, {
+      headers: { 'User-Agent': 'Loopra/Desktop', Range: 'bytes=0-1023' },
+      timeout: timeoutMs
+    }, (res) => {
+      const status = res.statusCode || 0
+      if (status !== 200 && status !== 206) {
+        res.resume()
+        return done(null)
+      }
+      res.once('data', () => { res.destroy(); done(Date.now() - start) })
+      res.on('error', () => done(null))
+    })
+    req.on('timeout', () => { req.destroy(); done(null) })
+    req.on('error', () => done(null))
+  })
 }
 
 function isLoopraGuiRuntime(commandLine) {
@@ -660,9 +693,11 @@ function cleanupLoopraWeb() {
 
 // ==================== 窗口 ====================
 
-// 启动窗口：承载检测/安装/服务启动全流程，完成后关闭并创建主窗口
-function createSplashWindow() {
-  if (mainWindow && !mainWindow.isDestroyed()) {
+// 启动窗口：承载检测/安装/服务启动全流程，完成后关闭并创建主窗口。
+// force=true：即使主窗口已存在也打开（复用该窗口承载更新等场景）；from 标记打开场景（如 update）
+function createSplashWindow(options = {}) {
+  const { force = false, from = '' } = options || {}
+  if (!force && mainWindow && !mainWindow.isDestroyed()) {
     mainWindow.show()
     mainWindow.focus()
     return
@@ -670,13 +705,13 @@ function createSplashWindow() {
   if (splashWindow && !splashWindow.isDestroyed()) {
     splashWindow.show()
     splashWindow.focus()
-    return
+    return splashWindow
   }
 
   splashWindow = new BrowserWindow({
-    width: 780,
-    height: 620,
-    minWidth: 720,
+    width: 920,
+    height: 640,
+    minWidth: 800,
     minHeight: 560,
     useContentSize: true,
     resizable: true,
@@ -706,45 +741,22 @@ function createSplashWindow() {
     if (splashWindow && !splashWindow.isDestroyed()) splashWindow.destroy()
   })
 
+  const query = { desktopSplash: '1' }
+  if (from) query.from = from
   if (isDev) {
-    splashWindow.loadURL('http://localhost:3000/?desktopSplash=1')
+    const url = new URL('http://localhost:3000/')
+    url.searchParams.set('desktopSplash', '1')
+    if (from) url.searchParams.set('from', from)
+    splashWindow.loadURL(url.toString())
   } else {
-    splashWindow.loadFile(path.join(__dirname, '../renderer/index.html'), { query: { desktopSplash: '1' } })
+    splashWindow.loadFile(path.join(__dirname, '../renderer/index.html'), { query })
   }
   return splashWindow
 }
 
-// 更新窗口：独立窗口承载版本信息、下载源选择与核心服务更新
+// 更新入口：直接复用启动页窗口承载更新（核心管理 / 依赖管理），不再单独创建更新窗口
 function openUpdateWindow() {
-  if (updateWindow && !updateWindow.isDestroyed()) {
-    updateWindow.show()
-    updateWindow.focus()
-    return updateWindow
-  }
-
-  updateWindow = new BrowserWindow({
-    width: 720,
-    height: 760,
-    minWidth: 560,
-    minHeight: 600,
-    title: 'Loopra 更新',
-    icon: appIconPath,
-    webPreferences: {
-      preload: path.join(__dirname, 'preload.cjs'),
-      contextIsolation: true,
-      nodeIntegration: false,
-      sandbox: false,
-      backgroundThrottling: false
-    }
-  })
-  updateWindow.on('closed', () => { updateWindow = null })
-
-  if (isDev) {
-    updateWindow.loadURL('http://localhost:3000/?desktopUpdate=1')
-  } else {
-    updateWindow.loadFile(path.join(__dirname, '../renderer/index.html'), { query: { desktopUpdate: '1' } })
-  }
-  return updateWindow
+  return createSplashWindow({ force: true, from: 'update' })
 }
 
 // 引导页窗口：独立窗口承载首次使用引导流程（设置模型/导入 Skills/迁移 AGENTS.md/MCP）
@@ -1347,9 +1359,9 @@ ipcMain.handle('install_loopra_web_local', async () => {
   }
 })
 
-// 自动下载并安装最新 JRE 25（Adoptium assets API 获取 GitHub 直链，支持直连/镜像源）
+// 自动下载并安装最新 JRE 25（Adoptium assets API 获取 GitHub 直链，支持直连/指定镜像源）
 ipcMain.handle('download_jre25', async (event, options = {}) => {
-  const source = options && options.source === 'mirror' ? 'mirror' : 'normal'
+  const source = options && options.source ? options.source : 'normal'
   sendJreLog('='.repeat(50))
   sendJreLog('  JRE 25 自动下载安装')
   sendJreLog('='.repeat(50))
@@ -1359,6 +1371,17 @@ ipcMain.handle('download_jre25', async (event, options = {}) => {
     sendJreLog(`>> ❌ ${error.message}`)
     throw error
   }
+})
+
+// 镜像测速：并发测各镜像延迟，返回 [{ value, latency }]（失败/超时 latency=null）
+ipcMain.handle('measure_mirror_latencies', async (event, options = {}) => {
+  const mirrors = Array.isArray(options && options.mirrors) ? options.mirrors : []
+  const timeout = Number((options && options.timeout) || 8000)
+  const list = await Promise.all(mirrors.map(async (m) => ({
+    value: m && m.value ? m.value : '',
+    latency: m && m.value ? await measureMirrorLatency(m.value, timeout) : null
+  })))
+  return { success: true, list: list.filter((item) => item.value) }
 })
 
 ipcMain.handle('stop_loopra_web', async () => {
