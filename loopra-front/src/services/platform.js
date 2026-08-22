@@ -75,6 +75,18 @@ const webImplementation = {
       }
     },
 
+    async detectJavaStatus() {
+      // web 环境下无法探测本机 JRE/JDK，返回不可用占位
+      return {
+        system: { found: false, path: '', version: '', major: 0 },
+        bundled: { found: false, path: '', version: '', major: 0 },
+        used: '',
+        usable: false,
+        requiredMajor: 17,
+        hint: 'Web 环境不支持检测本机 Java'
+      }
+    },
+
     async getResourceDir() {
       return null
     },
@@ -85,6 +97,16 @@ const webImplementation = {
 
     async install() {
       return { success: true, steps: ['web_environment_skip'] }
+    },
+
+    async installLocal() {
+      // web 环境下无法本地安装，返回失败
+      return { success: false, error: 'Web 环境不支持本地安装' }
+    },
+
+    async downloadJre25() {
+      // web 环境下无法下载 JRE，返回失败
+      return { success: false, error: 'Web 环境不支持自动下载 JRE' }
     },
 
     async start() {
@@ -204,6 +226,9 @@ const electronImplementation = {
     async getStatus() {
       return await window.electronAPI.loopraWebService.getStatus()
     },
+    async detectJavaStatus() {
+      return await window.electronAPI.loopraWebService.detectJavaStatus()
+    },
     async getResourceDir() {
       return await window.electronAPI.loopraWebService.getResourceDir()
     },
@@ -212,6 +237,12 @@ const electronImplementation = {
     },
     async install(resourceDir) {
       return await window.electronAPI.loopraWebService.install(resourceDir)
+    },
+    async installLocal() {
+      return await window.electronAPI.loopraWebService.installLocal()
+    },
+    async downloadJre25(source) {
+      return await window.electronAPI.loopraWebService.downloadJre25(source)
     },
     async start() {
       return await window.electronAPI.loopraWebService.start()

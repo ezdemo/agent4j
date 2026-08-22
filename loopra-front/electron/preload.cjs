@@ -5,9 +5,12 @@ contextBridge.exposeInMainWorld('electronAPI', {
   // loopra-web 服务管理
   loopraWebService: {
     getStatus: () => ipcRenderer.invoke('get_loopra_web_status'),
+    detectJavaStatus: () => ipcRenderer.invoke('detect_java_status'),
     getResourceDir: () => ipcRenderer.invoke('get_resource_dir'),
     checkInstallNeeded: (resourceDir) => ipcRenderer.invoke('check_install_needed', resourceDir),
     install: (resourceDir) => ipcRenderer.invoke('install_loopra_web', resourceDir),
+    installLocal: () => ipcRenderer.invoke('install_loopra_web_local'),
+    downloadJre25: (source) => ipcRenderer.invoke('download_jre25', { source }),
     start: () => ipcRenderer.invoke('start_loopra_web'),
     stop: () => ipcRenderer.invoke('stop_loopra_web'),
     listProcesses: () => ipcRenderer.invoke('list_loopra_java_processes'),
@@ -20,8 +23,7 @@ contextBridge.exposeInMainWorld('electronAPI', {
 
   // 启动窗口：检测/安装/启动完成后通知主进程创建主窗口
   splash: {
-    ready: () => ipcRenderer.invoke('splash_ready'),
-    resize: (size) => ipcRenderer.send('splash-resize', size)
+    ready: () => ipcRenderer.invoke('splash_ready')
   },
 
   // 更新窗口管理
