@@ -1570,7 +1570,7 @@ async function openDesktopDownloadUrl() {
   }
 }
 
-// 打开更新界面：Electron 新建独立更新窗口；Web 在页面内展示更新面板（不弹新网页）
+// 打开更新界面：Electron 复用启动页窗口承载更新（核心管理/依赖管理）；Web 在页面内展示更新面板（不弹新网页）
 function openUpdateWindow() {
   if (platform.isElectron) {
     window.electronAPI?.updateWindow?.open()

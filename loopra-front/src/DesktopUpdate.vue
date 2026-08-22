@@ -33,19 +33,26 @@
         @auto-update="handleAutoUpdate"
       />
 
-      <!-- 下载源选择 -->
+      <!-- 下载源选择：GitHub 直连 / 镜像列表（自动测速排序） -->
       <section class="du-section">
-        <div class="du-section-title">下载源</div>
+        <div class="du-section-title du-source-title">
+          <span>下载源</span>
+          <button class="du-speedtest" type="button" :disabled="testingMirrors" @click="runMirrorSpeedTest">
+            <svg v-if="!testingMirrors" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M13 2 3 14h9l-1 8 10-12h-9l1-8z"/></svg>
+            <svg v-else class="du-speedtest-spin" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 12a9 9 0 1 1-6.22-8.56"/></svg>
+            {{ testingMirrors ? '测速中' : '重新测速' }}
+          </button>
+        </div>
         <div class="du-source-row">
           <label class="du-source-option" :class="{ active: updateSource === UPDATE_SOURCE_NORMAL }">
             <input v-model="updateSource" type="radio" :value="UPDATE_SOURCE_NORMAL" />
             <span class="du-source-name">GitHub 直连</span>
             <span class="du-source-desc">官方发布源，海外网络推荐</span>
           </label>
-          <label class="du-source-option" :class="{ active: updateSource === UPDATE_SOURCE_MIRROR }">
-            <input v-model="updateSource" type="radio" :value="UPDATE_SOURCE_MIRROR" />
-            <span class="du-source-name">镜像下载</span>
-            <span class="du-source-desc">gh-proxy 加速，国内网络推荐</span>
+          <label v-for="m in mirrorList" :key="m.value" class="du-source-option" :class="{ active: updateSource === m.value }">
+            <input v-model="updateSource" type="radio" :value="m.value" />
+            <span class="du-source-name">{{ m.label }}</span>
+            <span class="du-source-desc">{{ m.latency != null ? `延迟 ${m.latency}ms` : '测速中 / 暂不可用' }}</span>
           </label>
         </div>
       </section>
@@ -92,7 +99,14 @@ import {platform} from './services/platform'
 import {systemAPI} from './services/api'
 import {RELEASE_LATEST_URL} from './utils/constants'
 import VersionInfoPanel from './components/VersionInfoPanel.vue'
-import {UPDATE_SOURCE_MIRROR, UPDATE_SOURCE_NORMAL, loadUpdateSource, saveUpdateSource} from './utils/updateScripts'
+import {UPDATE_SOURCE_NORMAL, loadUpdateSource, saveUpdateSource} from './utils/updateScripts'
+import {
+  MIRROR_SOURCES,
+  applyLatencies,
+  loadCachedLatencies,
+  measureMirrors,
+  sortMirrors
+} from './utils/mirrors'
 import {useAppStore} from './stores/app'
 
 // embedded：以组件形式嵌入父页面（Web 端点击版本号在页面内展示），关闭/自动更新通过事件通知父组件
@@ -104,8 +118,25 @@ const emit = defineEmits(['close', 'auto-update'])
 const store = useAppStore()
 const theme = computed(() => store.settings.theme)
 
-// 下载源（localStorage 持久化，与其他窗口共享）
+// 下载源（localStorage 持久化，与其他窗口共享）：'normal'（GitHub 直连）或具体镜像 URL
 const updateSource = ref(loadUpdateSource())
+
+// 镜像列表（latency 由测速填充），按延迟升序排列（未测/失败的排末尾）
+const mirrorList = ref(sortMirrors(applyLatencies(MIRROR_SOURCES, loadCachedLatencies())))
+const testingMirrors = ref(false)
+
+// 自动测速：并发测速所有镜像并按延迟排序（结果缓存 30 分钟，过期自动重测）
+async function runMirrorSpeedTest() {
+  if (testingMirrors.value) return
+  testingMirrors.value = true
+  try {
+    mirrorList.value = await measureMirrors(MIRROR_SOURCES)
+  } catch (e) {
+    console.warn('[DesktopUpdate] mirror speed test failed:', e)
+  } finally {
+    testingMirrors.value = false
+  }
+}
 
 // 版本信息
 const appVersion = ref('')
@@ -120,6 +151,8 @@ const checking = ref(false)
 watch(updateSource, (value) => saveUpdateSource(value))
 
 onMounted(async () => {
+  // 镜像测速：无新鲜缓存（30 分钟内）时自动重测并按延迟排序，不阻塞主流程
+  if (!loadCachedLatencies()) void runMirrorSpeedTest()
   await refreshCurrentVersion()
   await handleCheckVersion()
 })
@@ -354,6 +387,45 @@ function closeWindow() {
   font-size: 13px;
   font-weight: 600;
   color: var(--fg-3);
+}
+
+.du-source-title {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+}
+
+.du-speedtest {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  padding: 4px 10px;
+  font-size: 12px;
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  background: var(--bg-2);
+  color: var(--fg-3);
+  cursor: pointer;
+  transition: all 0.15s;
+}
+
+.du-speedtest:hover:not(:disabled) {
+  color: var(--fg);
+  border-color: var(--border-2);
+  background: var(--bg-3);
+}
+
+.du-speedtest:disabled {
+  opacity: 0.6;
+  cursor: not-allowed;
+}
+
+.du-speedtest-spin {
+  animation: du-speedtest-rotate 0.9s linear infinite;
+}
+
+@keyframes du-speedtest-rotate {
+  to { transform: rotate(360deg); }
 }
 
 .du-source-row {

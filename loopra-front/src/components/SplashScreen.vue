@@ -218,10 +218,17 @@
               <span class="sw-java-row-label">版本</span>
               <code class="sw-java-row-value">{{ java.bundled.version || '—' }}</code>
               <span class="sw-java-tools">
-                <select v-model="jreSource" class="sw-java-source-select" :disabled="jreDownloading">
-                  <option :value="UPDATE_SOURCE_NORMAL">GitHub 直连</option>
-                  <option :value="UPDATE_SOURCE_MIRROR">镜像下载 (gh-proxy)</option>
+                <select v-model="jreSource" class="sw-java-source-select" :disabled="jreDownloading" :title="jreSource === 'normal' ? 'GitHub 直连' : '当前镜像: ' + jreSource">
+                  <option value="normal">GitHub 直连</option>
+                  <option v-for="m in jreOptions" :key="m.value" :value="m.value">
+                    {{ m.label }}<template v-if="m.latency != null"> ({{ m.latency }}ms)</template>
+                  </option>
                 </select>
+                <button class="btn sw-speedtest-btn" type="button" :disabled="testingMirrors || jreDownloading" title="重新测速并按延迟排序" @click="runMirrorSpeedTest">
+                  <svg v-if="!testingMirrors" width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M13 2 3 14h9l-1 8 10-12h-9l1-8z"/></svg>
+                  <svg v-else class="sw-speedtest-spin" width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 12a9 9 0 1 1-6.22-8.56"/></svg>
+                  {{ testingMirrors ? '测速中' : '重新测速' }}
+                </button>
                 <button class="btn btn-primary" :class="{ breathing: jrePulse }" type="button" :disabled="jreDownloading" @click="downloadJre">
                   {{ jreDownloading ? '安装中...' : (java.bundled.found ? '重新安装 JRE 25' : '安装 JRE 25') }}
                 </button>
@@ -269,11 +276,14 @@ import {computed, nextTick, onMounted, onUnmounted, ref, watch} from 'vue'
 import {platform} from '@/services/platform'
 import {systemAPI} from '@/services/api'
 import {
-  loadUpdateSource,
-  saveUpdateSource,
-  UPDATE_SOURCE_MIRROR,
-  UPDATE_SOURCE_NORMAL
-} from '@/utils/updateScripts'
+  MIRROR_SOURCES,
+  applyLatencies,
+  loadCachedLatencies,
+  loadSelectedMirrorSource,
+  measureMirrors,
+  saveSelectedMirrorSource,
+  sortMirrors
+} from '@/utils/mirrors'
 import {useAppStore} from '@/stores/app'
 
 const { loopraWebService } = platform.implementation
@@ -285,6 +295,9 @@ const theme = computed(() => store.settings.theme)
 
 const visible = ref(true)
 const menu = ref('core') // core | deps
+
+// 更新模式：复用启动页窗口承载更新时（?from=update），不自动启动服务、不自动进入主界面
+const updateMode = new URLSearchParams(window.location.search).get('from') === 'update'
 
 // 核心端状态
 const installed = ref(false)
@@ -315,9 +328,27 @@ const jreDownloading = ref(false)
 const jrePercent = ref(0)
 const jreLogs = ref([])
 const jreLogRef = ref(null)
-// 下载源（与核心服务下载源共用 localStorage，保持选择一致）
-const jreSource = ref(loadUpdateSource())
-watch(jreSource, (value) => saveUpdateSource(value))
+// JRE 下载源：'normal'（GitHub 直连）或具体镜像 URL；镜像下拉从 MIRROR_SOURCES 获取，自动测速排序
+const jreSource = ref(loadSelectedMirrorSource())
+watch(jreSource, (value) => saveSelectedMirrorSource(value))
+
+// 镜像列表（latency 由测速填充），按延迟升序排列（未测/失败的排末尾）
+const mirrorList = ref(sortMirrors(applyLatencies(MIRROR_SOURCES, loadCachedLatencies())))
+const testingMirrors = ref(false)
+const jreOptions = computed(() => mirrorList.value)
+
+// 自动测速：并发测速所有镜像并按延迟排序（结果缓存 30 分钟，过期自动重测）
+async function runMirrorSpeedTest() {
+  if (testingMirrors.value) return
+  testingMirrors.value = true
+  try {
+    mirrorList.value = await measureMirrors(MIRROR_SOURCES)
+  } catch (e) {
+    console.warn('[Splash] mirror speed test failed:', e)
+  } finally {
+    testingMirrors.value = false
+  }
+}
 
 // 安装日志
 const installLogs = ref([])
@@ -388,6 +419,13 @@ const bundledStateText = computed(() => {
 })
 
 onMounted(async () => {
+  // 镜像测速：无新鲜缓存（30 分钟内）时自动重测并按延迟排序，不阻塞主流程
+  if (!loadCachedLatencies()) void runMirrorSpeedTest()
+  // 更新模式（复用启动页窗口承载更新）：不自动启动服务、不自动进入，仅刷新状态供管理/更新
+  if (updateMode) {
+    await Promise.all([refreshCore(), refreshJava()])
+    return
+  }
   // 打开即进入启动等待：转圈立刻出现，启动与状态检测并行进行
   const startPromise = startService({ overlay: true })
   await Promise.all([refreshCore(), refreshJava()])
@@ -454,13 +492,19 @@ async function refreshCore() {
         livePort = 4567
       }
     }
+    // 同步端口到 localStorage：复用已运行服务时（如 CLI 启动的 4567）refreshCore 会先于
+    // startService 完成，若不在此同步，用户快速进入主窗口会读到上次会话遗留的旧地址（随机端口已失效）→ Network Error
+    if (livePort > 0) {
+      localStorage.setItem('loopra-port', String(livePort))
+      localStorage.setItem('loopra-api-base', `http://127.0.0.1:${livePort}`)
+    }
     running.value = isRunning
     port.value = livePort
     // 服务运行中：进入按钮呼吸闪提示
     if (isRunning) {
       enterPulse.value = true
-      // 跳过等待：打开时已在运行则自动进入主界面
-      if (skipWait.value && !autoEntered) {
+      // 跳过等待：打开时已在运行则自动进入主界面（更新模式不自动进入）
+      if (!updateMode && skipWait.value && !autoEntered) {
         autoEntered = true
         setTimeout(() => enterLoopra(), 600)
       }
@@ -1570,6 +1614,29 @@ defineExpose({
 .sw-java-source-select:disabled {
   opacity: 0.5;
   cursor: not-allowed;
+}
+
+/* 镜像重新测速按钮 */
+.sw-speedtest-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  padding: 6px 10px;
+  font-size: 12px;
+  white-space: nowrap;
+  flex-shrink: 0;
+}
+
+.sw-speedtest-btn svg {
+  flex-shrink: 0;
+}
+
+.sw-speedtest-spin {
+  animation: sw-speedtest-rotate 0.9s linear infinite;
+}
+
+@keyframes sw-speedtest-rotate {
+  to { transform: rotate(360deg); }
 }
 
 /* JRE 下载进度 */

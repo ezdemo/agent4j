@@ -7,7 +7,12 @@
 set -euo pipefail
 
 VERSION="v26.8.211"
-PACKAGE_URL="https://github.com/ezdemo/loopra/releases/download/${VERSION}/loopra-dist.tar.gz"
+# 下载地址：优先使用用户指定的镜像（LOOPRA_MIRROR），否则 GitHub 直连
+if [ -n "$LOOPRA_MIRROR" ]; then
+    PACKAGE_URL="${LOOPRA_MIRROR%/}/https://github.com/ezdemo/loopra/releases/download/${VERSION}/loopra-dist.tar.gz"
+else
+    PACKAGE_URL="https://github.com/ezdemo/loopra/releases/download/${VERSION}/loopra-dist.tar.gz"
+fi
 TEMP_DIR="/tmp/loopra-gui-install"
 
 RED='\033[0;31m'
@@ -29,7 +34,7 @@ cleanup() {
 trap cleanup EXIT
 mkdir -p "$TEMP_DIR"
 
-info "Downloading Loopra Desktop runtime ${VERSION}..."
+info "Downloading Loopra Desktop runtime ${VERSION}${LOOPRA_MIRROR:+ via mirror $LOOPRA_MIRROR}..."
 
 if command -v curl &> /dev/null; then
     curl -fsSL "$PACKAGE_URL" -o "$TEMP_DIR/package.tar.gz"
