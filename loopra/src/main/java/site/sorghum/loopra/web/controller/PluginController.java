@@ -12,6 +12,7 @@ import org.noear.solon.annotation.Post;
 import site.sorghum.loopra.bin.config.ConfigService;
 import site.sorghum.loopra.integration.cutin.plugin.LoopraPluginRuntime;
 import site.sorghum.loopra.integration.cutin.plugin.LoopraPluginRuntime.PluginView;
+import site.sorghum.loopra.integration.cutin.plugin.external.ExternalPluginStore;
 import site.sorghum.loopra.web.common.ServiceException;
 import site.sorghum.loopra.web.model.ApiResponse;
 
@@ -62,5 +63,64 @@ public class PluginController {
 
     public static class ToggleRequest {
         public boolean enabled;
+    }
+
+    // ==================== 外置插件管理 ====================
+
+    /** 外置插件仓库（无状态，按需创建）。 */
+    private final ExternalPluginStore externalStore = new ExternalPluginStore();
+
+    @ApiOperation("列出已安装的外置插件")
+    @Get
+    @Mapping("/external")
+    public ApiResponse<List<ExternalPluginStore.InstalledPlugin>> listExternal() {
+        return ApiResponse.ok(externalStore.installed());
+    }
+
+    @ApiOperation(value = "从 JAR 直链安装外置插件", notes = "下载后热注册到全部存活 AgentLoop，并持久化到 ~/.loopra/plugins/installed.json")
+    @Post
+    @Mapping("/external/install")
+    public ApiResponse<ExternalPluginStore.InstalledPlugin> installExternal(@Body InstallRequest request) {
+        if (request == null || request.source == null || request.source.isBlank()) {
+            throw new ServiceException("source 不能为空（仅支持以 .jar 结尾的 http(s) 直链）");
+        }
+        try {
+            return ApiResponse.ok(externalStore.install(request.source));
+        } catch (IllegalArgumentException | IllegalStateException exception) {
+            throw new ServiceException("安装失败: " + exception.getMessage());
+        }
+    }
+
+    @ApiOperation(value = "卸载外置插件", notes = "从全部存活 AgentLoop 注销、删除本地 jar 并更新清单")
+    @Post
+    @Mapping("/external/{id}/remove")
+    public ApiResponse<String> removeExternal(@Path("id") String id) {
+        try {
+            externalStore.uninstall(id);
+            return ApiResponse.ok("插件已卸载: " + id);
+        } catch (IllegalArgumentException exception) {
+            throw new ServiceException("插件不存在: " + id);
+        }
+    }
+
+    @ApiOperation("启用/停用外置插件")
+    @Post
+    @Mapping("/external/{id}/toggle")
+    public ApiResponse<ExternalPluginStore.InstalledPlugin> toggleExternal(
+            @Path("id") String id, @Body ToggleRequest request) {
+        if (request == null) {
+            throw new ServiceException("请求体不能为空");
+        }
+        try {
+            return ApiResponse.ok(externalStore.setEnabled(id, request.enabled));
+        } catch (IllegalArgumentException exception) {
+            throw new ServiceException("插件不存在: " + id);
+        }
+    }
+
+    /** 外置插件安装请求体。 */
+    public static class InstallRequest {
+        /** 插件 jar 直链（以 .jar 结尾）。 */
+        public String source;
     }
 }
