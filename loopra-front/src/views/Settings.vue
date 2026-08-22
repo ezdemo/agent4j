@@ -2116,7 +2116,7 @@ async function handleCoreUpdateFromPanel() {
 function renderMarkdown(text) {
   if (!text) return ''
   try {
-    return md.parse(text)
+    return md.render(text)
   } catch {
     return text
   }
@@ -5286,7 +5286,7 @@ const saveLoopraMd = async () => {
   font-size: 13px;
   font-weight: 600;
   color: var(--fg);
-  font-family: monospace;
+  font-family: var(--mono, monospace);
 }
 
 .mcp-tool-desc {
@@ -5574,7 +5574,7 @@ const saveLoopraMd = async () => {
 
 .remote-model-name {
   flex: 1;
-  font-family: monospace;
+  font-family: var(--mono, monospace);
   font-size: 13px;
 }
 
@@ -6247,7 +6247,7 @@ const saveLoopraMd = async () => {
   resize: none;
   background: var(--bg);
   color: var(--fg);
-  font-family: 'Cascadia Code', 'Fira Code', 'JetBrains Mono', 'Consolas', monospace;
+  font-family: var(--mono, 'JetBrains Mono Variable', monospace);
   font-size: 13px;
   line-height: 1.6;
   padding: 16px;

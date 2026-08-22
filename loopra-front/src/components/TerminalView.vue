@@ -379,7 +379,7 @@ async function addTerminal(shellId = '') {
   const term = new Terminal({
     cursorBlink: true,
     fontSize: 13,
-    fontFamily: "Consolas, Menlo, 'Courier New', monospace",
+    fontFamily: "'JetBrains Mono Variable', Consolas, Menlo, 'Courier New', monospace",
     theme: currentTheme(),
     scrollback: 5000
   })
