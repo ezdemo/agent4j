@@ -2,7 +2,7 @@
 # =============================================
 #  Loopra Web Installer (Linux / macOS)
 #  支持重复安装，保留已有 config.json
-#  自动下载 JRE 25（无需系统 Java）
+#  复用系统 Java 17+ 或已有捆绑 JRE（不自动下载 JDK）
 #  兼容 bash, zsh, sh 等多种 shell
 # =============================================
 
@@ -49,7 +49,6 @@ if [ "$GUI_INSTALL" = true ]; then
 fi
 TARGET_BIN_DIR="$TARGET_DIR/bin"
 JRE25_DIR="$TARGET_DIR/jre25"
-JRE25_JAVA="$JRE25_DIR/bin/java"
 
 # 源目录
 SOURCE_BIN_DIR="$SOURCE_DIR/bin"
@@ -57,155 +56,60 @@ SOURCE_CONFIG="$SOURCE_DIR/config.json"
 SOURCE_AGENTS="$SOURCE_DIR/loopra.md"
 
 # =============================================
-# 检测 OS / ARCH（与 Adoptium API 对齐）
+# Pre-check: 复用系统 Java 17+ 或已有捆绑 JRE
+# （Solon 风格：不自动下载 JDK，缺失时提示用户安装）
 # =============================================
-detect_os() {
-    case "$(uname -s)" in
-        Darwin)  echo "mac" ;;
-        Linux)   echo "linux" ;;
-        *)       echo "linux" ;;  # fallback
-    esac
-}
+echo ""
+echo -e "${YELLOW}[Pre-check]${NC} Verifying Java 17+ installation..."
 
-detect_arch() {
-    case "$(uname -m)" in
-        x86_64|amd64) echo "x64" ;;
-        aarch64|arm64) echo "aarch64" ;;
-        *)             echo "x64" ;;  # fallback
-    esac
-}
+JAVA_EXE=""
+JAVA_SOURCE=""
 
-# =============================================
-# 下载并安装 JRE 25 到运行时目录
-# 参考 lib.rs: Adoptium API → 清华镜像
-# =============================================
-download_jre25() {
-    local os=$(detect_os)
-    local arch=$(detect_arch)
-
-    echo -e "${YELLOW}[JRE 25]${NC} Downloading JRE 25 for ${os}/${arch}..."
-
-    # 1. 从 Adoptium API 获取最新包名
-    local api_url="https://api.adoptium.net/v3/assets/feature_releases/25/ga?architecture=${arch}&image_type=jre&os=${os}&page_size=1"
-    echo -e "      Querying Adoptium API..."
-
-    local package_name=""
-    if command -v curl &> /dev/null; then
-        # 匹配 name 中含 jre 且以 .tar.gz 结尾的字段（跳过 source 和 .pkg）
-        package_name=$(curl -fsSL "$api_url" 2>/dev/null | grep -o '"name": *"[^"]*jre[^"]*\.tar\.gz"' | cut -d'"' -f4 | tr -d '\r' | head -1)
-    elif command -v wget &> /dev/null; then
-        package_name=$(wget -qO- "$api_url" 2>/dev/null | grep -o '"name": *"[^"]*jre[^"]*\.tar\.gz"' | cut -d'"' -f4 | tr -d '\r' | head -1)
+# 1. 优先系统 Java（需 17+）
+if command -v java &> /dev/null; then
+    JAVA_VER=$(java -version 2>&1 | head -n1 | grep -oE '"[0-9]+' | grep -oE '[0-9]+' | head -1)
+    if [ -z "$JAVA_VER" ]; then
+        JAVA_VER=$(java -version 2>&1 | head -n1 | cut -d'"' -f2 | cut -d'.' -f1)
     fi
-
-    # 2. 兜底文件名（API 不可用时）
-    if [ -z "$package_name" ]; then
-        local ext
-        case "$os" in
-            mac)     ext="tar.gz" ;;
-            windows) ext="zip"    ;;
-            *)       ext="tar.gz" ;;
-        esac
-        package_name="OpenJDK25U-jre_${arch}_${os}_hotspot_25.0.3_9.${ext}"
-        echo -e "      ${YELLOW}API unavailable, using fallback name: ${package_name}${NC}"
+    if [ -n "$JAVA_VER" ] && [ "$JAVA_VER" -ge 17 ]; then
+        JAVA_EXE="java"
+        JAVA_SOURCE="System Java"
+        echo -e "      System Java found: $(java -version 2>&1 | head -n1)"
     else
-        echo -e "      Latest package: ${package_name}"
+        echo -e "      ${YELLOW}System Java too old (${JAVA_VER:-unknown}), checking bundled JRE...${NC}"
     fi
+fi
 
-    # 3. 从清华镜像下载
-    local download_url="https://mirrors.tuna.tsinghua.edu.cn/Adoptium/25/jre/${arch}/${os}/${package_name}"
-    local tmp_dir="$TARGET_DIR/.tmp-jre"
-    local archive_path="$tmp_dir/$package_name"
+# 2. 兼容已有捆绑 JRE（~/.loopra/jre25 或 ~/.loopra-gui/jre25）
+if [ -z "$JAVA_EXE" ]; then
+    for candidate in "$JRE25_DIR/bin/java" "$JRE25_DIR/bin/java.exe" "$JRE25_DIR/Contents/Home/bin/java"; do
+        if [ -f "$candidate" ]; then
+            JAVA_EXE="$candidate"
+            JAVA_SOURCE="Bundled JRE ($JRE25_DIR)"
+            echo -e "      Bundled JRE found: $JRE25_DIR"
+            break
+        fi
+    done
+fi
 
-    rm -rf "$tmp_dir"
-    mkdir -p "$tmp_dir"
-
-    echo -e "      Downloading from Tsinghua mirror..."
-    if command -v curl &> /dev/null; then
-        curl -fSL --progress-bar "$download_url" -o "$archive_path"
-    else
-        wget -q --show-progress "$download_url" -O "$archive_path"
-    fi
-
-    # 4. 解压
-    echo -e "      Extracting..."
-    local extract_dir="$tmp_dir/extract"
-    mkdir -p "$extract_dir"
-
-    case "$package_name" in
-        *.tar.gz|*.tgz)
-            tar -xzf "$archive_path" -C "$extract_dir" ;;
-        *.zip)
-            if command -v unzip &> /dev/null; then
-                unzip -q "$archive_path" -d "$extract_dir"
-            else
-                echo -e "${RED}[ERROR]${NC} unzip is required to extract .zip files"
-                exit 1
-            fi
-            ;;
-        *)
-            echo -e "${RED}[ERROR]${NC} Unknown archive format: $package_name"
-            exit 1
-            ;;
-    esac
-
-    # 5. 找到 JRE 顶层目录（解压后唯一的子目录）
-    local jre_subdir=$(ls -d "$extract_dir"/*/ 2>/dev/null | head -1)
-    if [ -z "$jre_subdir" ]; then
-        # 可能直接解压到了 extract_dir 根目录
-        jre_subdir="$extract_dir"
-    fi
-
-    # 6. 移动到最终位置
-    if [ -d "$JRE25_DIR" ]; then
-        rm -rf "$JRE25_DIR"
-    fi
-    mkdir -p "$(dirname "$JRE25_DIR")"
-    mv "$jre_subdir" "$JRE25_DIR"
-
-    # macOS: JRE tar.gz 解出来是 Contents/Home/bin/java 而不是 bin/java
-    # 把 Contents/Home 的内容提到 jre25/ 根目录，和 Linux 保持一致
-    if [ ! -f "$JRE25_JAVA" ] && [ -d "$JRE25_DIR/Contents/Home" ]; then
-        local mac_tmp="$tmp_dir/mac-flatten"
-        mkdir -p "$mac_tmp"
-        mv "$JRE25_DIR/Contents/Home/"* "$mac_tmp/" 2>/dev/null || true
-        mv "$JRE25_DIR/Contents/Home/".* "$mac_tmp/" 2>/dev/null || true
-        rm -rf "$JRE25_DIR"
-        mv "$mac_tmp" "$JRE25_DIR"
-    fi
-
-    # 7. 清理
-    rm -rf "$tmp_dir"
-
-    # 8. 验证
-    if [ ! -f "$JRE25_JAVA" ]; then
-        echo -e "${RED}[ERROR]${NC} JRE 25 installation failed: java binary not found at $JRE25_JAVA"
-        exit 1
-    fi
-
-    local jre_ver=$("$JRE25_JAVA" -version 2>&1 | head -1)
-    echo -e "      ${GREEN}JRE 25 installed: ${jre_ver}${NC}"
-}
-
-# =============================================
-# 确保 JRE 25 可用
-# =============================================
-ensure_java() {
-    if [ -f "$JRE25_JAVA" ]; then
-        local ver=$("$JRE25_JAVA" -version 2>&1 | head -1)
-        echo -e "${GREEN}[Pre-check]${NC} Bundled JRE 25 found: ${ver}"
-        return 0
-    fi
-
-    echo -e "${YELLOW}[Pre-check]${NC} JRE 25 not found, will download automatically..."
+# 3. 都没有 → 提示用户安装
+if [ -z "$JAVA_EXE" ]; then
     echo ""
-    download_jre25
+    echo -e "${RED}[Error] Java 17+ is not installed.${NC}"
     echo ""
-}
+    echo "  Please install Java 17 or later:"
+    echo "    - Tsinghua Adoptium mirror: https://mirrors.tuna.tsinghua.edu.cn/Adoptium/25/jdk/"
+    echo "    - injdk.cn: https://injdk.cn"
+    echo ""
+    if [ "$SETUP_INSTALL" = false ]; then
+        echo "Press Enter to exit..."
+        read -r
+    fi
+    exit 1
+fi
 
-# =============================================
-# 执行 Pre-check
-# =============================================
-ensure_java
+echo -e "      ${GREEN}Java ready (${JAVA_SOURCE}): $("$JAVA_EXE" -version 2>&1 | head -n1)${NC}"
+echo ""
 
 # =============================================
 # 检查源目录是否存在
@@ -301,14 +205,14 @@ fi
 echo "      Found loopra-web.jar"
 
 # =============================================
-# [5/5] 创建 loopra 命令脚本（使用捆绑 JRE 25）
+# [5/5] 创建 loopra 命令脚本（系统 Java 或已有捆绑 JRE）
 # =============================================
 echo ""
 echo "[5/5] Creating 'loopra' command..."
 
 cat > "$TARGET_BIN_DIR/loopra" << 'LAUNCHER_EOF'
 #!/bin/bash
-# Loopra Launcher — uses bundled JRE 25
+# Loopra Launcher — uses system Java (or bundled JRE)
 
 # 获取脚本真实路径（兼容软链接）
 SCRIPT_PATH="$0"
@@ -322,25 +226,22 @@ while [ -L "$SCRIPT_PATH" ]; do
 done
 SCRIPT_DIR="$(cd "$(dirname "$SCRIPT_PATH")" && pwd)"
 
-# 捆绑的 JRE 25 路径
+# 优先系统 Java，其次复用已有捆绑 JRE（兼容旧安装）
 LOOPRA_HOME="$(cd "$SCRIPT_DIR/.." && pwd)"
-JAVA_BIN="$LOOPRA_HOME/jre25/bin/java"
-
-# macOS: JRE 有时在 Contents/Home 下
-if [ ! -f "$JAVA_BIN" ] && [ -f "$LOOPRA_HOME/jre25/Contents/Home/bin/java" ]; then
+JAVA_BIN=""
+if command -v java &> /dev/null; then
+    JAVA_BIN="java"
+elif [ -f "$LOOPRA_HOME/jre25/bin/java" ]; then
+    JAVA_BIN="$LOOPRA_HOME/jre25/bin/java"
+elif [ -f "$LOOPRA_HOME/jre25/Contents/Home/bin/java" ]; then
+    # macOS: JRE 有时在 Contents/Home 下
     JAVA_BIN="$LOOPRA_HOME/jre25/Contents/Home/bin/java"
-fi
-
-# 如果捆绑 JRE 不存在，回退到系统 Java
-if [ ! -f "$JAVA_BIN" ]; then
-    if command -v java &> /dev/null; then
-        JAVA_BIN="java"
-    else
-        echo "[ERROR] No Java found."
-        echo "  Expected bundled JRE at: $LOOPRA_HOME/jre25/bin/java"
-        echo "  Please re-run the installer to download JRE 25."
-        exit 1
-    fi
+else
+    echo "[ERROR] No Java found."
+    echo "  Please install Java 17 or later:"
+    echo "    - Tsinghua Adoptium mirror: https://mirrors.tuna.tsinghua.edu.cn/Adoptium/25/jdk/"
+    echo "    - injdk.cn: https://injdk.cn"
+    exit 1
 fi
 
 # 显示帮助（无参数 或 -h/--help/help）
@@ -534,7 +435,7 @@ echo -e "${GREEN}============================================${NC}"
 echo ""
 echo "  Install path: $TARGET_DIR"
 echo "  Config path:  $LOOPRA_CONFIG_DIR"
-echo "  JRE path:     $JRE25_DIR"
+echo "  Java:         System Java 17+ (or existing bundled JRE at $JRE25_DIR)"
 echo ""
 
 if [ "$IS_GUI_INSTALL" = "1" ]; then
@@ -554,9 +455,7 @@ fi
 echo ""
 echo -e "  ${CYAN}Directory structure:${NC}"
 echo "    $TARGET_DIR/"
-echo "    ├── jre25/           (bundled JRE 25)"
-echo "    │   ├── bin/java"
-echo "    │   └── ..."
+echo "    ├── jre25/           (optional: existing bundled JRE 25)"
 echo "    └── bin/             (executables)"
 echo "        ├── loopra-web.jar"
 echo "        ├── loopra           (launcher)"

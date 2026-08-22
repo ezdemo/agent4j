@@ -331,9 +331,9 @@ function readLoopraGuiVersion() {
 }
 
 function isLoopraGuiInstalled() {
-  const { binPath, jarPath, javaPath, javaMacPath } = getLoopraPaths()
+  const { binPath, jarPath } = getLoopraPaths()
+  // Java 由 launcher 解析：优先系统 java，回退已有捆绑 jre25（不再自动下载）
   return [binPath, jarPath].every((filePath) => fs.existsSync(filePath))
-    && (fs.existsSync(javaPath) || fs.existsSync(javaMacPath))
 }
 
 function isLoopraGuiRuntime(commandLine) {

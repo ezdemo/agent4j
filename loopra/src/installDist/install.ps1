@@ -1,7 +1,7 @@
 ﻿#
 # Loopra Web Installer for Windows PowerShell
 # 支持重复安装，保留已有 config.json
-# 自动下载 JRE 25（无需系统 Java）
+# 复用系统 Java 17+ 或已有捆绑 JRE（不自动下载 JDK）
 #
 param(
     [switch]$Gui,
@@ -35,159 +35,79 @@ $TARGET_AGENTS = Join-Path $CONFIG_DIR "loopra.md"
 $JRE25_DIR = Join-Path $TARGET_DIR "jre25"
 
 # =============================================
-# 检测 OS / ARCH
+# Pre-check: 复用系统 Java 17+ 或已有捆绑 JRE
+# （Solon 风格：不自动下载 JDK，缺失时提示用户安装）
 # =============================================
-function Get-AdoptiumOS {
-    if ($IsMacOS) { return "mac" }
-    if ($IsLinux) { return "linux" }
-    return "windows"
-}
-
-function Get-AdoptiumArch {
-    $arch = (Get-CimInstance Win32_Processor).Architecture
-    # 常见: 9=x64/AMD64, 12=ARM64, 5=ARM, 0=x86
-    if ($arch -eq 9 -or $arch -eq 12) {
-        # 进一步判断
-        $envArch = $env:PROCESSOR_ARCHITECTURE
-        if ($envArch -eq "ARM64") { return "aarch64" }
-        if ($envArch -eq "AMD64" -or $envArch -eq "x86_64") { return "x64" }
-    }
-    # 通过环境变量判断
-    switch ($env:PROCESSOR_ARCHITECTURE) {
-        "ARM64"   { return "aarch64" }
-        "AMD64"   { return "x64" }
-        "x86_64"  { return "x64" }
-        default   { return "x64" }
-    }
-}
-
-# =============================================
-# 下载并安装 JRE 25 到运行时目录
-# =============================================
-function Install-JRE25 {
-    $os = Get-AdoptiumOS
-    $arch = Get-AdoptiumArch
-
-    Write-Host "[JRE 25] Downloading JRE 25 for $arch/$os..." -ForegroundColor Yellow
-
-    # 1. 从 Adoptium API 获取最新包名
-    $apiUrl = "https://api.adoptium.net/v3/assets/feature_releases/25/ga?architecture=$arch&image_type=jre&os=$os&page_size=1"
-    Write-Host "      Querying Adoptium API..."  -ForegroundColor Gray
-
-    $packageName = $null
-    try {
-        $apiResponse = Invoke-WebRequest -Uri $apiUrl -UseBasicParsing -TimeoutSec 30
-        $json = $apiResponse | ConvertFrom-Json
-        $packageName = $json[0].binaries[0].package.name
-    } catch {
-        Write-Host "      API request failed: $_" -ForegroundColor DarkGray
-    }
-
-    # 2. 兜底文件名
-    if (-not $packageName) {
-        $ext = if ($os -eq "windows") { "zip" } else { "tar.gz" }
-        $packageName = "OpenJDK25U-jre_${arch}_${os}_hotspot_25.0.3_9.${ext}"
-        Write-Host "      API unavailable, using fallback name: $packageName" -ForegroundColor Yellow
-    } else {
-        Write-Host "      Latest package: $packageName" -ForegroundColor Gray
-    }
-
-    # 3. 从清华镜像下载
-    $mirrorUrl = "https://mirrors.tuna.tsinghua.edu.cn/Adoptium/25/jre/$arch/$os/$packageName"
-    $tmpDir = Join-Path $TARGET_DIR ".tmp-jre"
-
-    if (Test-Path $tmpDir) { Remove-Item -Recurse -Force $tmpDir }
-    New-Item -ItemType Directory -Path $tmpDir -Force | Out-Null
-
-    $archivePath = Join-Path $tmpDir $packageName
-
-    Write-Host "      Downloading from Tsinghua mirror..." -ForegroundColor Gray
-    try {
-        Invoke-WebRequest -Uri $mirrorUrl -OutFile $archivePath -UseBasicParsing
-    } catch {
-        Write-Host "[ERROR] Download failed: $_" -ForegroundColor Red
-        Write-Host "      URL: $mirrorUrl" -ForegroundColor Gray
-        exit 1
-    }
-
-    # 4. 解压
-    Write-Host "      Extracting..." -ForegroundColor Gray
-    $extractDir = Join-Path $tmpDir "extract"
-    New-Item -ItemType Directory -Path $extractDir -Force | Out-Null
-
-    if ($packageName -match "\.(tar\.gz|tgz)$") {
-        tar -xzf $archivePath -C $extractDir
-    } elseif ($packageName -match "\.zip$") {
-        Expand-Archive -Path $archivePath -DestinationPath $extractDir -Force
-    } else {
-        Write-Host "[ERROR] Unknown archive format: $packageName" -ForegroundColor Red
-        exit 1
-    }
-
-    # 5. 找到 JRE 顶层目录
-    $subDirs = Get-ChildItem -Path $extractDir -Directory | Select-Object -First 1
-    $jreSource = if ($subDirs) { $subDirs.FullName } else { $extractDir }
-
-    # 6. 移动到最终位置
-    if (Test-Path $JRE25_DIR) { Remove-Item -Recurse -Force $JRE25_DIR }
-    Move-Item -Path $jreSource -Destination $JRE25_DIR
-
-    # 7. 清理
-    Remove-Item -Recurse -Force $tmpDir -ErrorAction SilentlyContinue
-
-    # 8. 验证
-    $javaExe = if ($os -eq "windows") { Join-Path $JRE25_DIR "bin\java.exe" } else { Join-Path $JRE25_DIR "bin/java" }
-    if (-not (Test-Path $javaExe)) {
-        Write-Host "[ERROR] JRE 25 installation failed: java not found at $javaExe" -ForegroundColor Red
-        exit 1
-    }
-
+function Get-JavaVersionOutput {
+    param([string]$JavaPath)
     $process = New-Object System.Diagnostics.Process
-    $process.StartInfo.FileName = $javaExe
+    $process.StartInfo.FileName = $JavaPath
     $process.StartInfo.Arguments = "-version"
     $process.StartInfo.RedirectStandardError = $true
     $process.StartInfo.RedirectStandardOutput = $true
     $process.StartInfo.UseShellExecute = $false
     $process.Start() | Out-Null
-    $jreVer = $process.StandardError.ReadToEnd().Trim()
+    $out = $process.StandardError.ReadToEnd()
     $process.WaitForExit() | Out-Null
-    Write-Host "      JRE 25 installed: $($jreVer -split "`n" | Select-Object -First 1)" -ForegroundColor Green
+    return $out
 }
 
-# =============================================
-# 确保 JRE 25 可用
-# =============================================
-function Ensure-Java {
-    $javaExe = if ((Get-AdoptiumOS) -eq "windows") {
-        Join-Path $JRE25_DIR "bin\java.exe"
+Write-Host ""
+Write-Host "[Pre-check] Verifying Java 17+ installation..." -ForegroundColor Yellow
+
+$JAVA_EXE = $null
+$JAVA_SOURCE = ""
+
+# 1. 优先系统 Java（需 17+）
+$sysJava = Get-Command java -ErrorAction SilentlyContinue
+if ($sysJava) {
+    $verOut = Get-JavaVersionOutput $sysJava.Source
+    if ($verOut -match '"(\d+)') {
+        $major = [int]$Matches[1]
+        if ($major -ge 17) {
+            $JAVA_EXE = $sysJava.Source
+            $JAVA_SOURCE = "System Java"
+            Write-Host "      System Java found: $(($verOut -split "`n" | Select-Object -First 1).Trim())" -ForegroundColor Gray
+        } else {
+            Write-Host "      System Java too old (major $major), checking bundled JRE..." -ForegroundColor Yellow
+        }
     } else {
-        Join-Path $JRE25_DIR "bin\java"
+        Write-Host "      Cannot parse system Java version, checking bundled JRE..." -ForegroundColor Yellow
     }
-
-    if (Test-Path $javaExe) {
-        $process = New-Object System.Diagnostics.Process
-        $process.StartInfo.FileName = $javaExe
-        $process.StartInfo.Arguments = "-version"
-        $process.StartInfo.RedirectStandardError = $true
-        $process.StartInfo.RedirectStandardOutput = $true
-        $process.StartInfo.UseShellExecute = $false
-        $process.Start() | Out-Null
-        $ver = ($process.StandardError.ReadToEnd() -split "`n" | Select-Object -First 1).Trim()
-        $process.WaitForExit() | Out-Null
-        Write-Host "[Pre-check] Bundled JRE 25 found: $ver" -ForegroundColor Green
-        return
-    }
-
-    Write-Host "[Pre-check] JRE 25 not found, will download automatically..." -ForegroundColor Yellow
-    Write-Host ""
-    Install-JRE25
-    Write-Host ""
 }
 
-# =============================================
-# 执行 Pre-check
-# =============================================
-Ensure-Java
+# 2. 兼容已有捆绑 JRE（~/.loopra/jre25 或 ~/.loopra-gui/jre25）
+if (-not $JAVA_EXE) {
+    $bundled = @(
+        (Join-Path $JRE25_DIR "bin\java.exe"),
+        (Join-Path $JRE25_DIR "bin\java"),
+        (Join-Path $JRE25_DIR "Contents\Home\bin\java")
+    ) | Where-Object { Test-Path $_ } | Select-Object -First 1
+    if ($bundled) {
+        $JAVA_EXE = $bundled
+        $JAVA_SOURCE = "Bundled JRE ($JRE25_DIR)"
+        Write-Host "      Bundled JRE found: $JRE25_DIR" -ForegroundColor Gray
+    }
+}
+
+# 3. 都没有 → 提示用户安装
+if (-not $JAVA_EXE) {
+    Write-Host ""
+    Write-Host "[Error] Java 17+ is not installed." -ForegroundColor Red
+    Write-Host ""
+    Write-Host "  Please install Java 17 or later:" -ForegroundColor White
+    Write-Host "    - Tsinghua Adoptium mirror: https://mirrors.tuna.tsinghua.edu.cn/Adoptium/25/jdk/" -ForegroundColor White
+    Write-Host "    - injdk.cn: https://injdk.cn" -ForegroundColor White
+    Write-Host ""
+    if (-not $Setup) {
+        Read-Host "Press Enter to exit"
+    }
+    exit 1
+}
+
+$javaVerLine = ((Get-JavaVersionOutput $JAVA_EXE) -split "`n" | Select-Object -First 1).Trim()
+Write-Host "      Java ready ($JAVA_SOURCE): $javaVerLine" -ForegroundColor Green
+Write-Host ""
 
 # =============================================
 # 检查源目录是否存在
@@ -283,7 +203,7 @@ if (-not (Test-Path $JAR_FILE)) {
 Write-Host "      Found loopra-web.jar" -ForegroundColor Gray
 
 # =============================================
-# [5/5] 创建启动脚本并配置 PATH（使用捆绑 JRE 25）
+# [5/5] 创建启动脚本并配置 PATH（系统 Java 或已有捆绑 JRE）
 # =============================================
 Write-Host ""
 Write-Host "[5/5] Setting up 'loopra' command..." -ForegroundColor Yellow
@@ -291,25 +211,29 @@ Write-Host "[5/5] Setting up 'loopra' command..." -ForegroundColor Yellow
 # —— PowerShell 启动脚本 (loopra.ps1) ——
 $LAUNCHER_PS1 = Join-Path $TARGET_BIN_DIR "loopra.ps1"
 $LAUNCHER_PS1_CONTENT = @'
-# Loopra Launcher for PowerShell — uses bundled JRE 25
+# Loopra Launcher for PowerShell — uses system Java (or bundled JRE)
 param([Parameter(ValueFromRemainingArguments)]$RestArgs)
 
 $ScriptDir = Split-Path -Parent $MyInvocation.MyCommand.Definition
 $LoopraHome = Split-Path -Parent $ScriptDir
 $JreDir = Join-Path $LoopraHome "jre25"
-$JavaBin = Join-Path $JreDir "bin\java.exe"
 
-# 如果捆绑 JRE 不存在，回退到系统 Java
-if (-not (Test-Path $JavaBin)) {
-    $sysJava = Get-Command java -ErrorAction SilentlyContinue
-    if ($sysJava) {
-        $JavaBin = $sysJava.Source
-    } else {
-        Write-Host "[ERROR] No Java found." -ForegroundColor Red
-        Write-Host "  Expected bundled JRE at: $JavaBin" -ForegroundColor Gray
-        Write-Host "  Please re-run the installer to download JRE 25." -ForegroundColor Gray
-        exit 1
+# 优先系统 Java，其次复用已有捆绑 JRE（兼容旧安装）
+$JavaBin = $null
+$sysJava = Get-Command java -ErrorAction SilentlyContinue
+if ($sysJava) {
+    $JavaBin = $sysJava.Source
+} else {
+    foreach ($candidate in @((Join-Path $JreDir "bin\java.exe"), (Join-Path $JreDir "bin\java"), (Join-Path $JreDir "Contents\Home\bin\java"))) {
+        if (Test-Path $candidate) { $JavaBin = $candidate; break }
     }
+}
+if (-not $JavaBin) {
+    Write-Host "[ERROR] No Java found." -ForegroundColor Red
+    Write-Host "  Please install Java 17 or later:" -ForegroundColor Gray
+    Write-Host "    - Tsinghua Adoptium mirror: https://mirrors.tuna.tsinghua.edu.cn/Adoptium/25/jdk/" -ForegroundColor Gray
+    Write-Host "    - injdk.cn: https://injdk.cn" -ForegroundColor Gray
+    exit 1
 }
 
 # 显示帮助
@@ -428,7 +352,7 @@ while ($i -lt $RestArgs.Count) {
     }
 }
 
-# 运行 Java 程序（使用捆绑 JRE）
+# 运行 Java 程序
 & $JavaBin @JavaArgs -jar $JarFile @PassThroughArgs
 '@
 
@@ -440,25 +364,33 @@ Write-Host "      Created: loopra.ps1" -ForegroundColor Gray
 $LAUNCHER_BAT = Join-Path $TARGET_BIN_DIR "loopra.bat"
 $LAUNCHER_BAT_CONTENT = @'
 @echo off
-rem Loopra Launcher for CMD - uses bundled JRE 25
+rem Loopra Launcher for CMD - uses system Java (or bundled JRE)
 setlocal enabledelayedexpansion
 
-rem Locate script dir and JRE
+rem Locate script dir
 set "SCRIPT_DIR=%~dp0"
 set "LOOPRA_HOME=%SCRIPT_DIR%.."
-set "JAVA_BIN=%LOOPRA_HOME%\jre25\bin\java.exe"
 
-rem Fallback to system Java if bundled JRE missing
-if not exist "%JAVA_BIN%" (
-    where java >nul 2>&1
-    if %ERRORLEVEL% equ 0 (
-        set "JAVA_BIN=java"
-    ) else (
-        echo [ERROR] No Java found.
-        echo   Expected bundled JRE at: %JAVA_BIN%
-        echo   Please re-run the installer to download JRE 25.
-        exit /b 1
+rem Prefer system Java, then fall back to existing bundled JRE (old installs)
+set "JAVA_BIN="
+where java >nul 2>&1
+if %ERRORLEVEL% equ 0 (
+    set "JAVA_BIN=java"
+) else (
+    if exist "%LOOPRA_HOME%\jre25\bin\java.exe" (
+        set "JAVA_BIN=%LOOPRA_HOME%\jre25\bin\java.exe"
+    ) else if exist "%LOOPRA_HOME%\jre25\bin\java" (
+        set "JAVA_BIN=%LOOPRA_HOME%\jre25\bin\java"
+    ) else if exist "%LOOPRA_HOME%\jre25\Contents\Home\bin\java" (
+        set "JAVA_BIN=%LOOPRA_HOME%\jre25\Contents\Home\bin\java"
     )
+)
+if not defined JAVA_BIN (
+    echo [ERROR] No Java found.
+    echo   Please install Java 17 or later:
+    echo     - Tsinghua Adoptium mirror: https://mirrors.tuna.tsinghua.edu.cn/Adoptium/25/jdk/
+    echo     - injdk.cn: https://injdk.cn
+    exit /b 1
 )
 
 rem Show help (no args / -h / --help / help)
@@ -550,7 +482,7 @@ for %%a in (%*) do (
     )
 )
 
-rem Run Java with bundled JRE
+rem Run Java
 "%JAVA_BIN%" %JAVA_OPTS% -jar "%JAR_FILE%" %PASS_ARGS%
 
 :end
@@ -564,22 +496,26 @@ Write-Host "      Created: loopra.bat" -ForegroundColor Gray
 $LAUNCHER_SH = Join-Path $TARGET_BIN_DIR "loopra"
 $LAUNCHER_SH_CONTENT = @'
 #!/bin/bash
-# Loopra Launcher for Git Bash / WSL — uses bundled JRE 25
+# Loopra Launcher for Git Bash / WSL — uses system Java (or bundled JRE)
 
 SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
 LOOPRA_HOME="$(cd "$SCRIPT_DIR/.." && pwd)"
-JAVA_BIN="$LOOPRA_HOME/jre25/bin/java"
 
-# 如果捆绑 JRE 不存在，回退到系统 Java
-if [ ! -f "$JAVA_BIN" ]; then
-    if command -v java &> /dev/null; then
-        JAVA_BIN="java"
-    else
-        echo "[ERROR] No Java found."
-        echo "  Expected bundled JRE at: $LOOPRA_HOME/jre25/bin/java"
-        echo "  Please re-run the installer to download JRE 25."
-        exit 1
-    fi
+# 优先系统 Java，其次复用已有捆绑 JRE（兼容旧安装）
+JAVA_BIN=""
+if command -v java &> /dev/null; then
+    JAVA_BIN="java"
+elif [ -f "$LOOPRA_HOME/jre25/bin/java" ]; then
+    JAVA_BIN="$LOOPRA_HOME/jre25/bin/java"
+elif [ -f "$LOOPRA_HOME/jre25/Contents/Home/bin/java" ]; then
+    # macOS: JRE 有时在 Contents/Home 下
+    JAVA_BIN="$LOOPRA_HOME/jre25/Contents/Home/bin/java"
+else
+    echo "[ERROR] No Java found."
+    echo "  Please install Java 17 or later:"
+    echo "    - Tsinghua Adoptium mirror: https://mirrors.tuna.tsinghua.edu.cn/Adoptium/25/jdk/"
+    echo "    - injdk.cn: https://injdk.cn"
+    exit 1
 fi
 
 # 显示帮助（无参数 或 -h/--help/help）
@@ -691,7 +627,7 @@ Write-Host "============================================" -ForegroundColor Green
 Write-Host ""
 Write-Host "  Install path: $TARGET_DIR" -ForegroundColor White
 Write-Host "  Config path:  $CONFIG_DIR" -ForegroundColor White
-Write-Host "  JRE path:     $JRE25_DIR" -ForegroundColor White
+Write-Host "  Java:         System Java 17+ (or existing bundled JRE at $JRE25_DIR)" -ForegroundColor White
 Write-Host ""
 if ($IS_GUI_INSTALL) {
     Write-Host "  Desktop runtime is managed by the Loopra Desktop app." -ForegroundColor Cyan
@@ -705,9 +641,7 @@ if ($IS_GUI_INSTALL) {
 Write-Host ""
 Write-Host "  Directory structure:" -ForegroundColor Cyan
 Write-Host "    $TARGET_DIR\"
-Write-Host "    +-- jre25/           (bundled JRE 25)"
-Write-Host "    |   +-- bin/java.exe"
-Write-Host "    |   +-- ..."
+Write-Host "    +-- jre25/           (optional: existing bundled JRE 25)"
 Write-Host "    +-- bin/             (executables)"
 Write-Host "        +-- loopra-web.jar"
 Write-Host "        +-- loopra.ps1       (PowerShell launcher)"
