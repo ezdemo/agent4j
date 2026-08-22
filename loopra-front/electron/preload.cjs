@@ -26,6 +26,11 @@ contextBridge.exposeInMainWorld('electronAPI', {
     ready: () => ipcRenderer.invoke('splash_ready')
   },
 
+  // 下载镜像测速（主进程 node https，避免浏览器 CORS 限制）
+  mirror: {
+    measureLatencies: (options) => ipcRenderer.invoke('measure_mirror_latencies', options)
+  },
+
   // 更新窗口管理
   updateWindow: {
     open: () => ipcRenderer.invoke('open-update-window'),

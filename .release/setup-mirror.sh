@@ -7,7 +7,13 @@
 set -e
 
 VERSION="v26.8.211"
-PACKAGE_URL="https://gh-proxy.org/https://github.com/ezdemo/loopra/releases/download/${VERSION}/loopra-dist.tar.gz"
+# 下载地址：优先使用用户指定的镜像（LOOPRA_MIRROR），未指定时默认 gh-proxy.org
+if [ -n "$LOOPRA_MIRROR" ]; then
+    MIRROR="$LOOPRA_MIRROR"
+else
+    MIRROR="https://gh-proxy.org/"
+fi
+PACKAGE_URL="${MIRROR%/}/https://github.com/ezdemo/loopra/releases/download/${VERSION}/loopra-dist.tar.gz"
 TEMP_DIR="/tmp/loopra-install"
 
 # Colors
@@ -38,7 +44,7 @@ trap cleanup EXIT
 # Create temp directory
 mkdir -p "$TEMP_DIR"
 
-info "Downloading Loopra Web ${VERSION} via GitHub mirror (gh-proxy)..."
+info "Downloading Loopra Web ${VERSION} via GitHub mirror (${MIRROR})..."
 
 # Download package
 if command -v curl &> /dev/null; then

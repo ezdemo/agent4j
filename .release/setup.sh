@@ -7,7 +7,12 @@
 set -e
 
 VERSION="v26.8.211"
-PACKAGE_URL="https://github.com/ezdemo/loopra/releases/download/${VERSION}/loopra-dist.tar.gz"
+# 下载地址：优先使用用户指定的镜像（LOOPRA_MIRROR），否则 GitHub 直连
+if [ -n "$LOOPRA_MIRROR" ]; then
+    PACKAGE_URL="${LOOPRA_MIRROR%/}/https://github.com/ezdemo/loopra/releases/download/${VERSION}/loopra-dist.tar.gz"
+else
+    PACKAGE_URL="https://github.com/ezdemo/loopra/releases/download/${VERSION}/loopra-dist.tar.gz"
+fi
 TEMP_DIR="/tmp/loopra-install"
 
 # Colors
@@ -38,7 +43,7 @@ trap cleanup EXIT
 # Create temp directory
 mkdir -p "$TEMP_DIR"
 
-info "Downloading Loopra Web ${VERSION}..."
+info "Downloading Loopra Web ${VERSION}${LOOPRA_MIRROR:+ via mirror $LOOPRA_MIRROR}..."
 
 # Download package
 if command -v curl &> /dev/null; then

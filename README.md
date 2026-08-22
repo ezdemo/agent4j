@@ -59,7 +59,7 @@ Loopra 将用户任务、模型推理与受控工具调用组织成持续执行�
 
 桌面端下载地址：[Releases](https://github.com/ezdemo/loopra/releases/latest)。
 
-Desktop 首次启动会安装独立运行时到 `~/.loopra-gui`；CLI 仍安装在 `~/.loopra`，两者共用配置目录但不会复用或终止对方的服务进程。Desktop 启动时优先复用本机 `4567` 端口上的健康 Loopra Web 服务，并展示启动窗口；安装包内置核心运行时（`resources/loopra-core`），首次安装优先使用内置包本地安装（无网络也可完成；Java 由系统提供或复用已有捆绑 JRE，不再自动下载），内置包缺失或本地安装失败时自动回退到在线下载源（GitHub 直连或镜像加速）；独立运行时版本不一致时，可在更新窗口选择下载源（GitHub 直连或镜像加速）更新核心服务与桌面端，也可以暂不更新继续使用。
+Desktop 首次启动会安装独立运行时到 `~/.loopra-gui`；CLI 仍安装在 `~/.loopra`，两者共用配置目录但不会复用或终止对方的服务进程。Desktop 启动时优先复用本机 `4567` 端口上的健康 Loopra Web 服务，并展示启动窗口（核心服务与依赖管理）；安装包内置核心运行时（`resources/loopra-core`），首次安装优先使用内置包本地安装（无网络也可完成；Java 优先复用系统 Java 17+ 或已有捆绑 JRE，缺失时安装脚本自动下载 JRE 25，也可在启动窗口中选择镜像安装/重装 JRE 25），内置包缺失或本地安装失败时自动回退到在线下载源（GitHub 直连或镜像加速）。下载源支持 GitHub 直连与镜像列表（自动测速并按延迟排序、可一键重测，选中的镜像同时用于 JRE 下载与更新脚本）；更新入口复用启动窗口，可直接更新核心服务与桌面端，也可以暂不更新继续使用。
 
 ### 1. 安装
 
@@ -88,6 +88,22 @@ macOS / Linux：
 ```bash
 curl -fsSL https://raw.giteeusercontent.com/ezdemo/loopra/raw/main/.release/setup-mirror.sh | bash
 ```
+
+所有安装脚本（`setup.ps1` / `setup.sh` 及其 `-mirror`、`-gui` 变体）都支持通过 `LOOPRA_MIRROR` 环境变量指定具体镜像（镜像列表可在桌面端下载源选择中自动测速排序后挑选）：
+
+Windows PowerShell：
+
+```powershell
+$env:LOOPRA_MIRROR='https://gh-proxy.org/'; irm https://raw.giteeusercontent.com/ezdemo/loopra/raw/main/.release/setup.ps1 | iex
+```
+
+macOS / Linux：
+
+```bash
+export LOOPRA_MIRROR='https://gh-proxy.org/'; curl -fsSL https://raw.giteeusercontent.com/ezdemo/loopra/raw/main/.release/setup.sh | bash
+```
+
+未设置 `LOOPRA_MIRROR` 时：直连脚本走 GitHub 官方源，镜像脚本（`-mirror` 变体）默认使用 `gh-proxy.org`。
 
 > **macOS 用户注意**：桌面端（Releases 中的 `Loopra-*.zip`）目前未做 Apple 签名与公证，首次打开可能提示 **“Loopra”已损坏，无法打开**。这是 macOS Gatekeeper 对未签名应用的拦截，安装包本身没有损坏，按下面任一种方式放行即可：
 >

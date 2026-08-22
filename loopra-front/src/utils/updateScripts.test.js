@@ -9,6 +9,9 @@ import {
   saveUpdateSource,
   updateScriptName
 } from './updateScripts'
+import {MIRROR_SOURCES} from './mirrors'
+
+const MIRROR_URL = MIRROR_SOURCES[0].value // e.g. https://gh-proxy.org/
 
 describe('updateScriptName', () => {
   it('builds web scripts for the normal source', () => {
@@ -27,6 +30,11 @@ describe('updateScriptName', () => {
     expect(updateScriptName(UPDATE_SOURCE_MIRROR, true, 'ps1')).toBe('setup-gui-mirror.ps1')
     expect(updateScriptName(UPDATE_SOURCE_MIRROR, true, 'sh')).toBe('setup-gui-mirror.sh')
   })
+
+  it('treats a concrete mirror URL as a mirror source', () => {
+    expect(updateScriptName(MIRROR_URL, false, 'ps1')).toBe('setup-mirror.ps1')
+    expect(updateScriptName(MIRROR_URL, true, 'sh')).toBe('setup-gui-mirror.sh')
+  })
 })
 
 describe('buildUpdateCommand', () => {
@@ -42,6 +50,19 @@ describe('buildUpdateCommand', () => {
     const cmd = buildUpdateCommand(UPDATE_SOURCE_MIRROR, true)
     expect(cmd.windows).toContain('setup-gui-mirror.ps1')
     expect(cmd.unix).toContain('setup-gui-mirror.sh')
+  })
+
+  it('injects the chosen mirror via LOOPRA_MIRROR when a concrete mirror URL is selected', () => {
+    const cmd = buildUpdateCommand(MIRROR_URL, true)
+    expect(cmd.windows).toContain(`$env:LOOPRA_MIRROR='${MIRROR_URL.replace(/\/+$/, '')}'; `)
+    expect(cmd.windows).toContain('setup-gui-mirror.ps1')
+    expect(cmd.unix).toContain(`export LOOPRA_MIRROR='${MIRROR_URL.replace(/\/+$/, '')}'; `)
+    expect(cmd.unix).toContain('setup-gui-mirror.sh')
+  })
+
+  it('does not inject LOOPRA_MIRROR for the direct or legacy mirror source', () => {
+    expect(buildUpdateCommand(UPDATE_SOURCE_NORMAL, false).windows).not.toContain('LOOPRA_MIRROR')
+    expect(buildUpdateCommand(UPDATE_SOURCE_MIRROR, false).windows).not.toContain('LOOPRA_MIRROR')
   })
 })
 
@@ -82,6 +103,18 @@ describe('update source persistence', () => {
     localStorage.clear()
     saveUpdateSource(UPDATE_SOURCE_MIRROR)
     saveUpdateSource(UPDATE_SOURCE_NORMAL)
+    expect(loadUpdateSource()).toBe(UPDATE_SOURCE_NORMAL)
+  })
+
+  it('persists a concrete mirror URL and restores it', () => {
+    localStorage.clear()
+    saveUpdateSource(MIRROR_URL)
+    expect(loadUpdateSource()).toBe(MIRROR_URL)
+  })
+
+  it('ignores unknown mirror values and keeps the normal source', () => {
+    localStorage.clear()
+    saveUpdateSource('https://not-in-list.example/')
     expect(loadUpdateSource()).toBe(UPDATE_SOURCE_NORMAL)
   })
 })

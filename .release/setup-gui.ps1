@@ -6,7 +6,13 @@
 $ErrorActionPreference = "Stop"
 
 $VERSION = "v26.8.211"
-$PACKAGE_URL = "https://github.com/ezdemo/loopra/releases/download/$VERSION/loopra-dist.tar.gz"
+# 下载地址：优先使用用户指定的镜像（LOOPRA_MIRROR），否则 GitHub 直连
+$MIRROR = $env:LOOPRA_MIRROR
+if ($MIRROR) {
+    $PACKAGE_URL = $MIRROR.TrimEnd('/') + "/https://github.com/ezdemo/loopra/releases/download/$VERSION/loopra-dist.tar.gz"
+} else {
+    $PACKAGE_URL = "https://github.com/ezdemo/loopra/releases/download/$VERSION/loopra-dist.tar.gz"
+}
 $TEMP_DIR = Join-Path $env:TEMP "loopra-gui-install"
 
 function Write-Info {
@@ -27,7 +33,7 @@ if (Test-Path $TEMP_DIR) {
 New-Item -ItemType Directory -Path $TEMP_DIR | Out-Null
 
 try {
-    Write-Info "Downloading Loopra Desktop runtime $VERSION..."
+    Write-Info "Downloading Loopra Desktop runtime $VERSION$(if ($MIRROR) { " via mirror $MIRROR" } else { '' })..."
 
     $packageFile = Join-Path $TEMP_DIR "package.tar.gz"
     Invoke-WebRequest -Uri $PACKAGE_URL -OutFile $packageFile -UseBasicParsing
