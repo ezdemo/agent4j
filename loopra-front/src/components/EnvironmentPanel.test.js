@@ -6,6 +6,7 @@ import EnvironmentPanel from './EnvironmentPanel.vue'
 
 const environmentMock = vi.fn()
 const worktreeCreateMock = vi.fn()
+const generateCommitMessageMock = vi.fn()
 const setWorktreeModeMock = vi.fn()
 
 vi.mock('ant-design-vue', () => ({
@@ -16,6 +17,7 @@ vi.mock('../services/api', () => ({
   gitAPI: {
     environment: (...args) => environmentMock(...args),
     worktreeCreate: (...args) => worktreeCreateMock(...args),
+    generateEnvironmentCommitMessage: (...args) => generateCommitMessageMock(...args),
     status: vi.fn()
   },
   sessionsAPI: {
@@ -50,6 +52,7 @@ function localEnvironment() {
 beforeEach(() => {
   environmentMock.mockReset().mockResolvedValue(localEnvironment())
   worktreeCreateMock.mockReset().mockResolvedValue({success: true})
+  generateCommitMessageMock.mockReset().mockResolvedValue({success: true, data: {message: 'feat: 更新环境面板'}})
   setWorktreeModeMock.mockReset().mockResolvedValue({success: true, data: {worktreeMode: true}})
   statusMock.mockReset().mockResolvedValue({
     initialized: true,
@@ -196,6 +199,35 @@ describe('EnvironmentPanel', () => {
     expect(wrapper.text()).toContain('Git 功能未加载')
     expect(wrapper.text()).not.toContain('暂无未提交变更')
     expect(wrapper.text()).not.toContain('主项目干净')
+    wrapper.unmount()
+  })
+
+  it('一键 AI 生成提交信息并填入提交框', async () => {
+    const wrapper = mount(EnvironmentPanel, {props: {workspaceHash: 'h1', sessionName: 's1'}})
+    await flushPromises()
+
+    const generateButton = wrapper.find('.environment-button.ai')
+    expect(generateButton.attributes('disabled')).toBeUndefined()
+
+    await generateButton.trigger('click')
+    await flushPromises()
+
+    expect(generateCommitMessageMock).toHaveBeenCalledWith('h1', 's1')
+    expect(wrapper.find('.environment-commit-input').element.value).toBe('feat: 更新环境面板')
+    expect(wrapper.text()).toContain('AI 已生成提交信息')
+    wrapper.unmount()
+  })
+
+  it('AI 生成失败时提示错误且不填写提交信息', async () => {
+    generateCommitMessageMock.mockResolvedValue({success: false, message: 'AI 模型未配置'})
+    const wrapper = mount(EnvironmentPanel, {props: {workspaceHash: 'h1', sessionName: 's1'}})
+    await flushPromises()
+
+    await wrapper.find('.environment-button.ai').trigger('click')
+    await flushPromises()
+
+    expect(wrapper.find('.environment-commit-input').element.value).toBe('')
+    expect(wrapper.text()).toContain('AI 模型未配置')
     wrapper.unmount()
   })
 })

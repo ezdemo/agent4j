@@ -1,5 +1,5 @@
 import {ref} from 'vue'
-import {applyHljsTheme} from '../utils/hljsTheme'
+import {applyHighlightTheme} from '../utils/highlight'
 
 const theme = ref('light')
 
@@ -13,8 +13,8 @@ function applyTheme(val) {
   document.documentElement.setAttribute('data-theme', val)
   localStorage.setItem('loopra-theme', val)
   theme.value = val
-  // 同步切换 highlight.js 语法高亮主题
-  applyHljsTheme(val)
+  // 同步切换 Shiki 语法高亮主题（已渲染消息会经 highlightVersion 自动重渲染）
+  applyHighlightTheme(val)
 }
 
 // 初始化

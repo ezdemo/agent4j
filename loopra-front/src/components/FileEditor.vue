@@ -531,7 +531,7 @@ async function initializeEditor() {
     monaco.value = module.default
     editor.value = monaco.value.editor.create(editorRef.value, {
       automaticLayout: true,
-      fontFamily: 'var(--mono)',
+      fontFamily: "'JetBrains Mono Variable', Consolas, 'Courier New', monospace",
       fontSize: 13,
       glyphMargin: true,
       lineHeight: 21,

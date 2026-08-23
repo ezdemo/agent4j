@@ -177,6 +177,13 @@
                     </svg>
                     {{ desktopPetVisible ? '隐藏桌面宠物' : '显示到桌面' }}
                   </button>
+                  <button v-if="isElectron" class="btn btn-ghost" :disabled="!activePetName" @click="resetPetPosition">
+                    <svg fill="none" height="14" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24" width="14">
+                      <path d="M12 21s-7-5.1-7-11a7 7 0 0 1 14 0c0 5.9-7 11-7 11z"/>
+                      <circle cx="12" cy="10" r="2.5"/>
+                    </svg>
+                    重置位置
+                  </button>
                   <button v-if="!isElectron" class="btn btn-ghost" @click="toggleWebPet">
                     <svg fill="none" height="14" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24" width="14">
                       <path d="M1 12s4-7 11-7 11 7 11 7-4 7-11 7-11-7-11-7z"/>
@@ -1258,6 +1265,88 @@ X-Custom-Header=value"
               <p>从社区浏览、搜索和安装技能</p>
             </div>
             <div class="card-body">
+              <!-- 已安装技能 -->
+              <div class="installed-skills-section">
+                <div class="installed-skills-header">
+                  <div class="installed-skills-toggle" @click="installedSkillsCollapsed = !installedSkillsCollapsed">
+                    <svg
+                      class="installed-skills-chevron"
+                      :class="{ collapsed: installedSkillsCollapsed }"
+                      fill="none"
+                      height="12"
+                      stroke="currentColor"
+                      stroke-width="2"
+                      viewBox="0 0 24 24"
+                      width="12"
+                    >
+                      <polyline points="6 9 12 15 18 9"/>
+                    </svg>
+                    <span class="installed-skills-title">已安装技能</span>
+                    <span v-if="installedSkillList.length > 0" class="installed-skills-count">{{ installedSkillList.length }}</span>
+                    <span class="installed-skills-sub">本机技能池 ~/.loopra/skills 中的技能，卸载后立即生效</span>
+                  </div>
+                  <button
+                    class="btn btn-ghost btn-sm"
+                    :disabled="installedSkillsLoading"
+                    @click="loadInstalledSkills"
+                    title="刷新已安装技能"
+                  >
+                    <svg v-if="installedSkillsLoading" class="animate-spin" width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                      <path d="M21 12a9 9 0 11-6.219-8.56"/>
+                    </svg>
+                    <svg v-else width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                      <polyline points="23 4 23 10 17 10"/>
+                      <path d="M20.49 15a9 9 0 1 1-2.12-9.36L23 10"/>
+                    </svg>
+                    刷新
+                  </button>
+                </div>
+
+                <div v-if="!installedSkillsCollapsed">
+                <!-- 已安装技能列表 -->
+                <div v-if="installedSkillList.length === 0" class="installed-skills-empty">
+                  <svg fill="none" height="28" stroke="var(--fg-3)" stroke-width="1.5" viewBox="0 0 24 24" width="28">
+                    <path d="M9 18h6M10 22h4M12 2a7 7 0 0 0-4 12.7c.6.5 1 1.4 1 2.3h6c0-.9.4-1.8 1-2.3A7 7 0 0 0 12 2z"/>
+                  </svg>
+                  <p>还没有安装任何技能</p>
+                  <p class="hint">从下方市场选择技能并点击「安装」，或手动放入 ~/.loopra/skills/ 目录</p>
+                </div>
+                <div v-else class="skill-list">
+                  <div
+                    v-for="skill in installedSkillList"
+                    :key="skill.directoryName || skill.name"
+                    class="skill-item"
+                  >
+                    <div class="skill-icon">{{ (skill.name || 'SK').substring(0, 2).toUpperCase() }}</div>
+                    <div class="skill-info">
+                      <div class="skill-name">
+                        {{ skill.name }}
+                        <span v-if="skill.directoryName && skill.directoryName !== skill.name" class="skill-installed-badge">{{ skill.directoryName }}</span>
+                      </div>
+                      <div v-if="skill.description" class="skill-desc">{{ skill.description.length > 80 ? skill.description.substring(0, 80) + '...' : skill.description }}</div>
+                    </div>
+                    <div class="skill-actions">
+                      <button
+                        class="btn btn-ghost btn-sm"
+                        :disabled="skillMarket.installing === (skill.directoryName || skill.name)"
+                        @click="uninstallInstalledSkill(skill)"
+                        title="卸载"
+                      >
+                        <svg v-if="skillMarket.installing === (skill.directoryName || skill.name)" class="animate-spin" width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                          <path d="M21 12a9 9 0 11-6.219-8.56"/>
+                        </svg>
+                        <svg v-else width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                          <polyline points="3 6 5 6 21 6"/>
+                          <path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"/>
+                        </svg>
+                        {{ skillMarket.installing === (skill.directoryName || skill.name) ? '卸载中...' : '卸载' }}
+                      </button>
+                    </div>
+                  </div>
+                </div>
+                </div>
+              </div>
+
               <!-- 工具栏 -->
               <div style="display:flex;gap:8px;margin-bottom:12px;align-items:center">
                 <!-- 市场选择 -->
@@ -1899,6 +1988,17 @@ async function toggleDesktopPet() {
   store.desktopPetVisible = true
 }
 
+// 重置桌面宠物位置到初始位置（主窗口右下角）
+async function resetPetPosition() {
+  if (!isElectron || !activePetName.value) return
+  try {
+    const res = await window.electronAPI.desktopPet.resetPosition()
+    message.success(`宠物位置已重置到初始位置 (${res?.x}, ${res?.y})`)
+  } catch (err) {
+    message.error('重置宠物位置失败: ' + (err.message || ''))
+  }
+}
+
 // web 端：显示/隐藏聊天内宠物（状态持久化，桌面端聊天内不展示宠物）
 function toggleWebPet() {
   store.setPetHidden(!store.petHidden)
@@ -2116,7 +2216,7 @@ async function handleCoreUpdateFromPanel() {
 function renderMarkdown(text) {
   if (!text) return ''
   try {
-    return md.parse(text)
+    return md.render(text)
   } catch {
     return text
   }
@@ -2216,22 +2316,61 @@ async function uninstallSkill(slug, displayName) {
 
 // 获取已安装的技能列表。市场 slug 可能与 SKILL.md 的 name 不同，因此两个标识都要保留。
 const installedSkills = ref(new Set())
+const installedSkillList = ref([])
+const installedSkillsLoading = ref(false)
+// 已安装技能板块默认折叠
+const installedSkillsCollapsed = ref(true)
 async function loadInstalledSkills() {
+  installedSkillsLoading.value = true
   try {
     const res = await agentAPI.getSkills()
     if (res.success && res.data) {
-      installedSkills.value = new Set(res.data.flatMap(skill => [
+      installedSkillList.value = Array.isArray(res.data) ? res.data : []
+      installedSkills.value = new Set(installedSkillList.value.flatMap(skill => [
         skill.name,
         skill.directoryName
       ].filter(Boolean)))
     }
   } catch (err) {
     console.warn('加载已安装技能失败:', err)
+  } finally {
+    installedSkillsLoading.value = false
   }
 }
 
 function isSkillInstalled(slug) {
   return installedSkills.value.has(slug)
+}
+
+// 从「已安装技能」板块卸载技能
+function uninstallInstalledSkill(skill) {
+  const slug = skill.directoryName || skill.name
+  if (!slug) return
+  Modal.confirm({
+    title: '卸载技能',
+    content: `确定要卸载技能「${skill.name || slug}」吗？${skill.directoryName ? `（${skill.directoryName}）` : ''}该目录将被删除，此操作不可恢复。`,
+    okText: '卸载',
+    okType: 'danger',
+    cancelText: '取消',
+    onOk: async () => {
+      skillMarket.installing = slug
+      try {
+        const res = await skillMarketAPI.uninstall(slug)
+        if (res.success) {
+          message.success(`技能「${skill.name || slug}」已卸载`)
+          installedSkills.value.delete(skill.name)
+          installedSkills.value.delete(skill.directoryName)
+          installedSkillList.value = installedSkillList.value.filter(s => s !== skill)
+        } else {
+          message.error(res.error || '卸载失败')
+        }
+      } catch (err) {
+        message.error('卸载失败: ' + (err.message || err))
+      } finally {
+        skillMarket.installing = null
+      }
+    }
+  })
 }
 
 // 标签页配置
@@ -5286,7 +5425,7 @@ const saveLoopraMd = async () => {
   font-size: 13px;
   font-weight: 600;
   color: var(--fg);
-  font-family: monospace;
+  font-family: var(--mono, monospace);
 }
 
 .mcp-tool-desc {
@@ -5359,6 +5498,78 @@ const saveLoopraMd = async () => {
 }
 
 /* ==================== 技能市场 ==================== */
+.installed-skills-section {
+  border: 1px solid var(--border);
+  border-radius: var(--r);
+  padding: 12px;
+  margin-bottom: 14px;
+  background: var(--bg-2, var(--bg));
+}
+
+.installed-skills-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  margin-bottom: 10px;
+}
+
+.installed-skills-toggle {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-wrap: wrap;
+  min-width: 0;
+  cursor: pointer;
+  user-select: none;
+}
+
+.installed-skills-toggle:hover .installed-skills-title {
+  color: var(--accent);
+}
+
+.installed-skills-chevron {
+  flex-shrink: 0;
+  color: var(--fg-3);
+  transition: transform var(--t);
+}
+
+.installed-skills-chevron.collapsed {
+  transform: rotate(-90deg);
+}
+
+.installed-skills-title {
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--fg);
+}
+
+.installed-skills-count {
+  font-size: 11px;
+  font-weight: 600;
+  padding: 1px 7px;
+  border-radius: 10px;
+  background: var(--accent-bg);
+  color: var(--accent);
+  border: 1px solid var(--accent);
+}
+
+.installed-skills-sub {
+  font-size: 11px;
+  color: var(--fg-3);
+}
+
+.installed-skills-empty {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 6px;
+  padding: 18px 0 10px;
+  color: var(--fg-3);
+  font-size: 12px;
+  text-align: center;
+}
+
 .skill-list {
   display: flex;
   flex-direction: column;
@@ -5574,7 +5785,7 @@ const saveLoopraMd = async () => {
 
 .remote-model-name {
   flex: 1;
-  font-family: monospace;
+  font-family: var(--mono, monospace);
   font-size: 13px;
 }
 
@@ -6247,7 +6458,7 @@ const saveLoopraMd = async () => {
   resize: none;
   background: var(--bg);
   color: var(--fg);
-  font-family: 'Cascadia Code', 'Fira Code', 'JetBrains Mono', 'Consolas', monospace;
+  font-family: var(--mono, 'JetBrains Mono Variable', monospace);
   font-size: 13px;
   line-height: 1.6;
   padding: 16px;

@@ -174,7 +174,13 @@
       </svg>
     </button>
 
-
+    <!-- 一键折叠所有展开的折叠块（固定在滚动到底部按钮上方） -->
+    <button v-if="hasHistory" class="collapse-all-btn" title="一键折叠所有展开的块" @click="collapseAllBlocks">
+      <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+        <polyline points="7.41 4.5 12 9 16.59 4.5"/>
+        <polyline points="7.41 19.5 12 15 16.59 19.5"/>
+      </svg>
+    </button>
 
     <!-- 系统提示词 Modal -->
     <Teleport to="body">
@@ -1020,6 +1026,7 @@ watch(() => messages.value.map(messageKey), ids => {
 })
 
 watch(() => props.sessionName, () => {
+  cancelBottomAnchor()
   messageHeights.clear()
   virtualScrollTop.value = 0
   rawEventsOpen.value = false
@@ -1370,6 +1377,7 @@ onMounted(() => {
 
 onBeforeUnmount(() => {
   resetSessionStatus()
+  cancelBottomAnchor()
   window.removeEventListener('keydown', handleImagePreviewKeydown)
   window.removeEventListener('resize', updateVirtualViewport)
   messageResizeObserver?.disconnect()
@@ -1475,15 +1483,15 @@ window.copyCode = (btn) => {
   })
 }
 
-// 系统提示词和计划预览不需要代码高亮，避免空会话加载完整 highlight.js。
+// 系统提示词和计划预览不需要代码高亮，避免空会话加载完整高亮引擎。
 const fmtPrompt = c => {
   if (!c) return ''
-  return sanitize(basicMarkdown.parse(c))
+  return sanitize(basicMarkdown.render(c))
 }
 
 const fmtPlan = c => {
   if (!c) return ''
-  return sanitize(basicMarkdown.parse(c))
+  return sanitize(basicMarkdown.render(c))
 }
 
 // 复制整条消息内容
@@ -1567,6 +1575,63 @@ const scroll = async (force = false, smooth = false) => {
     el.scrollTo({top: programmaticScrollTarget, behavior: smooth ? 'smooth' : 'auto'})
   }
   updateScrollBtn()
+  // 强制跳底（打开旧会话/加载历史/发送消息）后：虚拟滚动下未渲染消息的高度按估算值参与布局，
+  // 真实高度由 ResizeObserver 异步测量。若实测整体高于估算（长助手消息常见），
+  // 首次 scrollTo 会停在真实底部的上方，这里等在测量收敛期间持续对齐底部，
+  // 用户主动滚离则立即停止。
+  if (force && !smooth) {
+    userScrolledAway = false
+    startBottomAnchor(el)
+  }
+}
+
+// —— 底部锚定：等虚拟滚动高度测量收敛后重新对齐到底部 ——
+const ANCHOR_MIN_FRAMES = 4
+const ANCHOR_STABLE_FRAMES = 3
+const ANCHOR_MAX_FRAMES = 120
+let bottomAnchorActive = false
+let bottomAnchorFrame = 0
+let bottomAnchorFrames = 0
+let bottomAnchorStable = 0
+let bottomAnchorLastHeight = 0
+
+const startBottomAnchor = (el) => {
+  if (bottomAnchorActive) return
+  bottomAnchorActive = true
+  bottomAnchorFrames = 0
+  bottomAnchorStable = 0
+  bottomAnchorLastHeight = el.scrollHeight
+  const probe = () => {
+    bottomAnchorFrame = 0
+    if (!bottomAnchorActive || userScrolledAway || !el.isConnected) {
+      bottomAnchorActive = false
+      return
+    }
+    bottomAnchorFrames++
+    const height = el.scrollHeight
+    if (Math.abs(height - bottomAnchorLastHeight) > 1) {
+      bottomAnchorStable = 0
+      bottomAnchorLastHeight = height
+      programmaticScrollGuard = true
+      programmaticScrollTarget = height
+      el.scrollTo({top: height, behavior: 'auto'})
+    } else {
+      bottomAnchorStable++
+    }
+    const converged = bottomAnchorFrames >= ANCHOR_MIN_FRAMES && bottomAnchorStable >= ANCHOR_STABLE_FRAMES
+    if (!converged && bottomAnchorFrames < ANCHOR_MAX_FRAMES) {
+      bottomAnchorFrame = requestAnimationFrame(probe)
+    } else {
+      bottomAnchorActive = false
+    }
+  }
+  bottomAnchorFrame = requestAnimationFrame(probe)
+}
+
+const cancelBottomAnchor = () => {
+  bottomAnchorActive = false
+  if (bottomAnchorFrame) cancelAnimationFrame(bottomAnchorFrame)
+  bottomAnchorFrame = 0
 }
 
 watch(() => queuedMessages.value.length > 0, (hasQueue, hadQueue) => {
@@ -1576,6 +1641,33 @@ watch(() => queuedMessages.value.length > 0, (hasQueue, hadQueue) => {
 const scrollToBottom = () => {
   userScrolledAway = false
   scroll(true, true)
+}
+
+// 一键折叠当前会话所有展开的折叠块（思考/工具/路径组/子代理/代码块等）。
+// 块级状态（showContent/expanded 等）直接改 store 中的消息对象（深响应式）：
+// 已挂载的 BlockRenderer 通过响应式自动更新，虚拟滚动未挂载的消息下次进入视口时也是折叠态。
+const collapseAllBlocks = () => {
+  for (const msg of messages.value) {
+    for (const block of (msg.blocks || [])) {
+      block.showContent = false
+      block.expanded = false
+      block.showAll = false
+      if (block.type === 'sub_agent') {
+        for (const sb of (block.blocks || [])) {
+          sb.expanded = false
+          sb.showContent = false
+        }
+      }
+      for (const t of (block._tools || [])) t.expanded = false
+    }
+  }
+  // 已渲染代码块的折叠状态挂在 DOM class 上（.expanded），直接收起
+  messagesContainer.value?.querySelectorAll('.code-block-wrap.expanded')
+      .forEach(wrap => wrap.classList.remove('expanded'))
+  // 通知已挂载的 BlockRenderer 重置组件内的分组折叠状态（工具组/路径组/子代理展开覆盖）
+  window.dispatchEvent(new CustomEvent('loopra:collapse-all-blocks'))
+  // 折叠后内容整体变矮，若原本在底部附近则保持贴底
+  nextTick(() => void scroll())
 }
 
 // 监听容器的滚动事件，检测用户是否主动滚离底部
@@ -3099,6 +3191,31 @@ defineExpose({clearMessages, resetLocalMessages, loadSession, sendCommand, start
   animation: bounce-down 1.5s ease-in-out infinite;
 }
 
+.collapse-all-btn {
+  position: absolute;
+  right: 24px;
+  bottom: 154px;
+  z-index: 60;
+  width: 36px;
+  height: 36px;
+  border-radius: 50%;
+  background: var(--glass-bg-2);
+  color: var(--fg-2);
+  border: 1px solid var(--border);
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.18);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+  transition: all 0.2s ease;
+}
+
+.collapse-all-btn:hover {
+  transform: scale(1.1);
+  color: var(--accent);
+  border-color: var(--accent);
+}
+
 @keyframes bounce-down {
   0%, 100% {
     transform: translateY(0);
@@ -3811,6 +3928,7 @@ defineExpose({clearMessages, resetLocalMessages, loadSession, sendCommand, start
   .welcome-action small { font-size: 11px; }
   .suggestion { font-size: 11px; padding: 3px 8px; }
   .scroll-bottom-btn { right: 12px; bottom: 100px; width: 32px; height: 32px; }
+  .collapse-all-btn { right: 12px; bottom: 140px; width: 32px; height: 32px; }
   .ai-preparing { padding: 6px 10px; }
   .ai-dot { width: 6px; height: 6px; }
   .ai-label { font-size: 12px; }

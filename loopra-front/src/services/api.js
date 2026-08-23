@@ -890,6 +890,15 @@ export const gitAPI = {
     return api.post('/git/generate-commit-message', body, { params, timeout: 120000 })
   },
 
+  // AI 生成当前会话环境（隔离分支优先，否则主项目）的提交消息 - POST /api/git/generate-environment-commit-message?workspaceHash=xxx&sessionName=xxx  body: { files, model, modelChannelId }
+  generateEnvironmentCommitMessage: (workspaceHash, sessionName, files, model, modelChannelId) => {
+    const body = {}
+    if (files && files.length) body.files = files
+    if (model) body.model = model
+    if (modelChannelId) body.modelChannelId = modelChannelId
+    return api.post('/git/generate-environment-commit-message', body, { params: { workspaceHash, sessionName }, timeout: 120000 })
+  },
+
   // 获取提交历史记录 - GET /api/git/log?workspaceHash=xxx&limit=50
   commitHistory: (workspaceHash, limit) => {
     const params = workspaceHash ? { workspaceHash } : {}
