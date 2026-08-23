@@ -1020,6 +1020,7 @@ watch(() => messages.value.map(messageKey), ids => {
 })
 
 watch(() => props.sessionName, () => {
+  cancelBottomAnchor()
   messageHeights.clear()
   virtualScrollTop.value = 0
   rawEventsOpen.value = false
@@ -1370,6 +1371,7 @@ onMounted(() => {
 
 onBeforeUnmount(() => {
   resetSessionStatus()
+  cancelBottomAnchor()
   window.removeEventListener('keydown', handleImagePreviewKeydown)
   window.removeEventListener('resize', updateVirtualViewport)
   messageResizeObserver?.disconnect()
@@ -1567,6 +1569,63 @@ const scroll = async (force = false, smooth = false) => {
     el.scrollTo({top: programmaticScrollTarget, behavior: smooth ? 'smooth' : 'auto'})
   }
   updateScrollBtn()
+  // 强制跳底（打开旧会话/加载历史/发送消息）后：虚拟滚动下未渲染消息的高度按估算值参与布局，
+  // 真实高度由 ResizeObserver 异步测量。若实测整体高于估算（长助手消息常见），
+  // 首次 scrollTo 会停在真实底部的上方，这里等在测量收敛期间持续对齐底部，
+  // 用户主动滚离则立即停止。
+  if (force && !smooth) {
+    userScrolledAway = false
+    startBottomAnchor(el)
+  }
+}
+
+// —— 底部锚定：等虚拟滚动高度测量收敛后重新对齐到底部 ——
+const ANCHOR_MIN_FRAMES = 4
+const ANCHOR_STABLE_FRAMES = 3
+const ANCHOR_MAX_FRAMES = 120
+let bottomAnchorActive = false
+let bottomAnchorFrame = 0
+let bottomAnchorFrames = 0
+let bottomAnchorStable = 0
+let bottomAnchorLastHeight = 0
+
+const startBottomAnchor = (el) => {
+  if (bottomAnchorActive) return
+  bottomAnchorActive = true
+  bottomAnchorFrames = 0
+  bottomAnchorStable = 0
+  bottomAnchorLastHeight = el.scrollHeight
+  const probe = () => {
+    bottomAnchorFrame = 0
+    if (!bottomAnchorActive || userScrolledAway || !el.isConnected) {
+      bottomAnchorActive = false
+      return
+    }
+    bottomAnchorFrames++
+    const height = el.scrollHeight
+    if (Math.abs(height - bottomAnchorLastHeight) > 1) {
+      bottomAnchorStable = 0
+      bottomAnchorLastHeight = height
+      programmaticScrollGuard = true
+      programmaticScrollTarget = height
+      el.scrollTo({top: height, behavior: 'auto'})
+    } else {
+      bottomAnchorStable++
+    }
+    const converged = bottomAnchorFrames >= ANCHOR_MIN_FRAMES && bottomAnchorStable >= ANCHOR_STABLE_FRAMES
+    if (!converged && bottomAnchorFrames < ANCHOR_MAX_FRAMES) {
+      bottomAnchorFrame = requestAnimationFrame(probe)
+    } else {
+      bottomAnchorActive = false
+    }
+  }
+  bottomAnchorFrame = requestAnimationFrame(probe)
+}
+
+const cancelBottomAnchor = () => {
+  bottomAnchorActive = false
+  if (bottomAnchorFrame) cancelAnimationFrame(bottomAnchorFrame)
+  bottomAnchorFrame = 0
 }
 
 watch(() => queuedMessages.value.length > 0, (hasQueue, hadQueue) => {
