@@ -14,7 +14,7 @@
   <img src="https://img.shields.io/badge/Solon-4.0.4-important?logo=java" alt="Solon 4.0.4"/>
   <img src="https://img.shields.io/badge/Vue-3.4-4FC08D?logo=vue.js" alt="Vue 3"/>
   <img src="https://img.shields.io/badge/Electron-42.4-47848F?logo=electron" alt="Electron"/>
-  <img src="https://img.shields.io/badge/version-26.8.211-lightgrey" alt="Version 26.8.211"/>
+  <img src="https://img.shields.io/badge/version-26.8.231-lightgrey" alt="Version 26.8.231"/>
   <img src="https://img.shields.io/badge/license-MIT-green" alt="MIT License"/>
 </p>
 
@@ -26,7 +26,7 @@
   <a href="#从源码开发">从源码开发</a>
 </p>
 
-> 当前版本：`26.8.211`。完整变更记录见 [CHANGELOG.md](CHANGELOG.md)。
+> 当前版本：`26.8.231`。完整变更记录见 [CHANGELOG.md](CHANGELOG.md)。
 
 ## 技术交流群
 
@@ -163,7 +163,7 @@ loopra web 0
 | 自主推理循环 | 流式输出推理、工具调用和结果，持续处理多轮任务。 |
 | 上下文管理 | JSONL 会话持久化、自动摘要折叠、消息自愈和 token 用量统计。 |
 | 多模型渠道 | 支持多渠道、Chat Completions API、OpenAI Responses API、Anthropic Messages API、推理强度和模型能力配置。 |
-| 可扩展工具系统 | 内核基于 cutin 插件化框架，插件支持热插拔并可在设置页管理运行时；工具经 Solon `@ToolMapping` 声明式注册，支持内置工具、MCP、OpenAPI、技能和 REST API。 |
+| 可扩展工具系统 | 内核基于 cutin 插件化框架，插件支持热插拔、可在设置页管理运行时，并通过 `/plugin add` 一行命令从 jar 直链或本地路径安装外置插件；工具经 Solon `@ToolMapping` 声明式注册，支持内置工具、MCP、OpenAPI、技能和 REST API。 |
 | 代码库操作 | 在项目边界内读取、搜索、编辑文件，运行一次性或交互式命令。 |
 | 子代理协作 | 内置 `explore`、`implement`、`test`、`review`、`plan` 五种角色，支持隔离上下文、权限约束和超时控制；配置可在桌面端编辑并持久化，支持选择渠道模型。 |
 | 计划模式 | 输入框一键进入只读探索，探索完成后提交计划供用户审查，批准后按计划执行。 |
