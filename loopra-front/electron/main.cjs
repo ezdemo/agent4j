@@ -930,6 +930,14 @@ function setDesktopPetPosition(x, y) {
   saveDesktopPetState({ x: Math.round(x), y: Math.round(y) })
 }
 
+// 初始位置：主窗口右下角偏移（无持久化位置时的默认落点，也用于“重置位置”）
+function getDesktopPetInitialPosition() {
+  return {
+    x: Math.max(0, (mainWindow?.getBounds().x || 0) + (mainWindow?.getBounds().width || 800) - 260),
+    y: Math.max(0, (mainWindow?.getBounds().y || 0) + (mainWindow?.getBounds().height || 600) - 300)
+  }
+}
+
 function openDesktopPetWindow() {
   if (desktopPetWindow && !desktopPetWindow.isDestroyed()) {
     desktopPetWindow.showInactive()
@@ -937,10 +945,7 @@ function openDesktopPetWindow() {
   }
 
   const persistedPosition = getDesktopPetPosition()
-  const initialPosition = persistedPosition || {
-    x: Math.max(0, (mainWindow?.getBounds().x || 0) + (mainWindow?.getBounds().width || 800) - 260),
-    y: Math.max(0, (mainWindow?.getBounds().y || 0) + (mainWindow?.getBounds().height || 600) - 300)
-  }
+  const initialPosition = persistedPosition || getDesktopPetInitialPosition()
   if (!persistedPosition) setDesktopPetPosition(initialPosition.x, initialPosition.y)
 
   desktopPetWindow = new BrowserWindow({
@@ -1547,6 +1552,16 @@ ipcMain.handle('desktop-pet-move-by', (event, delta) => {
   const nextY = Math.round(bounds.y + dy)
   desktopPetWindow.setPosition(nextX, nextY)
   setDesktopPetPosition(nextX, nextY)
+})
+ipcMain.handle('desktop-pet-reset-position', (event) => {
+  if (event.sender !== mainWindow?.webContents) throw new Error('Unauthorized desktop pet reset position')
+  const initial = getDesktopPetInitialPosition()
+  // 宠物窗口已显示时立即移动；未显示时更新持久化位置，下次打开即落在初始位置
+  if (desktopPetWindow && !desktopPetWindow.isDestroyed()) {
+    desktopPetWindow.setPosition(initial.x, initial.y)
+  }
+  setDesktopPetPosition(initial.x, initial.y)
+  return { x: initial.x, y: initial.y }
 })
 ipcMain.on('desktop-pet-set-interactive', (event, interactive) => {
   if (event.sender !== desktopPetWindow?.webContents || !desktopPetWindow || desktopPetWindow.isDestroyed()) return
