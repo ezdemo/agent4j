@@ -73,12 +73,25 @@ get_java_major() {
     if [ -z "$ver" ]; then
         ver=$("$bin" -version 2>&1 | head -n1 | cut -d'"' -f2 | cut -d'.' -f1)
     fi
+    # 只接受纯数字：macOS 上 java 命令存在但无 JDK 时（系统占位命令）输出的是报错文本，
+    # 不能当作版本号参与比较，一律视为"未拿到版本号"
+    case "$ver" in
+        ''|*[!0-9]*) ver="" ;;
+    esac
     printf '%s' "$ver"
+}
+
+# 判断主版本号是否 >= 指定值（仅接受纯数字，避免报错文本触发整数比较错误）
+java_major_at_least() {
+    case "$1" in
+        ''|*[!0-9]*) return 1 ;;
+    esac
+    [ "$1" -ge "$2" ]
 }
 
 if command -v java &> /dev/null; then
     JAVA_VER=$(get_java_major java)
-    if [ -n "$JAVA_VER" ] && [ "$JAVA_VER" -ge 17 ]; then
+    if java_major_at_least "$JAVA_VER" 17; then
         JAVA_EXE="java"
         JAVA_SOURCE="System Java"
         echo -e "      System Java found: $(java -version 2>&1 | head -n1)"
@@ -94,7 +107,7 @@ if [ -z "$JAVA_EXE" ]; then
     for candidate in "$JRE25_DIR/bin/java" "$JRE25_DIR/bin/java.exe" "$JRE25_DIR/Contents/Home/bin/java"; do
         if [ -f "$candidate" ]; then
             JAVA_VER=$(get_java_major "$candidate")
-            if [ -n "$JAVA_VER" ] && [ "$JAVA_VER" -ge 17 ]; then
+            if java_major_at_least "$JAVA_VER" 17; then
                 JAVA_EXE="$candidate"
                 JAVA_SOURCE="Bundled JRE ($JRE25_DIR)"
                 echo -e "      Bundled JRE found: $JRE25_DIR"
@@ -133,8 +146,16 @@ if [ -z "$JAVA_EXE" ]; then
     GITHUB_URL=""
     FILE_NAME=""
     if [ -n "$API_JSON" ]; then
-        GITHUB_URL=$(printf '%s' "$API_JSON" | grep -oE '"link"[[:space:]]*:[[:space:]]*"[^"]*"' | head -1 | sed -E 's/.*"([^"]*)"$/\1/' || true)
-        FILE_NAME=$(printf '%s' "$API_JSON" | grep -oE '"name"[[:space:]]*:[[:space:]]*"[^"]*"' | head -1 | sed -E 's/.*"([^"]*)"$/\1/' || true)
+        # 只选 .tar.gz 便携压缩包，避开 .pkg/.msi 安装包：
+        # Adoptium 响应中同一资产同时含 installer（macOS 为 .pkg）和 package（.tar.gz）两个条目，
+        # 且 installer 排在前面；pkg 是 xar 打包的安装向导，tar 解不出可运行的 java。
+        FILE_NAME=$(printf '%s' "$API_JSON" | grep -oE '"name"[[:space:]]*:[[:space:]]*"[^"]*\.tar\.gz"' | head -1 | sed -E 's/.*"([^"]*)"$/\1/' || true)
+        GITHUB_URL=$(printf '%s' "$API_JSON" | grep -oE '"link"[[:space:]]*:[[:space:]]*"[^"]*\.tar\.gz"' | head -1 | sed -E 's/.*"([^"]*)"$/\1/' || true)
+        # 兜底：万一 API 结构变化拿到非 .tar.gz，按解析失败处理，避免下载到无法解压的安装包
+        case "$FILE_NAME" in
+            *.tar.gz) ;;
+            *) FILE_NAME="" ;;
+        esac
     fi
 
     if [ -z "$GITHUB_URL" ] || [ -z "$FILE_NAME" ]; then
@@ -214,7 +235,7 @@ if [ -z "$JAVA_EXE" ]; then
     for candidate in "$JRE25_DIR/bin/java" "$JRE25_DIR/bin/java.exe" "$JRE25_DIR/Contents/Home/bin/java"; do
         if [ -f "$candidate" ]; then
             JAVA_VER=$(get_java_major "$candidate")
-            if [ -n "$JAVA_VER" ] && [ "$JAVA_VER" -ge 17 ]; then
+            if java_major_at_least "$JAVA_VER" 17; then
                 JAVA_EXE="$candidate"
                 JAVA_SOURCE="Bundled JRE (downloaded)"
                 break
@@ -361,12 +382,19 @@ LOOPRA_HOME="$(cd "$SCRIPT_DIR/.." && pwd)"
 JAVA_BIN=""
 if command -v java &> /dev/null; then
     JAVA_BIN="java"
-elif [ -f "$LOOPRA_HOME/jre25/bin/java" ]; then
+    # macOS 无 JDK 时系统自带的 java 是占位命令：能调用但无法运行，验证失败则回退捆绑 JRE
+    if ! "$JAVA_BIN" -version >/dev/null 2>&1; then
+        JAVA_BIN=""
+    fi
+fi
+if [ -z "$JAVA_BIN" ] && [ -f "$LOOPRA_HOME/jre25/bin/java" ]; then
     JAVA_BIN="$LOOPRA_HOME/jre25/bin/java"
-elif [ -f "$LOOPRA_HOME/jre25/Contents/Home/bin/java" ]; then
-    # macOS: JRE 有时在 Contents/Home 下
+fi
+if [ -z "$JAVA_BIN" ] && [ -f "$LOOPRA_HOME/jre25/Contents/Home/bin/java" ]; then
+    # macOS: JRE 顶层是 Contents/Home
     JAVA_BIN="$LOOPRA_HOME/jre25/Contents/Home/bin/java"
-else
+fi
+if [ -z "$JAVA_BIN" ]; then
     echo "[ERROR] No Java found."
     echo "  Please install Java 17 or later:"
     echo "    - Tsinghua Adoptium mirror: https://mirrors.tuna.tsinghua.edu.cn/Adoptium/25/jdk/"
@@ -402,6 +430,9 @@ JAVA_VER=$("$JAVA_BIN" -version 2>&1 | head -n1 | grep -oE '"[0-9]+' | grep -oE 
 if [ -z "$JAVA_VER" ]; then
     JAVA_VER=$("$JAVA_BIN" -version 2>&1 | head -n1 | cut -d'"' -f2 | cut -d'.' -f1)
 fi
+case "$JAVA_VER" in
+    ''|*[!0-9]*) JAVA_VER="" ;;
+esac
 JAVA_OPTS="-Dfile.encoding=UTF-8"
 if [ -n "$JAVA_VER" ] && [ "$JAVA_VER" -ge 21 ]; then
     JAVA_OPTS="$JAVA_OPTS --enable-native-access=ALL-UNNAMED"
