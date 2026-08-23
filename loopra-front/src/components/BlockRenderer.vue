@@ -532,9 +532,11 @@ const clock = ref(Date.now())
 let durationTimer = null
 onMounted(() => {
   durationTimer = window.setInterval(() => { clock.value = Date.now() }, 1000)
+  window.addEventListener('loopra:collapse-all-blocks', onCollapseAllBlocks)
 })
 onBeforeUnmount(() => {
   if (durationTimer != null) window.clearInterval(durationTimer)
+  window.removeEventListener('loopra:collapse-all-blocks', onCollapseAllBlocks)
 })
 
 const formatToolDuration = (block) => {
@@ -940,6 +942,27 @@ watchEffect(() => {
     }
   }
 })
+
+// ── 一键折叠全部展开的块（由 Chat 界面「折叠」按钮派发 window 事件触发） ──
+// 分组折叠状态存于本组件 ref，无法从外部按对象改写，需在事件中重置；
+// 块级状态（showContent/expanded/t.expanded 等）由 Chat.vue 直接改 store 消息对象完成。
+const onCollapseAllBlocks = () => {
+  toolGroupsExpanded.value = {}
+  pathGroupsExpanded.value = {}
+  pathItemExpanded.value = {}
+  subAgentExpanded.value = {}
+  // 路径组内的清单工具：写入显式 false，防止 watchEffect 自动展开再次打开
+  for (const block of processedBlocks.value) {
+    if (block.type === 'path_group' && block._blocks) {
+      block._blocks.forEach((item, idx) => {
+        if (item.type === 'tool_call' && isChecklistTool(item)) {
+          const key = getPathItemKey(block._groupId, idx)
+          pathItemExpanded.value = {...pathItemExpanded.value, [key]: false}
+        }
+      })
+    }
+  }
+}
 </script>
 
 <style scoped>
