@@ -261,8 +261,14 @@ jobs:
       - name: Setup Node.js for npm publish
         uses: actions/setup-node@v7
         with:
-          node-version: '22'
+          # trusted publishing 要求 npm >= 11.5.1 / Node >= 22.14
+          # （Node 22 自带 npm 10.x，OIDC token 交换会失败并导致 PUT 404，见 npm/cli#8678）
+          node-version: '24'
           registry-url: 'https://registry.npmjs.org'
+
+      # Node 24 自带的 npm 仍可能早于 11.5.1，显式升级到最新版兜底
+      - name: Upgrade npm for trusted publishing
+        run: npm install -g npm@latest
 
       - name: Publish loopra-dist to npm
         working-directory: .release/npm/loopra-dist
@@ -270,4 +276,5 @@ jobs:
           NPM_VER="$(echo "${GITHUB_REF_NAME#v}" | cut -d. -f1-3)"
           cp "${GITHUB_WORKSPACE}/release-artifacts/loopra-dist.tar.gz" ./loopra-dist.tar.gz
           npm version "$NPM_VER" --no-git-tag-version
-          npm publish --provenance
+          # 首次发布必须显式 --access public（npm 官方文档要求）
+          npm publish --provenance --access public
