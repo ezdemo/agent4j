@@ -217,6 +217,11 @@ jobs:
     runs-on: ubuntu-latest
 
     steps:
+      # 必须显式 checkout：本 job 需要仓库内的 .release/npm/loopra-dist
+      # （此前缺失导致 npm 发布步骤报 "No such file or directory"）
+      - name: Checkout
+        uses: actions/checkout@v7
+
       - name: Download all artifacts
         uses: actions/download-artifact@v8
         with:
