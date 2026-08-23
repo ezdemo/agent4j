@@ -174,7 +174,13 @@
       </svg>
     </button>
 
-
+    <!-- 一键折叠所有展开的折叠块（固定在滚动到底部按钮上方） -->
+    <button v-if="hasHistory" class="collapse-all-btn" title="一键折叠所有展开的块" @click="collapseAllBlocks">
+      <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+        <polyline points="7.41 4.5 12 9 16.59 4.5"/>
+        <polyline points="7.41 19.5 12 15 16.59 19.5"/>
+      </svg>
+    </button>
 
     <!-- 系统提示词 Modal -->
     <Teleport to="body">
@@ -1635,6 +1641,33 @@ watch(() => queuedMessages.value.length > 0, (hasQueue, hadQueue) => {
 const scrollToBottom = () => {
   userScrolledAway = false
   scroll(true, true)
+}
+
+// 一键折叠当前会话所有展开的折叠块（思考/工具/路径组/子代理/代码块等）。
+// 块级状态（showContent/expanded 等）直接改 store 中的消息对象（深响应式）：
+// 已挂载的 BlockRenderer 通过响应式自动更新，虚拟滚动未挂载的消息下次进入视口时也是折叠态。
+const collapseAllBlocks = () => {
+  for (const msg of messages.value) {
+    for (const block of (msg.blocks || [])) {
+      block.showContent = false
+      block.expanded = false
+      block.showAll = false
+      if (block.type === 'sub_agent') {
+        for (const sb of (block.blocks || [])) {
+          sb.expanded = false
+          sb.showContent = false
+        }
+      }
+      for (const t of (block._tools || [])) t.expanded = false
+    }
+  }
+  // 已渲染代码块的折叠状态挂在 DOM class 上（.expanded），直接收起
+  messagesContainer.value?.querySelectorAll('.code-block-wrap.expanded')
+      .forEach(wrap => wrap.classList.remove('expanded'))
+  // 通知已挂载的 BlockRenderer 重置组件内的分组折叠状态（工具组/路径组/子代理展开覆盖）
+  window.dispatchEvent(new CustomEvent('loopra:collapse-all-blocks'))
+  // 折叠后内容整体变矮，若原本在底部附近则保持贴底
+  nextTick(() => void scroll())
 }
 
 // 监听容器的滚动事件，检测用户是否主动滚离底部
@@ -3158,6 +3191,31 @@ defineExpose({clearMessages, resetLocalMessages, loadSession, sendCommand, start
   animation: bounce-down 1.5s ease-in-out infinite;
 }
 
+.collapse-all-btn {
+  position: absolute;
+  right: 24px;
+  bottom: 154px;
+  z-index: 60;
+  width: 36px;
+  height: 36px;
+  border-radius: 50%;
+  background: var(--glass-bg-2);
+  color: var(--fg-2);
+  border: 1px solid var(--border);
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.18);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+  transition: all 0.2s ease;
+}
+
+.collapse-all-btn:hover {
+  transform: scale(1.1);
+  color: var(--accent);
+  border-color: var(--accent);
+}
+
 @keyframes bounce-down {
   0%, 100% {
     transform: translateY(0);
@@ -3870,6 +3928,7 @@ defineExpose({clearMessages, resetLocalMessages, loadSession, sendCommand, start
   .welcome-action small { font-size: 11px; }
   .suggestion { font-size: 11px; padding: 3px 8px; }
   .scroll-bottom-btn { right: 12px; bottom: 100px; width: 32px; height: 32px; }
+  .collapse-all-btn { right: 12px; bottom: 140px; width: 32px; height: 32px; }
   .ai-preparing { padding: 6px 10px; }
   .ai-dot { width: 6px; height: 6px; }
   .ai-label { font-size: 12px; }
