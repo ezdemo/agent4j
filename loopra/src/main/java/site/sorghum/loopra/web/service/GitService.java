@@ -731,6 +731,25 @@ public class GitService {
         return generateCommitMessageAt(workspaceDir, workspaceHash, files, requestModel, requestChannelId);
     }
 
+    /**
+     * 为指定 Git 目录生成提交消息（Desktop 端环境信息面板使用）。
+     * <p>
+     * 目录由调用方从 {@link WorktreeService} 解析（隔离分支优先，否则主项目），
+     * 不接受客户端任意路径，避免路径穿越。
+     */
+    public GitGenerateMessageDTO generateCommitMessageAtPath(String workspaceDirPath, String workspaceHash,
+                                                             String body) throws Exception {
+        File workspaceDir = new File(workspaceDirPath);
+        ONode bodyJson = parseJsonBody(body, "generateCommitMessageAtPath");
+        List<String> files = readStringListField(bodyJson, "files");
+        String requestModel = readStringField(bodyJson, "model");
+        String requestChannelId = readStringField(bodyJson, "modelChannelId");
+        if (files != null && !files.isEmpty()) {
+            files = validatePaths(workspaceDir, files);
+        }
+        return generateCommitMessageAt(workspaceDir, workspaceHash, files, requestModel, requestChannelId);
+    }
+
     /** 为内部 Git 工作目录生成提交标题，例如隔离分支。 */
     String generateCommitMessageAt(File workspaceDir, String workspaceHash) throws Exception {
         return generateCommitMessageAt(workspaceDir, workspaceHash, null, null, null).message();

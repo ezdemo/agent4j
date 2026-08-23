@@ -165,6 +165,23 @@ public class GitController {
         return ApiResponse.ok(gitService.generateCommitMessage(workspaceHash, body));
     }
 
+    @ApiOperation(value = "AI 生成当前会话环境的提交消息",
+            notes = "根据会话当前实际使用的目录（隔离分支优先，否则主项目）的变更文件名、最多 3 个文件 diff 和近 3 条提交日志生成提交消息；Git 操作由 Desktop 端执行")
+    @Post
+    @Mapping("/generate-environment-commit-message")
+    public ApiResponse<GitGenerateMessageDTO> generateEnvironmentCommitMessage(
+            @ApiParam(value = "项目 hash", required = true) @Param(value = "workspaceHash", required = true) String workspaceHash,
+            @ApiParam(value = "会话名称", required = true) @Param(value = "sessionName", required = true) String sessionName,
+            @Body String body) throws Exception {
+        EnvironmentStatusDTO environment = worktreeService.environment(workspaceHash, sessionName);
+        String targetPath = environment.currentPath();
+        if (targetPath == null || targetPath.isBlank()) {
+            throw new site.sorghum.loopra.web.common.ServiceException(
+                    "当前环境不可用：" + (environment.message() == null ? "隔离分支尚未创建" : environment.message()));
+        }
+        return ApiResponse.ok(gitService.generateCommitMessageAtPath(targetPath, environment.workspaceHash(), body));
+    }
+
     @ApiOperation(value = "获取当前会话环境", notes = "返回 Agent 当前使用的本地项目或隔离分支；Git 操作由 Desktop 端执行")
     @Get
     @Mapping("/environment")
