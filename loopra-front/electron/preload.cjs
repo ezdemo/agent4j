@@ -112,6 +112,7 @@ contextBridge.exposeInMainWorld('electronAPI', {
     close: () => ipcRenderer.invoke('desktop-pet-close'),
     isVisible: () => ipcRenderer.invoke('desktop-pet-is-visible'),
     moveBy: (delta) => ipcRenderer.invoke('desktop-pet-move-by', delta),
+    resetPosition: () => ipcRenderer.invoke('desktop-pet-reset-position'),
     setInteractive: (interactive) => ipcRenderer.send('desktop-pet-set-interactive', Boolean(interactive)),
     activateMain: () => ipcRenderer.invoke('desktop-pet-activate-main'),
     refresh: () => ipcRenderer.invoke('desktop-pet-refresh'),
