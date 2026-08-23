@@ -21,6 +21,54 @@ npm install loopra-dist
 > 安装器会复用系统 Java 17+ 或已有捆绑 JRE，都没有时自动下载 JRE 25；可用 `LOOPRA_MIRROR` 指定镜像加速下载。
 > 不需要自动安装时，用 npm 官方逃生门跳过 postinstall：`npm install --ignore-scripts`
 
+**关于安装进度**：npm 出于安全默认**隐藏**生命周期脚本的输出（安装是正常跑完的）。想看实时进度：
+
+```bash
+npm install -g loopra-dist --foreground-scripts
+```
+
+无论哪种方式，每一步进度（校验包 → 镜像选择 → 解压 → 定位安装器 → 执行安装 → 完成）都会记录到 `~/.loopra/install.log`；安装出错时 npm 会自动打印捕获到的脚本输出。
+
+**镜像选择**：交互式环境（直接运行脚本或 `npm --foreground-scripts` 安装）会弹出 GitHub 镜像菜单供选择（`gh-proxy.org` / `ghfast.top` / `gh-proxy.com` / `ghproxy.net` / 自定义，已实测可用），选择结果通过 `LOOPRA_MIRROR` 传给安装器用于加速 JRE 等 GitHub 资源下载：
+
+```bash
+[loopra-dist] 选择下载镜像（用于加速 JRE 等 GitHub 资源下载）：
+  1) GitHub 直连（默认）
+  2) gh-proxy.org
+  3) ghfast.top
+  4) gh-proxy.com
+  5) ghproxy.net
+  6) 自定义镜像前缀（如 https://ghfast.top）
+  直接回车 = GitHub 直连
+请选择 [1-6]:
+```
+
+已设置 `LOOPRA_MIRROR` 时不再询问、直接使用；npm 默认模式 / CI / 管道下跳过询问、走直连（避免隐形挂起）。
+
+**注意（npm 的安全闸门）**：npm 11.16+ 会提示 allow-scripts 警告（此时脚本仍会执行）；**npm 12 起安装脚本默认被拦截**，首次安装会看到类似提示：
+
+```
+npm warn allow-scripts  loopra-dist@x.y.z (postinstall: node scripts/install.js)
+```
+
+此时 postinstall 尚未执行，需要先批准一次（写入项目的 `package.json` 的 `allowScripts` 字段）：
+
+```bash
+npm approve-scripts loopra-dist
+```
+
+批准后重新安装（或 `npm rebuild loopra-dist`）即可触发自动安装。
+
+**关于重复安装**：npm 对已安装且版本未变的包直接跳过（"up to date"），不会重新解压、也不会重跑 postinstall。需要重跑安装器时：
+
+```bash
+npm rebuild loopra-dist        # 重跑已装包的 preinstall/install/postinstall
+# 或卸载后重装：
+npm uninstall -g loopra-dist && npm install -g loopra-dist
+# 或升级到新版本（版本变化会自动触发）：
+npm install -g loopra-dist@latest
+```
+
 ### 方式二：作为下载源
 
 ```bash
