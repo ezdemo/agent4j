@@ -10,6 +10,7 @@ on:
 
 permissions:
   contents: write
+  id-token: write
 
 concurrency:
   group: build-${{ github.ref }}
@@ -243,3 +244,25 @@ jobs:
           prerelease: false
           files: |
             release-artifacts/**/*
+
+      # ──────────────────────────────────────────────
+      # 4. 同步发布 loopra-dist 到 npm（trusted publishing / OIDC）
+      #    版本取 tag 前三段（npm 要求 semver，四段版本号不合法，
+      #    与 bump-version.ps1 中 electronVersion 的截取逻辑一致）。
+      #    不使用长效 token：npm 将于 2027-01 左右禁掉 2FA-bypass
+      #    token 的直接发布，OIDC 发布（--provenance）免费附带
+      #    可验证的供应链 provenance。
+      # ──────────────────────────────────────────────
+      - name: Setup Node.js for npm publish
+        uses: actions/setup-node@v7
+        with:
+          node-version: '22'
+          registry-url: 'https://registry.npmjs.org'
+
+      - name: Publish loopra-dist to npm
+        working-directory: .release/npm/loopra-dist
+        run: |
+          NPM_VER="$(echo "${GITHUB_REF_NAME#v}" | cut -d. -f1-3)"
+          cp "${GITHUB_WORKSPACE}/release-artifacts/loopra-dist.tar.gz" ./loopra-dist.tar.gz
+          npm version "$NPM_VER" --no-git-tag-version
+          npm publish --provenance
