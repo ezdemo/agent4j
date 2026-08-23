@@ -111,7 +111,18 @@
           @keyup.enter="commitCurrent"
         >
         <div class="environment-action-row">
-          <button class="environment-button primary" type="button" :disabled="busy || environment.agentRunning || !currentStatus?.dirty || !commitMessage.trim()" @click="commitCurrent">
+          <button
+            class="environment-button ai"
+            type="button"
+            :disabled="busy || generating || environment.agentRunning || !currentStatus?.dirty"
+            title="AI 自动生成提交消息"
+            @click="generateCommitMessage"
+          >
+            <svg v-if="!generating" class="environment-generate-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><polygon points="13 2 3 14 12 14 11 22 21 10 12 10 13 2"/></svg>
+            <span v-else class="environment-generate-spinner" aria-hidden="true"></span>
+            {{ generating ? '生成中...' : 'AI 生成' }}
+          </button>
+          <button class="environment-button primary" type="button" :disabled="busy || generating || environment.agentRunning || !currentStatus?.dirty || !commitMessage.trim()" @click="commitCurrent">
             提交当前
           </button>
           <button class="environment-button" type="button" :disabled="busy || environment.agentRunning || !mainStatus?.initialized || mainStatus?.dirty" @click="pushMain">
@@ -167,6 +178,7 @@ const mainStatus = ref(null)
 const loading = ref(false)
 const manualRefreshing = ref(false)
 const busy = ref(false)
+const generating = ref(false)
 const commitMessage = ref('')
 const notice = ref('')
 const noticeTone = ref('info')
@@ -297,6 +309,25 @@ async function showHistory(scope) {
     historyError.value = error?.message || '读取失败'
   } finally {
     historyLoading.value = false
+  }
+}
+
+async function generateCommitMessage() {
+  if (generating.value || busy.value || !currentPath.value || !currentStatus.value?.dirty) return
+  generating.value = true
+  try {
+    const response = await gitAPI.generateEnvironmentCommitMessage(props.workspaceHash, props.sessionName)
+    if (!response?.success || !response?.data?.message) {
+      throw new Error(response?.message || 'AI 生成失败')
+    }
+    commitMessage.value = response.data.message
+    noticeTone.value = 'success'
+    notice.value = 'AI 已生成提交信息，可修改后提交'
+  } catch (error) {
+    noticeTone.value = 'error'
+    notice.value = error?.message || 'AI 生成失败'
+  } finally {
+    generating.value = false
   }
 }
 
@@ -475,6 +506,9 @@ defineExpose({refresh})
 .environment-button:hover:not(:disabled) { border-color: var(--accent); color: var(--accent); }
 .environment-button.primary { border-color: var(--accent); color: #fff; background: var(--accent); }
 .environment-button:disabled { opacity: .45; cursor: default; }
+.environment-button.ai { display: inline-flex; align-items: center; justify-content: center; gap: 5px; border-color: color-mix(in srgb, var(--accent) 28%, var(--border)); color: var(--accent); }
+.environment-generate-icon { width: 12px; height: 12px; }
+.environment-generate-spinner { width: 11px; height: 11px; box-sizing: border-box; border: 1.5px solid color-mix(in srgb, currentColor 24%, transparent); border-top-color: currentColor; border-radius: 50%; animation: environment-refresh-spin .7s linear infinite; }
 .environment-notice { display: flex; align-items: center; justify-content: space-between; gap: 8px; margin: 8px 10px 0; padding: 7px 9px; border: 1px solid var(--border); border-radius: 6px; color: var(--fg-2); background: var(--bg-2); font-size: 11px; line-height: 1.35; }
 .environment-notice::before { width: 6px; height: 6px; flex: 0 0 6px; border-radius: 50%; background: var(--fg-4); content: ''; }
 .environment-notice span { flex: 1 1 auto; min-width: 0; }
