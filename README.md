@@ -55,13 +55,47 @@ Loopra 将用户任务、模型推理与受控工具调用组织成持续执行�
 
 ## 快速开始
 
-> 建议手动运行下面命令再安装桌面端
-
-桌面端下载地址：[Releases](https://github.com/ezdemo/loopra/releases/latest)。
+> 桌面端推荐用下面的**一行命令**安装（自动静默安装并启动）；也可以到 [Releases](https://github.com/ezdemo/loopra/releases/latest) 手动下载安装包。
 
 Desktop 首次启动会安装独立运行时到 `~/.loopra-gui`；CLI 仍安装在 `~/.loopra`，两者共用配置目录但不会复用或终止对方的服务进程。Desktop 启动时优先复用本机 `4567` 端口上的健康 Loopra Web 服务，并展示启动窗口（核心服务与依赖管理）；安装包内置核心运行时（`resources/loopra-core`），首次安装优先使用内置包本地安装（无网络也可完成；Java 优先复用系统 Java 17+ 或已有捆绑 JRE，缺失时安装脚本自动下载 JRE 25，也可在启动窗口中选择镜像安装/重装 JRE 25），内置包缺失或本地安装失败时自动回退到在线下载源（GitHub 直连或镜像加速）。下载源支持 GitHub 直连与镜像列表（自动测速并按延迟排序、可一键重测，选中的镜像同时用于 JRE 下载与更新脚本）；更新入口复用启动窗口，可直接更新核心服务与桌面端，也可以暂不更新继续使用。
 
 ### 1. 安装
+
+#### 1.1 桌面端（推荐，一行命令）
+
+Windows PowerShell：
+
+```powershell
+irm https://raw.giteeusercontent.com/ezdemo/loopra/raw/main/.release/setup-desktop.ps1 | iex
+```
+
+macOS / Linux：
+
+```bash
+curl -fsSL https://raw.giteeusercontent.com/ezdemo/loopra/raw/main/.release/setup-desktop.sh | bash
+```
+
+国内网络可选用 GitHub 镜像脚本（默认 `gh-proxy.org`，也可用 `LOOPRA_MIRROR` 环境变量指定镜像）：
+
+```powershell
+irm https://gh-proxy.org/https://raw.githubusercontent.com/ezdemo/loopra/main/.release/setup-desktop-mirror.ps1 | iex
+```
+
+```bash
+curl -fsSL https://gh-proxy.org/https://raw.githubusercontent.com/ezdemo/loopra/main/.release/setup-desktop-mirror.sh | bash
+```
+
+脚本自动下载当前版本安装包并静默安装，安装完成后自动启动桌面端：
+
+| 平台 | 安装位置 | 卸载方式 |
+|---|---|---|
+| Windows | `%LOCALAPPDATA%\Programs\Loopra`（自动创建桌面/开始菜单快捷方式；可选 `$env:LOOPRA_DESKTOP_DIR` 指定目录） | 系统设置 → 应用 |
+| macOS | `/Applications/Loopra.app`（自动执行 `xattr -cr` 放行 Gatekeeper） | 移入废纸篓 |
+| Linux | apt 安装 `loopra-front_*.deb` | `sudo apt remove loopra-front` |
+
+装好桌面端即可正常使用，无需再单独安装 CLI；下面 1.2 供只需要命令行主体（无 GUI）的用户使用。
+
+#### 1.2 CLI（可选）
 
 Windows PowerShell：
 
@@ -89,7 +123,7 @@ macOS / Linux：
 curl -fsSL https://raw.giteeusercontent.com/ezdemo/loopra/raw/main/.release/setup-mirror.sh | bash
 ```
 
-所有安装脚本（`setup.ps1` / `setup.sh` 及其 `-mirror`、`-gui` 变体）都支持通过 `LOOPRA_MIRROR` 环境变量指定具体镜像（镜像列表可在桌面端下载源选择中自动测速排序后挑选）：
+所有安装脚本（`setup.ps1` / `setup.sh` / `setup-desktop.ps1` / `setup-desktop.sh` 及其 `-mirror`、`-gui` 变体）都支持通过 `LOOPRA_MIRROR` 环境变量指定具体镜像（镜像列表可在桌面端下载源选择中自动测速排序后挑选）：
 
 Windows PowerShell：
 
