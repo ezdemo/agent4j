@@ -179,6 +179,20 @@ if (Test-Path $path) {
     } else { Write-Host "  [--] .release/version (unchanged)" }
 } else { Write-Host "  [--] .release/version (not found)" }
 
+# 10.2 .release/npm/loopra-dist/package.json (npm, semver 3-part only)
+# npm 要求 semver，四段版本号不合法；与 CI 发布步骤的 cut -d. -f1-3 保持一致
+$path = Join-Path $root ".release/npm/loopra-dist/package.json"
+if (Test-Path $path) {
+    $c = [System.IO.File]::ReadAllText($path, [System.Text.Encoding]::UTF8)
+    $old = $c
+    $c = [regex]::Replace($c, '(?<="version"\s*:\s*")[\d.]+(?=")', $electronVersion)
+    if ($c -ne $old) {
+        $c = $c.TrimStart([char]0xFEFF)
+        [System.IO.File]::WriteAllText($path, $c, $utf8NoBom)
+        Write-Host "  [OK] .release/npm/loopra-dist/package.json"
+    } else { Write-Host "  [--] .release/npm/loopra-dist/package.json (unchanged)" }
+} else { Write-Host "  [--] .release/npm/loopra-dist/package.json (not found)" }
+
 Write-Host ""
 Write-Host "Done! Version unified to $Version"
 Write-Host "Run: git diff to review, then commit."
