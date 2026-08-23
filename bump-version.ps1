@@ -144,28 +144,6 @@ if ($c -ne $old) {
     Write-Host "  [OK] .release/setup-gui-mirror.ps1"
 } else { Write-Host "  [--] .release/setup-gui-mirror.ps1 (unchanged)" }
 
-# 8.5 .release/setup-desktop.sh
-$path = Join-Path $root ".release/setup-desktop.sh"
-$c = [System.IO.File]::ReadAllText($path, [System.Text.Encoding]::UTF8)
-$old = $c
-$c = [regex]::Replace($c, '(?<=VERSION=")v[\d.]+(?=")', "v$Version")
-if ($c -ne $old) {
-    [System.IO.File]::WriteAllText($path, $c, $utf8NoBom)
-    Write-Host "  [OK] .release/setup-desktop.sh"
-} else { Write-Host "  [--] .release/setup-desktop.sh (unchanged)" }
-
-# 8.6 .release/setup-desktop.ps1
-$path = Join-Path $root ".release/setup-desktop.ps1"
-$c = [System.IO.File]::ReadAllText($path, [System.Text.Encoding]::UTF8)
-$old = $c
-$c = [regex]::Replace($c, '(?<=\$VERSION = ")v[\d.]+(?=")', "v$Version")
-if ($c -ne $old) {
-    [System.IO.File]::WriteAllText($path, $c, $utf8NoBom)
-    Write-Host "  [OK] .release/setup-desktop.ps1"
-} else { Write-Host "  [--] .release/setup-desktop.ps1 (unchanged)" }
-
-# 注：setup-desktop-mirror.ps1 / setup-desktop-mirror.sh 为薄壳脚本（拉取主脚本），不维护版本号
-
 # 9. loopra-front/package.json (Electron, semver 3-part only)
 $path = Join-Path $root "loopra-front/package.json"
 $c = [System.IO.File]::ReadAllText($path, [System.Text.Encoding]::UTF8)
