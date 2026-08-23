@@ -3,6 +3,9 @@
   "version": "26.8.231",
   "description": "Loopra core distribution bundle (Java runtime). The actual loopra-dist.tar.gz file, ready to download and unpack.",
   "license": "MIT",
+  "scripts": {
+    "postinstall": "node scripts/install.js"
+  },
   "keywords": [
     "loopra",
     "ai",
@@ -18,7 +21,8 @@
     "directory": ".release/npm/loopra-dist"
   },
   "files": [
-    "loopra-dist.tar.gz"
+    "loopra-dist.tar.gz",
+    "scripts/install.js"
   ],
   "engines": {
     "node": ">=18.0.0"
