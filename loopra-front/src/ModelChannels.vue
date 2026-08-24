@@ -549,7 +549,7 @@ onMounted(load)
 .model-channel-fields-grid > label input, .model-channel-fields-grid > label select, .model-config-row input[type="text"], .model-config-row input[type="number"] { height: 32px; padding: 0 8px; }
 .model-channel-fields input:focus, .model-channel-fields select:focus, .model-config-row input:focus { border-color: var(--accent); box-shadow: 0 0 0 2px color-mix(in srgb, var(--accent) 12%, transparent); }
 .model-channel-models { min-height: 0; flex: 1 1 auto; display: flex; flex-direction: column; gap: 8px; }
-.model-channel-models-list { min-height: 0; flex: 1 1 auto; display: grid; gap: 8px; align-content: start; overflow-y: auto; }
+.model-channel-models-list { min-height: 0; flex: 1 1 auto; display: grid; gap: 8px; align-content: start; overflow-y: auto; grid-auto-rows: max-content; }
 .model-channel-models-label { display: flex; align-items: center; min-height: 18px; color: var(--fg-3); font-size: 12px; }
 .model-channel-actions { margin-left: auto; display: inline-flex; align-items: center; gap: 8px; }
 .model-channel-clear, .model-channel-sync { display: inline-flex; align-items: center; gap: 5px; border: 0; border-radius: 4px; padding: 2px 5px; background: transparent; color: var(--fg-4); font: inherit; font-size: 12px; cursor: pointer; }

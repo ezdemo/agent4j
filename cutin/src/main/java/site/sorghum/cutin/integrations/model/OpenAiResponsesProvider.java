@@ -289,6 +289,7 @@ public final class OpenAiResponsesProvider implements ModelProvider {
             case "response.reasoning_summary_text.delta", "response.reasoning_text.delta" -> {
                 String delta = JsonSupport.text(chunk, "", "delta");
                 if (!delta.isEmpty()) {
+                    state.reasoningTextDelivered = true;
                     builder.add(new StreamChunk("", delta, List.of(), List.of(), Usage.ZERO, Map.of(), false));
                 }
             }
@@ -394,6 +395,8 @@ public final class OpenAiResponsesProvider implements ModelProvider {
         private boolean usageDelivered;
         /** 是否已发出本次响应的推理开始阶段。 */
         private boolean reasoningStarted;
+        /** 是否已流式交付过推理文本增量（决定 terminal 块是否还需携带全文兜底）。 */
+        private boolean reasoningTextDelivered;
         /** 全部原始 SSE 数据行。 */
         private final StringBuilder raw = new StringBuilder();
         private final site.sorghum.cutin.core.model.ModelHttpExchange exchange;
@@ -519,9 +522,12 @@ public final class OpenAiResponsesProvider implements ModelProvider {
             if (reasoningContent != null) {
                 metadata.put("reasoning_content", reasoningContent);
             }
+            // 推理文本已随增量流交付过时，terminal 不再重复携带全文（避免前端把同一段思考追加两遍）；
+            // 仅当流中从未出现推理增量（如模型一次性返回 summary）时才兜底携带，保证实时渲染不丢失。
+            String terminalReasoning = reasoningTextDelivered ? null : reasoningContent;
             return Stream.of(new StreamChunk(
                 "",
-                reasoningContent,
+                terminalReasoning,
                 calls,
                 thinkingBlocks,
                 usageDelivered ? Usage.ZERO : usage,
