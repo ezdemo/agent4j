@@ -22,56 +22,63 @@
           <button class="model-channels-setup-confirm" type="button" @click="setupNoticeVisible = false">确定，开始配置</button>
         </section>
       </div>
-      <section class="model-validator">
-        <label>
-          <span>命令校验模型</span>
-          <select v-model="validationModelKey" title="替代人工 HITL 对待审批工具调用作出决定">
-            <option value="">不启用</option>
-            <optgroup v-for="channel in channels" :key="channel.id" :label="channel.name">
-              <option v-for="model in namedModels(channel)" :key="model.id" :value="modelKey(channel.id, model.name)">
-                {{ model.name }}
-              </option>
-            </optgroup>
-          </select>
-        </label>
-      </section>
-      <div v-if="!channels.length" class="model-channels-empty">暂无模型渠道</div>
-      <article v-for="(channel, index) in channels" :key="channel.id" class="model-channel" :class="{ active: channel.id === activeChannelId }">
-        <header class="model-channel-header">
-          <button class="model-channel-toggle" type="button" :aria-expanded="channel.expanded" @click="toggleChannel(channel)">
-            <svg class="model-collapse-icon" :class="{ expanded: channel.expanded }" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="m9 18 6-6-6-6"/></svg>
-            <span class="model-channel-title">{{ channel.name || `渠道 ${index + 1}` }}</span>
-            <span class="model-channel-count">{{ channel.models.length }} 个模型</span>
-          </button>
-          <label class="model-channel-current">
-            <input v-model="activeChannelId" :value="channel.id" type="radio" name="active-channel" @change="ensureCurrentModel(channel)" />
-            <span>当前渠道</span>
-          </label>
-          <button v-if="channels.length > 1" class="model-channel-delete" type="button" title="删除渠道" @click="removeChannel(index)">
-            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M4 7h16M10 11v6M14 11v6M6 7l1 13h10l1-13M9 7V4h6v3"/></svg>
-          </button>
-        </header>
-        <div v-if="channel.expanded" class="model-channel-fields">
+      <aside class="model-channels-sidebar">
+        <section class="model-validator">
           <label>
-            <span>渠道名称</span>
-            <input v-model.trim="channel.name" type="text" placeholder="例如 OpenAI" />
-          </label>
-          <label>
-            <span>API 地址</span>
-            <input v-model.trim="channel.baseUrl" type="url" placeholder="https://api.openai.com/v1" />
-          </label>
-          <label>
-            <span>接口类型</span>
-            <select v-model="channel.apiProtocol">
-              <option value="chat_completions">Chat Completions</option>
-              <option value="responses">Responses</option>
-              <option value="anthropic">Anthropic Messages</option>
+            <span>命令校验模型</span>
+            <select v-model="validationModelKey" title="替代人工 HITL 对待审批工具调用作出决定">
+              <option value="">不启用</option>
+              <optgroup v-for="channel in channels" :key="channel.id" :label="channel.name">
+                <option v-for="model in namedModels(channel)" :key="model.id" :value="modelKey(channel.id, model.name)">
+                  {{ model.name }}
+                </option>
+              </optgroup>
             </select>
           </label>
-          <label>
-            <span>API 密钥</span>
-            <input v-model="channel.apiKey" type="password" :placeholder="channel.secretConfigured ? '已保存，留空则不修改' : 'sk-...'" autocomplete="new-password" />
-          </label>
+        </section>
+        <button
+          v-for="(channel, index) in channels"
+          :key="channel.id"
+          class="model-channel-toggle"
+          :class="{ active: channel.id === activeChannelId }"
+          type="button"
+          :title="channel.name || `渠道 ${index + 1}`"
+          @click="selectChannel(channel)"
+        >
+          <span class="model-channel-title">{{ channel.name || `渠道 ${index + 1}` }}</span>
+          <span class="model-channel-count">{{ channel.models.length }} 个模型</span>
+        </button>
+        <div v-if="!channels.length" class="model-channels-empty">暂无模型渠道</div>
+        <button class="model-channel-add" type="button" @click="addChannel">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M12 5v14M5 12h14"/></svg>
+          添加渠道
+        </button>
+      </aside>
+
+      <main v-if="activeChannel" class="model-channels-detail">
+        <div class="model-channel-fields">
+          <div class="model-channel-fields-grid">
+            <label>
+              <span>渠道名称</span>
+              <input v-model.trim="activeChannel.name" type="text" placeholder="例如 OpenAI" />
+            </label>
+            <label>
+              <span>API 地址</span>
+              <input v-model.trim="activeChannel.baseUrl" type="url" placeholder="https://api.openai.com/v1" />
+            </label>
+            <label>
+              <span>接口类型</span>
+              <select v-model="activeChannel.apiProtocol">
+                <option value="chat_completions">Chat Completions</option>
+                <option value="responses">Responses</option>
+                <option value="anthropic">Anthropic Messages</option>
+              </select>
+            </label>
+            <label>
+              <span>API 密钥</span>
+              <input v-model="activeChannel.apiKey" type="password" :placeholder="activeChannel.secretConfigured ? '已保存，留空则不修改' : 'sk-...'" autocomplete="new-password" />
+            </label>
+          </div>
 
           <section class="model-channel-models" aria-label="模型列表">
             <header class="model-channel-models-label">
@@ -80,9 +87,9 @@
                 <button
                   class="model-channel-clear"
                   type="button"
-                  :disabled="syncingChannelId === channel.id || !channel.models.length"
+                  :disabled="syncingChannelId === activeChannel.id || !activeChannel.models.length"
                   title="清空当前渠道的模型列表"
-                  @click="clearModels(channel)"
+                  @click="clearModels(activeChannel)"
                 >
                   <DeleteOutlined />
                   清空当前模型列表
@@ -90,77 +97,83 @@
                 <button
                   class="model-channel-sync"
                   type="button"
-                  :disabled="syncingChannelId === channel.id || !canSyncRemoteModels(channel)"
-                  :title="canSyncRemoteModels(channel) ? '从此渠道的服务端同步模型列表' : '请填写 API 地址和密钥'"
-                  @click="syncRemoteModels(channel)"
+                  :disabled="syncingChannelId === activeChannel.id || !canSyncRemoteModels(activeChannel)"
+                  :title="canSyncRemoteModels(activeChannel) ? '从此渠道的服务端同步模型列表' : '请填写 API 地址和密钥'"
+                  @click="syncRemoteModels(activeChannel)"
                 >
-                  <ReloadOutlined v-if="syncingChannelId !== channel.id" />
+                  <ReloadOutlined v-if="syncingChannelId !== activeChannel.id" />
                   <LoadingOutlined v-else class="model-channel-spin" />
                   同步远端模型
                 </button>
               </div>
             </header>
 
-            <div v-if="!channel.models.length" class="model-list-empty">尚未添加模型</div>
-            <article v-for="(model, modelIndex) in channel.models" :key="model.id" class="model-config-row" :class="{ expanded: model.expanded }">
-              <header class="model-config-header">
-                <button class="model-config-toggle" type="button" :aria-expanded="model.expanded" @click="toggleModel(model)">
-                  <svg class="model-collapse-icon" :class="{ expanded: model.expanded }" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="m9 18 6-6-6-6"/></svg>
-                  <span>{{ model.name || `模型 ${modelIndex + 1}` }}</span>
-                </button>
-                <label class="model-config-current" title="设为当前模型">
-                  <input
-                    :name="`current-model-${channel.id}`"
-                    :checked="channel.id === activeChannelId && model.name === currentModel"
-                    type="radio"
-                    @change="selectCurrentModel(channel, model)"
-                  />
-                  <span class="sr-only">设为当前模型</span>
-                </label>
-                <button class="model-config-delete" type="button" title="删除模型" :aria-label="`删除模型 ${model.name || modelIndex + 1}`" @click="removeModel(channel, modelIndex)">
-                  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M4 7h16M10 11v6M14 11v6M6 7l1 13h10l1-13M9 7V4h6v3"/></svg>
-                </button>
-              </header>
-              <div v-if="model.expanded" class="model-config-fields">
-                <div class="model-config-main">
-                  <label>
-                    <span>名称</span>
-                    <input v-model.trim="model.name" type="text" placeholder="例如 gpt-4o" @change="handleModelNameChange(channel, model)" />
+            <div class="model-channel-models-list">
+              <div v-if="!activeChannel.models.length" class="model-list-empty">尚未添加模型</div>
+              <article v-for="(model, modelIndex) in activeChannel.models" :key="model.id" class="model-config-row" :class="{ expanded: model.expanded }">
+                <header class="model-config-header">
+                  <button class="model-config-toggle" type="button" :aria-expanded="model.expanded" @click="toggleModel(model)">
+                    <svg class="model-collapse-icon" :class="{ expanded: model.expanded }" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="m9 18 6-6-6-6"/></svg>
+                    <span>{{ model.name || `模型 ${modelIndex + 1}` }}</span>
+                  </button>
+                  <label class="model-config-current" title="设为当前模型">
+                    <input
+                      :name="`current-model-${activeChannel.id}`"
+                      :checked="activeChannel.id === activeChannelId && model.name === currentModel"
+                      type="radio"
+                      @change="selectCurrentModel(activeChannel, model)"
+                    />
+                    <span class="sr-only">设为当前模型</span>
                   </label>
-                  <label>
-                    <span>上下文（tokens）</span>
-                    <input v-model="model.contextTokens" type="number" min="1" step="1" placeholder="可空" />
-                  </label>
-                  <label class="model-config-switch">
-                    <input v-model="model.imageInput" type="checkbox" />
-                    <span>支持图片输入</span>
-                  </label>
-                </div>
-                <div class="model-config-price">
-                  <label class="model-config-switch">
-                    <input v-model="model.priceEnabled" type="checkbox" />
-                    <span>配置价格（元 / 百万 tokens）</span>
-                  </label>
-                  <template v-if="model.priceEnabled">
-                    <label v-for="field in priceFields" :key="field">
-                      <span>{{ priceFieldLabels[field] }}</span>
-                      <input v-model="model.price[field]" type="number" min="0" step="0.001" :aria-label="`${model.name || '模型'} ${priceFieldLabels[field]}价格`" />
+                  <button class="model-config-delete" type="button" title="删除模型" :aria-label="`删除模型 ${model.name || modelIndex + 1}`" @click="removeModel(activeChannel, modelIndex)">
+                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M4 7h16M10 11v6M14 11v6M6 7l1 13h10l1-13M9 7V4h6v3"/></svg>
+                  </button>
+                </header>
+                <div v-if="model.expanded" class="model-config-fields">
+                  <div class="model-config-main">
+                    <label>
+                      <span>名称</span>
+                      <input v-model.trim="model.name" type="text" placeholder="例如 gpt-4o" @change="handleModelNameChange(activeChannel, model)" />
                     </label>
-                  </template>
+                    <label>
+                      <span>上下文（tokens）</span>
+                      <input v-model="model.contextTokens" type="number" min="1" step="1" placeholder="可空" />
+                    </label>
+                    <label class="model-config-switch">
+                      <input v-model="model.imageInput" type="checkbox" />
+                      <span>支持图片输入</span>
+                    </label>
+                  </div>
+                  <div class="model-config-price">
+                    <label class="model-config-switch">
+                      <input v-model="model.priceEnabled" type="checkbox" />
+                      <span>配置价格（元 / 百万 tokens）</span>
+                    </label>
+                    <template v-if="model.priceEnabled">
+                      <label v-for="field in priceFields" :key="field">
+                        <span>{{ priceFieldLabels[field] }}</span>
+                        <input v-model="model.price[field]" type="number" min="0" step="0.001" :aria-label="`${model.name || '模型'} ${priceFieldLabels[field]}价格`" />
+                      </label>
+                    </template>
+                  </div>
                 </div>
-              </div>
-            </article>
-            <button class="model-config-add" type="button" @click="addModel(channel)">
+              </article>
+            </div>
+            <button class="model-config-add" type="button" @click="addModel(activeChannel)">
               <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M12 5v14M5 12h14"/></svg>
               添加模型
             </button>
           </section>
         </div>
-      </article>
-      <button class="model-channel-add" type="button" @click="addChannel">
-        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M12 5v14M5 12h14"/></svg>
-        添加渠道
-      </button>
+
+        <button v-if="channels.length > 1" class="model-channels-delete" type="button" @click="removeChannel(activeIndex)">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M4 7h16M10 11v6M14 11v6M6 7l1 13h10l1-13M9 7V4h6v3"/></svg>
+          删除此渠道
+        </button>
+      </main>
+      <main v-else class="model-channels-detail">
+        <div class="model-channels-empty">暂无渠道，请先添加</div>
+      </main>
     </div>
   </section>
 </template>
@@ -264,7 +277,6 @@ function normalizeChannel(channel, index) {
   const models = Array.isArray(channel.models) ? channel.models.map(normalizeModel) : []
   return {
     id: channel.id || makeId(),
-    expanded: false,
     name: channel.name || `渠道 ${index + 1}`,
     baseUrl: channel.baseUrl || '',
     apiProtocol: ['responses', 'anthropic'].includes(channel.apiProtocol) ? channel.apiProtocol : 'chat_completions',
@@ -309,8 +321,12 @@ function selectCurrentModel(channel, model) {
   currentModel.value = model.name
 }
 
-function toggleChannel(channel) {
-  channel.expanded = !channel.expanded
+const activeChannel = computed(() => channels.value.find((channel) => channel.id === activeChannelId.value))
+const activeIndex = computed(() => channels.value.findIndex((channel) => channel.id === activeChannelId.value))
+
+function selectChannel(channel) {
+  activeChannelId.value = channel.id
+  ensureCurrentModel(channel)
 }
 
 function toggleModel(model) {
@@ -344,10 +360,8 @@ function clearModels(channel) {
 
 function addChannel() {
   const channel = normalizeChannel({}, channels.value.length)
-  channel.expanded = true
   channels.value.push(channel)
-  activeChannelId.value = channel.id
-  currentModel.value = ''
+  selectChannel(channel)
 }
 
 function removeChannel(index) {
@@ -391,7 +405,6 @@ async function load() {
     if (!response.success) throw new Error(response.message || '加载模型配置失败')
     const config = response.data || {}
     channels.value = (config.modelChannels || []).map(normalizeChannel)
-    if (channels.value.length === 1) channels.value[0].expanded = true
     activeChannelId.value = config.modelChannelId || channels.value[0]?.id || ''
     currentModel.value = config.model || ''
     validationModel.value = config.validationModel || ''
@@ -498,7 +511,7 @@ onMounted(load)
 .model-channels-setup-confirm:hover { filter: brightness(.96); }
 
 .model-channels-back:hover { background: var(--bg-3); color: var(--fg); }
-.model-channels-back svg, .model-channel-delete svg, .model-config-delete svg { width: 17px; height: 17px; }
+.model-channels-back svg, .model-config-delete svg { width: 17px; height: 17px; }
 .model-collapse-icon { width: 16px; height: 16px; flex: 0 0 auto; transition: transform .15s ease; }
 .model-collapse-icon.expanded { transform: rotate(90deg); }
 .model-channels-save { height: 32px; margin-left: auto; padding: 0 14px; border: 0; border-radius: 5px; background: var(--accent); color: #fff; font: inherit; font-size: 13px; cursor: pointer; }
@@ -506,30 +519,32 @@ onMounted(load)
 .model-channels[data-theme="dark"] .model-channels-save:not(:disabled) { background: #d4d4d8; color: #18181b; }
 .model-channels[data-theme="dark"] .model-channels-save:not(:disabled):hover { background: #f4f4f5; }
 .model-channels[data-theme="dark"] .model-channels-save:disabled { background: #303034; color: #9499a3; opacity: 1; }
-.model-channels-body { box-sizing: border-box; width: 100%; min-width: 0; min-height: 0; flex: 1; margin: 0; padding: 28px max(24px, calc((100% - 840px) / 2)) 48px; overflow-x: hidden; overflow-y: auto; }
-.model-validator { margin-bottom: 14px; padding: 14px 16px; border: 1px solid var(--border); border-radius: 7px; background: var(--bg-2); }
-.model-validator label { display: grid; grid-template-columns: minmax(130px, auto) minmax(220px, 1fr); align-items: center; gap: 16px; color: var(--fg-2); font-size: 13px; }
-.model-validator select { width: 100%; height: 32px; padding: 0 8px; border: 1px solid var(--border); border-radius: 5px; outline: none; background: var(--bg); color: var(--fg); font: inherit; font-size: 13px; }
+.model-channels-body { box-sizing: border-box; width: 100%; min-width: 0; min-height: 0; flex: 1; margin: 0; display: flex; overflow: hidden; }
+.model-channels-sidebar { box-sizing: border-box; flex: 0 0 240px; width: 240px; min-width: 0; display: flex; flex-direction: column; border-right: 1px solid var(--border); background: var(--bg-2); overflow-x: hidden; overflow-y: auto; }
+.model-channels-detail { flex: 1; min-width: 0; min-height: 0; display: flex; flex-direction: column; overflow-y: auto; padding: 24px clamp(20px, 4vw, 48px) 40px; }
+.model-validator { flex: 0 0 auto; padding: 12px 12px 10px; border: 0; border-bottom: 1px solid var(--border); border-radius: 0; background: transparent; }
+.model-validator label { min-width: 0; display: grid; grid-template-columns: minmax(0, 1fr); gap: 6px; color: var(--fg-2); font-size: 13px; }
+.model-validator select { min-width: 0; width: 100%; height: 32px; padding: 0 8px; border: 1px solid var(--border); border-radius: 5px; outline: none; background: var(--bg); color: var(--fg); font: inherit; font-size: 13px; }
 .model-validator select:focus { border-color: var(--accent); box-shadow: 0 0 0 2px color-mix(in srgb, var(--accent) 12%, transparent); }
 .model-channels-empty { height: 100%; display: grid; place-items: center; color: var(--fg-4); font-size: 13px; }
-.model-channel { min-width: 0; margin-bottom: 14px; overflow: hidden; border: 1px solid var(--border); border-radius: 7px; background: var(--bg); }
-.model-channel.active { border-color: color-mix(in srgb, var(--accent) 52%, var(--border)); }
-.model-channel-header { height: 42px; display: flex; align-items: center; gap: 8px; padding: 0 10px 0 8px; background: var(--bg-2); }
-.model-channel-toggle, .model-config-toggle { min-width: 0; display: inline-flex; align-items: center; gap: 7px; border: 0; background: transparent; color: var(--fg-2); font: inherit; cursor: pointer; text-align: left; }
-.model-channel-toggle { flex: 1; height: 100%; padding: 0 6px; }
-.model-channel-toggle:hover, .model-config-toggle:hover { color: var(--fg); }
-.model-channel-title { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-size: 13px; font-weight: 500; }
-.model-channel-count { flex: 0 0 auto; color: var(--fg-4); font-size: 12px; }
-.model-channel-current { display: inline-flex; align-items: center; gap: 7px; color: var(--fg-2); font-size: 12px; cursor: pointer; white-space: nowrap; }
-.model-channel-current input, .model-config-current input, .model-config-switch input { accent-color: var(--accent); }
-.model-channel-delete { color: var(--fg-4); }
-.model-channel-delete:hover, .model-config-delete:hover { color: #c2413b; background: rgba(220, 38, 38, .09); }
-.model-channel-fields { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 14px; padding: 16px; border-top: 1px solid var(--border); }
-.model-channel-fields > label, .model-config-row label { min-width: 0; display: grid; gap: 5px; color: var(--fg-3); font-size: 12px; }
+.model-channels-sidebar .model-channel-toggle { box-sizing: border-box; flex: 0 0 auto; width: 100%; height: 40px; display: flex; align-items: center; gap: 8px; padding: 0 14px; border: 0; border-left: 3px solid transparent; background: transparent; color: var(--fg-2); font: inherit; font-size: 13px; cursor: pointer; text-align: left; }
+.model-channels-sidebar .model-channel-toggle:hover { background: var(--bg-3); color: var(--fg); }
+.model-channels-sidebar .model-channel-toggle.active { border-left-color: var(--accent); background: color-mix(in srgb, var(--accent) 10%, transparent); color: var(--fg); }
+.model-channels-sidebar .model-channel-title { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-size: 13px; font-weight: 500; }
+.model-channels-sidebar .model-channel-count { flex: 0 0 auto; color: var(--fg-4); font-size: 12px; }
+.model-channels-sidebar .model-channel-add { box-sizing: border-box; width: auto; margin: auto 12px 14px; }
+.model-config-toggle { min-width: 0; display: inline-flex; align-items: center; gap: 7px; border: 0; background: transparent; color: var(--fg-2); font: inherit; cursor: pointer; text-align: left; }
+.model-config-toggle:hover { color: var(--fg); }
+.model-config-current input, .model-config-switch input { accent-color: var(--accent); }
+.model-config-delete:hover { color: #c2413b; background: rgba(220, 38, 38, .09); }
+.model-channel-fields { flex: 1 0 auto; min-height: 0; display: flex; flex-direction: column; gap: 14px; padding: 0; border-top: 0; }
+.model-channel-fields-grid { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 14px; }
+.model-channel-fields-grid > label, .model-config-row label { min-width: 0; display: grid; gap: 5px; color: var(--fg-3); font-size: 12px; }
 .model-channel-fields input, .model-channel-fields select, .model-config-row input { width: 100%; box-sizing: border-box; border: 1px solid var(--border); border-radius: 5px; outline: none; background: var(--bg); color: var(--fg); font: inherit; font-size: 13px; }
-.model-channel-fields > label input, .model-channel-fields > label select, .model-config-row input[type="text"], .model-config-row input[type="number"] { height: 32px; padding: 0 8px; }
+.model-channel-fields-grid > label input, .model-channel-fields-grid > label select, .model-config-row input[type="text"], .model-config-row input[type="number"] { height: 32px; padding: 0 8px; }
 .model-channel-fields input:focus, .model-channel-fields select:focus, .model-config-row input:focus { border-color: var(--accent); box-shadow: 0 0 0 2px color-mix(in srgb, var(--accent) 12%, transparent); }
-.model-channel-models { grid-column: 1 / -1; min-width: 0; display: grid; gap: 8px; }
+.model-channel-models { min-height: 0; flex: 1 0 auto; display: flex; flex-direction: column; gap: 8px; }
+.model-channel-models-list { min-height: 0; flex: 1 0 auto; max-height: calc(100vh - 340px); display: grid; gap: 8px; align-content: start; overflow-y: auto; }
 .model-channel-models-label { display: flex; align-items: center; min-height: 18px; color: var(--fg-3); font-size: 12px; }
 .model-channel-actions { margin-left: auto; display: inline-flex; align-items: center; gap: 8px; }
 .model-channel-clear, .model-channel-sync { display: inline-flex; align-items: center; gap: 5px; border: 0; border-radius: 4px; padding: 2px 5px; background: transparent; color: var(--fg-4); font: inherit; font-size: 12px; cursor: pointer; }
@@ -558,5 +573,8 @@ onMounted(load)
 .model-config-add:hover, .model-channel-add:hover { color: var(--accent); border-color: var(--accent); background: var(--accent-bg); }
 .model-channel-add svg { width: 16px; height: 16px; }
 .sr-only { position: absolute; width: 1px; height: 1px; padding: 0; margin: -1px; overflow: hidden; clip: rect(0, 0, 0, 0); white-space: nowrap; border: 0; }
-@media (max-width: 700px) { .model-channels-header { padding: 0 14px; } .model-channels-header p { display: none; } .model-channels-body { width: 100%; padding: 14px 14px 32px; } .model-validator label { grid-template-columns: minmax(0, 1fr); gap: 7px; } .model-channel-current span { display: none; } .model-channel-fields { grid-template-columns: minmax(0, 1fr); gap: 12px; padding: 14px; } .model-channel-models { grid-column: auto; } .model-config-main { grid-template-columns: minmax(0, 1fr) auto; } .model-config-main .model-config-switch { grid-column: 1 / -1; } .model-config-price { flex-wrap: wrap; } .model-config-price .model-config-switch { width: 100%; } }
+.model-channels-delete { display: inline-flex; align-items: center; gap: 6px; margin-top: 26px; padding: 4px 6px; border: 0; border-radius: 5px; background: transparent; color: #c2413b; font: inherit; font-size: 13px; cursor: pointer; }
+.model-channels-delete:hover { background: rgba(220, 38, 38, .09); }
+.model-channels-delete svg { width: 15px; height: 15px; }
+@media (max-width: 700px) { .model-channels-header { padding: 0 14px; } .model-channels-header p { display: none; } .model-channels-sidebar { flex-basis: 172px; } .model-channels-detail { padding: 14px 14px 32px; } .model-channel-fields-grid { grid-template-columns: minmax(0, 1fr); gap: 12px; } .model-config-main { grid-template-columns: minmax(0, 1fr) auto; } .model-config-main .model-config-switch { grid-column: 1 / -1; } .model-config-price { flex-wrap: wrap; } .model-config-price .model-config-switch { width: 100%; } }
 </style>
