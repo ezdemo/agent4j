@@ -12,16 +12,16 @@
 //
 // 进度可见性：npm 默认隐藏生命周期脚本输出（安全特性）。本脚本会把进度和
 // 安装器输出直接写到控制台设备（Windows CONOUT$ / POSIX /dev/tty），
-// 绕开 npm 的捕获，因此默认 npm install 也能看到实时进度和镜像菜单。
+// 绕开 npm 的捕获，因此默认 npm install 也能看到实时进度和测速结果。
 //   - 完整日志：~/.loopra/install.log（永远记录）
-//   - 非交互环境（CI/管道，无控制台）：跳过菜单，默认 GitHub 直连
+//   - 非交互环境（CI/管道，无控制台）同样自动测速，不弹询问
 //   - 安装失败时，npm 也会自动打印捕获到的脚本输出
 //
-// 镜像选择：
-//   - 已设置 LOOPRA_MIRROR 时直接使用，不再询问；
-//   - 有控制台的交互环境默认弹出镜像菜单（30 秒未选择则直连）；
-//   - 非交互（CI/管道）跳过询问，默认 GitHub 直连。
-//   选择的镜像以 LOOPRA_MIRROR 传入安装器（加速 JRE 等 GitHub 下载）。
+// 镜像选择（GitHub 代理镜像，非 npm registry）：
+//   - 已设置 LOOPRA_MIRROR 时直接使用，不测速；
+//   - 未设置时自动测速：并发 HEAD 探测各候选代理镜像多轮取中位，自动选用
+//     延迟最低者（GitHub 直连延迟不准，不参与比拼）；全部探测失败则回退直连。
+//   选中的镜像以 LOOPRA_MIRROR 传入安装器（加速 JRE 等 GitHub 下载）。
 //
 // 不需要自动安装时，用 npm 官方逃生门跳过脚本：
 //   npm install --ignore-scripts
@@ -31,22 +31,25 @@
 const fs = require('fs');
 const os = require('os');
 const path = require('path');
-const readline = require('readline');
-const { Writable } = require('stream');
+const https = require('https');
 const { spawn, spawnSync } = require('child_process');
 
 // 常见 GitHub 代理镜像（均已实测可访问；格式为 URL 前缀，安装器会拼接
-// “<前缀>/https://github.com/...”）
+// “<前缀>/https://github.com/...”）。仅对代理测速；GitHub 直连的 HEAD
+// 延迟不代表实际下载可用性（不准），不参与比拼，只作为全部失败时的回退。
 const MIRROR_OPTIONS = [
-  { label: 'GitHub 直连（默认）', value: '' },
   { label: 'gh-proxy.org', value: 'https://gh-proxy.org' },
   { label: 'ghfast.top', value: 'https://ghfast.top' },
   { label: 'gh-proxy.com', value: 'https://gh-proxy.com' },
   { label: 'ghproxy.net', value: 'https://ghproxy.net' },
 ];
 
+// 测速参数：并发探测 <前缀>/https://github.com/ 的 HEAD 响应延迟
+const PROBE_URL = 'https://github.com/';
+const PROBE_ROUNDS = 3;
+const PROBE_TIMEOUT_MS = 5000;
+
 const LOG_FILE = path.join(os.homedir(), '.loopra', 'install.log');
-const PROMPT_TIMEOUT_MS = 30000;
 
 // 打开控制台设备（绕过 npm 对 stdout 的捕获）；无控制台（CI）时返回 null。
 // 注意：Windows 无控制台会话中打开 CONOUT$ 可能创建普通文件而不是设备，
@@ -112,60 +115,46 @@ class TerminalBridge {
   }
 }
 
-// 交互式选择镜像；EOF / 超时 / 直接回车 -> 直连（''）
-function askMirror(bridge, log) {
+// 单次 HEAD 探测；超时/失败记 Infinity（不参与最优先）
+function probeOnce(prefix) {
   return new Promise((resolve) => {
-    let out;
-    if (process.stdout.isTTY) {
-      out = process.stdout;
-    } else if (bridge.consoleFd != null) {
-      out = new Writable({
-        write(chunk, enc, cb) {
-          bridge.write(chunk.toString());
-          cb();
-        },
-      });
-    } else {
-      resolve('');
-      return;
-    }
-
-    const rl = readline.createInterface({ input: process.stdin, output: out });
-    let answered = false;
-    const finish = (value) => {
-      if (!answered) {
-        answered = true;
-        clearTimeout(timer);
-        rl.close();
-        resolve(value);
-      }
-    };
-
-    const lines = ['', '[loopra-dist] 选择下载镜像（用于加速 JRE 等 GitHub 资源下载）：'];
-    MIRROR_OPTIONS.forEach((m, i) => lines.push(`  ${i + 1}) ${m.label}`));
-    lines.push('  6) 自定义镜像前缀（如 https://ghfast.top）');
-    lines.push('  直接回车 = GitHub 直连');
-
-    const timer = setTimeout(() => {
-      log('[loopra-dist] 未在 30 秒内选择，使用 GitHub 直连');
-      finish('');
-    }, PROMPT_TIMEOUT_MS);
-
-    rl.question(lines.join('\n') + '\n请选择 [1-6]: ', (ans) => {
-      const n = parseInt(ans.trim(), 10);
-      if (n >= 1 && n <= MIRROR_OPTIONS.length) return finish(MIRROR_OPTIONS[n - 1].value);
-      if (n === 6) {
-        rl.question('输入镜像前缀（直接回车 = 直连）: ', (custom) => {
-          const v = custom.trim().replace(/\/+$/, '');
-          finish(v || '');
-        });
-        return;
-      }
-      finish('');
+    const url = prefix ? `${prefix}/${PROBE_URL}` : PROBE_URL;
+    const started = Date.now();
+    const req = https.request(url, { method: 'HEAD' }, (res) => {
+      res.resume(); // 丢弃响应体
+      resolve(Date.now() - started);
     });
-    // stdin 关闭（管道/CI）或 Ctrl+C -> 直连
-    rl.on('close', () => finish(''));
+    req.setTimeout(PROBE_TIMEOUT_MS, () => {
+      req.destroy();
+      resolve(Infinity);
+    });
+    req.on('error', () => resolve(Infinity));
+    req.end();
   });
+}
+
+// 并发测速全部代理候选，每候选多轮并发取中位，返回延迟最低者；全失败返回 null
+// （调用方回退 GitHub 直连）
+async function detectFastestMirror(log) {
+  const detected = await Promise.all(
+    MIRROR_OPTIONS.map(async (m) => {
+      const times = await Promise.all(
+        Array.from({ length: PROBE_ROUNDS }, () => probeOnce(m.value))
+      );
+      const sorted = times.filter(Number.isFinite).sort((a, b) => a - b);
+      const median =
+        sorted.length > 0 ? sorted[Math.floor(sorted.length / 2)] : Infinity;
+      return { label: m.label, value: m.value, median };
+    })
+  );
+  log('[loopra-dist] 测速结果（中位延迟）:');
+  for (const d of detected) {
+    log(`  ${d.label}: ${Number.isFinite(d.median) ? `${d.median} ms` : 'FAIL'}`);
+  }
+  const best = detected
+    .filter((d) => Number.isFinite(d.median))
+    .sort((a, b) => a.median - b.median)[0];
+  return best || null;
 }
 
 // 运行安装器：输出转发到终端（绕过 npm 捕获）+ 日志，返回退出码
@@ -215,20 +204,23 @@ async function main() {
     process.exit(1);
   }
 
-  // [2/7] 镜像选择：已有 LOOPRA_MIRROR 直接用；有终端则默认弹出菜单
+  // [2/7] 镜像选择：已有 LOOPRA_MIRROR 直接用；否则自动测速选最快
   let mirror = (process.env.LOOPRA_MIRROR || '').trim().replace(/\/+$/, '');
-  if (!mirror) {
-    if (process.stdin.isTTY || bridge.consoleFd != null) {
-      log('[loopra-dist] [2/7] 选择下载镜像 ...');
-      mirror = await askMirror(bridge, log);
-    } else {
-      log('[loopra-dist] [2/7] 非交互环境（无控制台），跳过镜像选择，使用 GitHub 直连');
-    }
-  }
   if (mirror) {
-    log(`[loopra-dist] [2/7] 使用镜像: ${mirror}（以 LOOPRA_MIRROR 传给安装器）`);
+    log(`[loopra-dist] [2/7] 使用 LOOPRA_MIRROR 指定镜像: ${mirror}`);
   } else {
-    log('[loopra-dist] [2/7] 使用 GitHub 直连');
+    log('[loopra-dist] [2/7] 自动测速选择最快镜像 ...');
+    const best = await detectFastestMirror(log);
+    if (best) {
+      mirror = best.value;
+      log(
+        `[loopra-dist] [2/7] 自动选择: ${best.label} (${best.median} ms)${
+          best.value ? '，将作为 LOOPRA_MIRROR 传给安装器' : ''
+        }`
+      );
+    } else {
+      log('[loopra-dist] [2/7] 所有镜像探测失败，回退 GitHub 直连');
+    }
   }
 
   const isWin = process.platform === 'win32';
