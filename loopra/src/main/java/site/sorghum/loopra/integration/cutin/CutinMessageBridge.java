@@ -29,11 +29,16 @@ public final class CutinMessageBridge {
 
     public static Message toCutin(ChatMessage message) {
         if (message.isTool()) {
+            Map<String, Object> metadata = new HashMap<>();
+            if (message.getToolImageUrl() != null && !message.getToolImageUrl().isBlank()) {
+                metadata.put("tool_image_url", message.getToolImageUrl());
+            }
             return new Message(
                 "tool",
                 message.getContent(),
                 message.getToolCallId(),
-                List.of()
+                List.of(),
+                metadata
             );
         }
         if (message.isAssistant()) {
@@ -47,11 +52,45 @@ public final class CutinMessageBridge {
             if (message.getResponseReasoning() != null) {
                 metadata.put("response_reasoning", message.getResponseReasoning());
             }
+            if (message.getToolImageUrl() != null && !message.getToolImageUrl().isBlank()) {
+                metadata.put("tool_image_url", message.getToolImageUrl());
+            }
             return new Message(
                 "assistant",
                 message.getContent(),
                 null,
                 toCutinToolCalls(message.getToolCalls()),
+                metadata
+            );
+        }
+        // user 及其他角色：兼容 contentParts 多模态模式（text part → content，
+        // image_url part → metadata.images），与 toCutin(UserMessage) 语义一致，
+        // 避免 compaction 整体覆盖时丢图片/文本。
+        List<ChatMessage.ContentPart> parts = message.getContentParts();
+        if (parts != null && !parts.isEmpty()) {
+            StringBuilder text = new StringBuilder();
+            List<String> images = new ArrayList<>();
+            for (ChatMessage.ContentPart part : parts) {
+                if ("text".equals(part.getType()) && part.getText() != null) {
+                    if (text.length() > 0) {
+                        text.append('\n');
+                    }
+                    text.append(part.getText());
+                } else if ("image_url".equals(part.getType())
+                        && part.getImageUrl() != null
+                        && part.getImageUrl().getUrl() != null) {
+                    images.add(part.getImageUrl().getUrl());
+                }
+            }
+            Map<String, Object> metadata = new HashMap<>();
+            if (!images.isEmpty()) {
+                metadata.put("images", List.copyOf(images));
+            }
+            return new Message(
+                message.getRole(),
+                text.length() == 0 ? null : text.toString(),
+                null,
+                List.of(),
                 metadata
             );
         }

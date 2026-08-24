@@ -157,7 +157,7 @@
         <button type="button" @click="initializeWorkspace">重试</button>
       </div>
       <DesktopHome
-        v-else-if="!activeTabId && !showSkills && !showTools && !showSubAgents && !showSettings && !showModelChannels && !showDashboard"
+        v-else-if="!activeTabId && !showSkills && !showSettings && !showModelChannels"
         :workspaces="workspaces"
         :active-workspace-hash="activeWorkspaceHash"
         :theme="theme"
@@ -184,19 +184,8 @@
         @reorder-workspaces="reorderWorkspaces"
       />
       <SettingsView v-else-if="showSkills" class="desktop-settings" market-only />
-      <ToolsView v-else-if="showTools" class="desktop-tools" />
-      <SubAgentsView v-else-if="showSubAgents" class="desktop-sub-agents" />
       <ModelChannels v-else-if="showModelChannels" class="desktop-settings" :show-back="false" @saved="reloadAfterModelChannelsSaved" />
-      <section v-else-if="showDashboard" class="desktop-dashboard">
-        <header class="desktop-dashboard-header">
-          <div>
-            <h1>数据面板</h1>
-            <p>查看模型调用的 Token、费用和请求统计</p>
-          </div>
-        </header>
-        <DashboardPanel class="desktop-dashboard-content" />
-      </section>
-      <SettingsView v-else-if="showSettings" class="desktop-settings" @open-sub-agents="openSubAgents" @open-dashboard="openDashboard" />
+      <SettingsView v-else-if="showSettings" class="desktop-settings" :initial-tab="settingsTab" />
     </main>
   <ConfirmDialog />
   <ActionConfirmDialog
@@ -220,10 +209,7 @@ import {buildUpdatePrompt} from './utils/updateScripts'
 import {platform} from './services/platform'
 import DesktopHome from './DesktopHome.vue'
 import SettingsView from './views/Settings.vue'
-import ToolsView from './views/Tools.vue'
-import SubAgentsView from './views/SubAgents.vue'
 import ModelChannels from './ModelChannels.vue'
-import DashboardPanel from './components/Dashboard.vue'
 import ConfirmDialog from './components/ConfirmDialog.vue'
 import ActionConfirmDialog from './components/ActionConfirmDialog.vue'
 import {hasConfiguredModelChannel} from './utils/modelChannels'
@@ -238,16 +224,15 @@ const activeWorkspaceHash = ref('')
 const homeRefreshKey = ref(0)
 const refreshingHome = ref(false)
 const showSkills = ref(false)
-const showTools = ref(false)
-const showSubAgents = ref(false)
 const showSettings = ref(false)
 const showModelChannels = ref(false)
 const modelChannelsRequireReload = ref(false)
-const showDashboard = ref(false)
+// 设置页打开的初始 tab（工具/子代理/数据面板已收进设置页左侧菜单）
+const settingsTab = ref('general')
 const tabs = ref([])
 const activeTabId = ref('')
 const isHomeActive = computed(() => !startupError.value
-  && !activeTabId.value && !showSkills.value && !showTools.value && !showSubAgents.value && !showSettings.value && !showModelChannels.value && !showDashboard.value)
+  && !activeTabId.value && !showSkills.value && !showSettings.value && !showModelChannels.value)
 const tabsNav = ref(null)
 const draggedTabId = ref('')
 const dragOverTabId = ref('')
@@ -804,20 +789,15 @@ function openRequirementBoard() {
 }
 
 async function openTools() {
-  hideStandaloneViews()
-  showTools.value = true
-  activeTabId.value = ''
-  await renderActiveTab()
+  await openSettings('tools')
 }
 
 async function openSubAgents() {
-  hideStandaloneViews()
-  showSubAgents.value = true
-  activeTabId.value = ''
-  await renderActiveTab()
+  await openSettings('sub-agents')
 }
 
-async function openSettings() {
+async function openSettings(tab = 'general') {
+  settingsTab.value = tab
   hideStandaloneViews()
   showSettings.value = true
   activeTabId.value = ''
@@ -828,13 +808,6 @@ async function openModelChannels({requireReload = false} = {}) {
   modelChannelsRequireReload.value = requireReload
   hideStandaloneViews()
   showModelChannels.value = true
-  activeTabId.value = ''
-  await renderActiveTab()
-}
-
-async function openDashboard() {
-  hideStandaloneViews()
-  showDashboard.value = true
   activeTabId.value = ''
   await renderActiveTab()
 }
@@ -852,11 +825,8 @@ async function toggleTerminal() {
 function hideStandaloneViews() {
   closeContextMenus()
   showSkills.value = false
-  showTools.value = false
-  showSubAgents.value = false
   showSettings.value = false
   showModelChannels.value = false
-  showDashboard.value = false
 }
 
 function toggleTheme() {
@@ -1279,12 +1249,6 @@ onBeforeUnmount(() => {
 .close-mark::after { transform: rotate(-45deg); }
 .desktop-view-host { flex: 1; min-width: 0; min-height: 0; background: var(--bg, #fff); }
 .desktop-settings { height: 100%; min-height: 0; overflow: hidden; }
-.desktop-tools, .desktop-sub-agents { box-sizing: border-box; height: 100%; min-height: 0; overflow: auto; }
-.desktop-dashboard { height: 100%; min-height: 0; overflow: auto; }
-.desktop-dashboard-header { height: 64px; display: flex; align-items: center; padding: 0 28px; border-bottom: 1px solid var(--border, #e8e8e8); }
-.desktop-dashboard-header h1 { margin: 0; font-size: 16px; font-weight: 600; }
-.desktop-dashboard-header p { margin: 3px 0 0; color: var(--fg-4, #9ca3af); font-size: 12px; }
-.desktop-dashboard-content { box-sizing: border-box; width: min(100%, 960px); margin: 0 auto; padding: 28px 24px 48px; }
 .desktop-empty { height: 100%; display: grid; place-items: center; color: var(--fg-4, #9ca3af); font-size: 14px; }
 .desktop-error { align-content: center; gap: 12px; }
 .desktop-error button { justify-self: center; border: 1px solid var(--border, #e5e7eb); border-radius: 5px; background: var(--bg, #fff); color: var(--fg, #202124); padding: 6px 14px; cursor: pointer; }
