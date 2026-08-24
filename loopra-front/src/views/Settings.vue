@@ -593,7 +593,7 @@
         </section>
 
         <!-- 模型渠道设置 -->
-        <section v-if="activeTab === 'model-channels'" class="settings-section">
+        <section v-if="activeTab === 'model-channels'" class="settings-section settings-embed model-channels-embed">
           <ModelChannels :showBack="false" />
         </section>
 
@@ -4003,6 +4003,11 @@ const saveLoopraMd = async () => {
 .settings-embed-view {
   width: 100%;
   min-width: 0;
+}
+
+/* 模型渠道为定高布局（内部滚动），嵌入设置页时撑满内容区高度，否则左侧渠道栏随模型展开变高、不定高 */
+.settings-embed.model-channels-embed {
+  height: 100%;
 }
 
 .settings-embed-loading {

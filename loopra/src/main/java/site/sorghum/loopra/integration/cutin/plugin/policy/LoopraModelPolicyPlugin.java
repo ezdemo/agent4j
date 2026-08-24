@@ -147,6 +147,13 @@ public final class LoopraModelPolicyPlugin implements LoopPlugin {
         } catch (Exception ignored) {
             // 部分测试 Provider 不实现中止语义
         }
+        // retry 会重新走一轮模型流：先通知前端作废本轮已流出的思考/正文，
+        // 否则两轮输出会叠加在同一条消息里，视觉上表现为"同一个思考重复渲染"。
+        try {
+            host.getOutput().sendEvent("stream_reset", "{}");
+        } catch (Exception ignored) {
+            // SSE 断开时忽略
+        }
         host.injectReasonBreakReminder();
         return InterceptDecision.retry("[ReasonBreaker] 连续两次检测到思考循环，重试本轮推理。" + result.toWarning());
     }
