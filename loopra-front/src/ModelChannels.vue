@@ -36,19 +36,21 @@
             </select>
           </label>
         </section>
-        <button
-          v-for="(channel, index) in channels"
-          :key="channel.id"
-          class="model-channel-toggle"
-          :class="{ active: channel.id === activeChannelId }"
-          type="button"
-          :title="channel.name || `渠道 ${index + 1}`"
-          @click="selectChannel(channel)"
-        >
-          <span class="model-channel-title">{{ channel.name || `渠道 ${index + 1}` }}</span>
-          <span class="model-channel-count">{{ channel.models.length }} 个模型</span>
-        </button>
         <div v-if="!channels.length" class="model-channels-empty">暂无模型渠道</div>
+        <div v-else class="model-channel-toggles">
+          <button
+            v-for="(channel, index) in channels"
+            :key="channel.id"
+            class="model-channel-toggle"
+            :class="{ active: channel.id === activeChannelId }"
+            type="button"
+            :title="channel.name || `渠道 ${index + 1}`"
+            @click="selectChannel(channel)"
+          >
+            <span class="model-channel-title">{{ channel.name || `渠道 ${index + 1}` }}</span>
+            <span class="model-channel-count">{{ channel.models.length }} 个模型</span>
+          </button>
+        </div>
         <button class="model-channel-add" type="button" @click="addChannel">
           <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M12 5v14M5 12h14"/></svg>
           添加渠道
@@ -520,8 +522,11 @@ onMounted(load)
 .model-channels[data-theme="dark"] .model-channels-save:not(:disabled):hover { background: #f4f4f5; }
 .model-channels[data-theme="dark"] .model-channels-save:disabled { background: #303034; color: #9499a3; opacity: 1; }
 .model-channels-body { box-sizing: border-box; width: 100%; min-width: 0; min-height: 0; flex: 1; margin: 0; display: flex; overflow: hidden; }
-.model-channels-sidebar { box-sizing: border-box; flex: 0 0 240px; width: 240px; min-width: 0; display: flex; flex-direction: column; border-right: 1px solid var(--border); background: var(--bg-2); overflow-x: hidden; overflow-y: auto; }
-.model-channels-detail { flex: 1; min-width: 0; min-height: 0; display: flex; flex-direction: column; overflow-y: auto; padding: 24px clamp(20px, 4vw, 48px) 40px; }
+.model-channels-sidebar { box-sizing: border-box; flex: 0 0 240px; width: 240px; min-width: 0; display: flex; flex-direction: column; border-right: 1px solid var(--border); background: var(--bg-2); overflow: hidden; }
+/* 侧栏定高不滚：渠道按钮列表在内部滚动（作用等同右侧模型列表） */
+.model-channels-sidebar .model-channel-toggles { min-height: 0; flex: 1 1 auto; display: flex; flex-direction: column; overflow-x: hidden; overflow-y: auto; }
+.model-channels-sidebar .model-channels-empty { height: auto; flex: 1; }
+.model-channels-detail { flex: 1; min-width: 0; min-height: 0; display: flex; flex-direction: column; overflow: hidden; padding: 24px clamp(20px, 4vw, 48px) 40px; }
 .model-validator { flex: 0 0 auto; padding: 12px 12px 10px; border: 0; border-bottom: 1px solid var(--border); border-radius: 0; background: transparent; }
 .model-validator label { min-width: 0; display: grid; grid-template-columns: minmax(0, 1fr); gap: 6px; color: var(--fg-2); font-size: 13px; }
 .model-validator select { min-width: 0; width: 100%; height: 32px; padding: 0 8px; border: 1px solid var(--border); border-radius: 5px; outline: none; background: var(--bg); color: var(--fg); font: inherit; font-size: 13px; }
@@ -537,14 +542,14 @@ onMounted(load)
 .model-config-toggle:hover { color: var(--fg); }
 .model-config-current input, .model-config-switch input { accent-color: var(--accent); }
 .model-config-delete:hover { color: #c2413b; background: rgba(220, 38, 38, .09); }
-.model-channel-fields { flex: 1 0 auto; min-height: 0; display: flex; flex-direction: column; gap: 14px; padding: 0; border-top: 0; }
+.model-channel-fields { flex: 1 1 auto; min-height: 0; display: flex; flex-direction: column; gap: 14px; padding: 0; border-top: 0; }
 .model-channel-fields-grid { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 14px; }
 .model-channel-fields-grid > label, .model-config-row label { min-width: 0; display: grid; gap: 5px; color: var(--fg-3); font-size: 12px; }
 .model-channel-fields input, .model-channel-fields select, .model-config-row input { width: 100%; box-sizing: border-box; border: 1px solid var(--border); border-radius: 5px; outline: none; background: var(--bg); color: var(--fg); font: inherit; font-size: 13px; }
 .model-channel-fields-grid > label input, .model-channel-fields-grid > label select, .model-config-row input[type="text"], .model-config-row input[type="number"] { height: 32px; padding: 0 8px; }
 .model-channel-fields input:focus, .model-channel-fields select:focus, .model-config-row input:focus { border-color: var(--accent); box-shadow: 0 0 0 2px color-mix(in srgb, var(--accent) 12%, transparent); }
-.model-channel-models { min-height: 0; flex: 1 0 auto; display: flex; flex-direction: column; gap: 8px; }
-.model-channel-models-list { min-height: 0; flex: 1 0 auto; max-height: calc(100vh - 340px); display: grid; gap: 8px; align-content: start; overflow-y: auto; }
+.model-channel-models { min-height: 0; flex: 1 1 auto; display: flex; flex-direction: column; gap: 8px; }
+.model-channel-models-list { min-height: 0; flex: 1 1 auto; display: grid; gap: 8px; align-content: start; overflow-y: auto; }
 .model-channel-models-label { display: flex; align-items: center; min-height: 18px; color: var(--fg-3); font-size: 12px; }
 .model-channel-actions { margin-left: auto; display: inline-flex; align-items: center; gap: 8px; }
 .model-channel-clear, .model-channel-sync { display: inline-flex; align-items: center; gap: 5px; border: 0; border-radius: 4px; padding: 2px 5px; background: transparent; color: var(--fg-4); font: inherit; font-size: 12px; cursor: pointer; }
@@ -555,7 +560,8 @@ onMounted(load)
 .model-channel-spin { animation: model-channel-spin .8s linear infinite; }
 @keyframes model-channel-spin { to { transform: rotate(360deg); } }
 .model-list-empty { padding: 10px; border: 1px dashed var(--border); border-radius: 5px; color: var(--fg-4); font-size: 12px; text-align: center; }
-.model-config-row { overflow: hidden; border: 1px solid var(--border); border-radius: 6px; background: var(--bg-2); }
+/* 行内模型卡片：overflow:hidden 且无显式高度时内在尺寸会塌缩（原行高被压到 ~2px，模型多了字全被裁掉），须撑起 min-height（38px 头部 + 2px 边框） */
+.model-config-row { min-height: 40px; overflow: hidden; border: 1px solid var(--border); border-radius: 6px; background: var(--bg-2); }
 .model-config-header { height: 38px; display: flex; align-items: center; gap: 7px; padding: 0 5px 0 7px; }
 .model-config-toggle { flex: 1; height: 100%; overflow: hidden; font-size: 13px; }
 .model-config-toggle span { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
