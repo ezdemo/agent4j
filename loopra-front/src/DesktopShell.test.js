@@ -56,10 +56,7 @@ async function mountShell() {
         Teleport: false,
         DesktopHome: true,
         SettingsView: true,
-        ToolsView: true,
-        SubAgentsView: true,
         ModelChannels: true,
-        DashboardPanel: true,
         ConfirmDialog: true
       }
     }

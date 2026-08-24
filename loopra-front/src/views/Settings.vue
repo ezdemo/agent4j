@@ -25,29 +25,17 @@
         </button>
       </div>
 
-      <!-- 桌面壳专属功能入口（子代理/数据面板从首页左下角收进这里） -->
-      <div v-if="inDesktopShell" class="nav-extra">
-        <div class="nav-extra-title">功能</div>
-        <button class="nav-item" type="button" @click="emit('open-sub-agents')">
-          <span class="nav-icon" v-html="SUB_AGENTS_ICON"></span>
-          <span class="nav-label">子代理</span>
-        </button>
-        <button class="nav-item" type="button" @click="emit('open-dashboard')">
-          <span class="nav-icon" v-html="DASHBOARD_ICON"></span>
-          <span class="nav-label">数据面板</span>
-        </button>
-      </div>
-    </nav>
+      </nav>
 
     <!-- 主内容区 -->
     <main class="settings-main">
       <!-- 顶部操作栏 -->
-      <header v-if="!marketOnly && activeTab !== 'model-channels'" class="settings-header">
+      <header v-if="!marketOnly && activeTab !== 'model-channels' && activeTab !== 'tools' && activeTab !== 'sub-agents' && activeTab !== 'dashboard'" class="settings-header">
         <div class="header-title">
           <h2>{{ currentTab?.label || '设置' }}</h2>
           <p class="header-desc">{{ currentTab?.description }}</p>
         </div>
-        <div v-if="activeTab !== 'openapi' && activeTab !== 'mcp' && activeTab !== 'lsp' && activeTab !== 'skill-market' && activeTab !== 'plugins' && activeTab !== 'about' && activeTab !== 'pet' && activeTab !== 'prompt' && activeTab !== 'model-channels'" class="header-actions">
+        <div v-if="activeTab !== 'openapi' && activeTab !== 'mcp' && activeTab !== 'lsp' && activeTab !== 'skill-market' && activeTab !== 'plugins' && activeTab !== 'about' && activeTab !== 'pet' && activeTab !== 'prompt' && activeTab !== 'model-channels' && activeTab !== 'tools' && activeTab !== 'sub-agents' && activeTab !== 'dashboard'" class="header-actions">
           <button v-if="activeTab === 'ai'" class="btn btn-secondary" style="padding:6px 12px;" @click="openAutoFillDialog" title="自动填入配置">
             <svg fill="none" height="14" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24" width="14">
               <polyline points="1 4 1 10 7 10"/>
@@ -1569,6 +1557,21 @@ X-Custom-Header=value"
           </div>
         </section>
 
+        <!-- ==================== 工具 ==================== -->
+        <section v-if="activeTab === 'tools'" class="settings-section settings-embed">
+          <ToolsView class="settings-embed-view" />
+        </section>
+
+        <!-- ==================== 子代理 ==================== -->
+        <section v-else-if="activeTab === 'sub-agents'" class="settings-section settings-embed">
+          <SubAgentsView class="settings-embed-view" />
+        </section>
+
+        <!-- ==================== 数据面板 ==================== -->
+        <section v-else-if="activeTab === 'dashboard'" class="settings-section settings-embed">
+          <DashboardPanel class="settings-embed-view" />
+        </section>
+
       </div>
     </main>
   </div>
@@ -1799,7 +1802,7 @@ X-Custom-Header=value"
 </template>
 
 <script setup>
-import {computed, onMounted, reactive, ref, watch} from 'vue'
+import {computed, defineAsyncComponent, h, onMounted, reactive, ref, watch} from 'vue'
 import {message, Modal} from 'ant-design-vue'
 import {useAppStore} from '../stores/app'
 import {
@@ -1821,6 +1824,22 @@ import platform from '../services/platform'
 import VersionInfoPanel from '../components/VersionInfoPanel.vue'
 import PetSprite from '../components/PetSprite.vue'
 import ModelChannels from '../ModelChannels.vue'
+// 工具/子代理/数据面板按需异步加载（切到对应 tab 时才拉取组件块，避免拖慢设置页打开）
+const EmbedLoading = {
+  render: () => h('div', {class: 'settings-embed-loading'}, '加载中…')
+}
+const ToolsView = defineAsyncComponent({
+  loader: () => import('./Tools.vue'),
+  loadingComponent: EmbedLoading
+})
+const SubAgentsView = defineAsyncComponent({
+  loader: () => import('./SubAgents.vue'),
+  loadingComponent: EmbedLoading
+})
+const DashboardPanel = defineAsyncComponent({
+  loader: () => import('../components/Dashboard.vue'),
+  loadingComponent: EmbedLoading
+})
 
 const store = useAppStore()
 const props = defineProps({
@@ -2127,7 +2146,7 @@ const autoUpdating = ref(false)
 // 更新源（直连/镜像），与更新窗口共享 localStorage
 const updateSource = ref(loadUpdateSource())
 
-const emit = defineEmits(['auto-update', 'init-pet', 'open-sub-agents', 'open-dashboard'])
+const emit = defineEmits(['auto-update', 'init-pet'])
 
 // 桌面端版本信息（由 handleCheckVersion 一并更新）
 const desktopInfo = ref({
@@ -2136,11 +2155,6 @@ const desktopInfo = ref({
   releaseUrl: null,
   checkTime: null
 })
-
-// 桌面壳功能入口图标（与首页左下角风格一致），仅 ?desktopShell=1 时显示
-const SUB_AGENTS_ICON = `<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><circle cx="9" cy="8" r="3"/><path d="M3.5 19v-1.5A4.5 4.5 0 0 1 8 13h2a4.5 4.5 0 0 1 4.5 4.5V19"/><circle cx="17" cy="9" r="2.5"/><path d="M15.5 14.2A4 4 0 0 1 21 18v1"/></svg>`
-const DASHBOARD_ICON = `<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M12 20V10"/><path d="M18 20V4"/><path d="M6 20v-4"/></svg>`
-const inDesktopShell = new URLSearchParams(window.location.search).get('desktopShell') === '1'
 
 // 检查更新（同时刷新当前版本和桌面端版本信息）
 async function handleCheckVersion() {
@@ -2409,6 +2423,24 @@ const tabs = computed(() => [
     icon: `<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
       <circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83-2.83l.06-.06A1.65 1.65 0 0 0 4.68 15a1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 2.83-2.83l.06.06A1.65 1.65 0 0 0 9 4.68a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 2.83l-.06.06A1.65 1.65 0 0 0 19.4 9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z"/>
     </svg>`
+  },
+  {
+    id: 'tools',
+    label: '工具',
+    description: '查看可用的 AI 工具',
+    icon: `<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M14.7 6.3a1 1 0 0 0 0 1.4l1.6 1.6a1 1 0 0 0 1.4 0l3.77-3.77a6 6 0 0 1-7.94 7.94l-6.91 6.91a2.12 2.12 0 0 1-3-3l6.91-6.91a6 6 0 0 1 7.94-7.94l-3.76 3.76z"/></svg>`
+  },
+  {
+    id: 'sub-agents',
+    label: '子代理',
+    description: '查看内置子代理及其可用工具',
+    icon: `<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><circle cx="9" cy="8" r="3"/><path d="M3.5 19v-1.5A4.5 4.5 0 0 1 8 13h2a4.5 4.5 0 0 1 4.5 4.5V19"/><circle cx="17" cy="9" r="2.5"/><path d="M15.5 14.2A4 4 0 0 1 21 18v1"/></svg>`
+  },
+  {
+    id: 'dashboard',
+    label: '数据面板',
+    description: 'Token 用量与活跃度统计',
+    icon: `<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M12 20V10"/><path d="M18 20V4"/><path d="M6 20v-4"/></svg>`
   },
   {
     id: 'pet',
@@ -3849,23 +3881,6 @@ const saveLoopraMd = async () => {
   gap: 2px;
 }
 
-.nav-extra {
-  flex: 0 0 auto;
-  padding: 8px 12px 0;
-  border-top: 1px solid var(--border);
-  margin-top: 8px;
-  display: flex;
-  flex-direction: column;
-  gap: 2px;
-}
-
-.nav-extra-title {
-  padding: 0 12px 6px;
-  font-size: 11px;
-  font-weight: 600;
-  color: var(--fg-3);
-}
-
 .nav-item {
   display: flex;
   align-items: center;
@@ -3978,6 +3993,24 @@ const saveLoopraMd = async () => {
   width: 100%;
   min-width: 0;
   box-sizing: border-box;
+}
+
+/* 嵌入的工具/子代理/数据面板视图 */
+.settings-embed {
+  width: 100%;
+}
+
+.settings-embed-view {
+  width: 100%;
+  min-width: 0;
+}
+
+.settings-embed-loading {
+  display: grid;
+  place-items: center;
+  min-height: 240px;
+  color: var(--fg-3);
+  font-size: 13px;
 }
 
 /* OpenAPI 样式 */

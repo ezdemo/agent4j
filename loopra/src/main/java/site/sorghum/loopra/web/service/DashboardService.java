@@ -35,11 +35,11 @@ public class DashboardService {
     /**
      * 获取数据面板统计。
      *
-     * @param days 统计天数（1-90）
+     * @param days 统计天数（1-365）
       * @return 面板 DTO
      */
     public DashboardDTO getDashboard(int days) {
-        int n = (days > 0) ? Math.min(days, 90) : 7;
+        int n = (days > 0) ? Math.min(days, 365) : 30;
         LocalDate today = LocalDate.now();
         LocalDate startDate = today.minusDays(n - 1);
 

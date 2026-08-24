@@ -2,6 +2,7 @@ package site.sorghum.loopra.integration.cutin.plugin.policy;
 
 import org.noear.solon.ai.chat.tool.FunctionTool;
 import site.sorghum.cutin.core.context.LoopContext;
+import site.sorghum.cutin.core.context.Message;
 import site.sorghum.cutin.core.loop.InterceptContext;
 import site.sorghum.cutin.core.loop.InterceptDecision;
 import site.sorghum.cutin.core.loop.InterceptPoint;
@@ -14,6 +15,7 @@ import site.sorghum.cutin.core.plugin.LoopRegistrar;
 import site.sorghum.cutin.core.tool.ToolDefinition;
 import site.sorghum.loopra.bin.agent.resilient.ReasonBreaker;
 import site.sorghum.loopra.bin.tool.ToolMetadata;
+import site.sorghum.loopra.integration.cutin.plugin.preflight.LoopraPreflight;
 import site.sorghum.loopra.tool.LogLevel;
 
 import java.util.List;
@@ -46,16 +48,34 @@ public final class LoopraModelPolicyPlugin implements LoopPlugin {
 
     private InterceptDecision prepareModelRequest(InterceptContext context) {
         ModelCallRequest request = payloadRequest(context);
+        List<Message> messages = context.context().messages();
+        if (!hasUsableInput(messages)) {
+            // 兜底保护：上下文没有任何可发送给模型的输入时（空回合、
+            // 清洗后内容被完全移除等），跳转到 output 节点优雅结束本轮，
+            // 而不是携带空消息调用模型网关触发上游 400（如 input must be non-empty）。
+            context.context().putVariable("loopraExitReason", "empty_input");
+            context.context().putVariable(LoopraPreflight.RESULT_VARIABLE,
+                "没有可供模型处理的消息内容，已跳过模型调用。请用文字描述你的需求后再试。");
+            return InterceptDecision.gotoNode(LoopraPreflight.OUTPUT_NODE);
+        }
         List<ToolDefinition> tools = context.context().tools().definitions().stream()
             .filter(tool -> !host.isPlanMode() || isReadOnly(tool.id()))
             .toList();
         ModelCallRequest effective = new ModelCallRequest(
             request.modelId(),
-            context.context().messages(),
+            messages,
             tools,
             request.options()
         );
         return InterceptDecision.modified(context.context(), effective);
+    }
+
+    private static boolean hasUsableInput(List<Message> messages) {
+        return messages.stream().anyMatch(message ->
+            !"system".equals(message.role())
+                && ((message.content() != null && !message.content().isEmpty())
+                    || message.hasToolCalls()
+                    || message.metadata("images") instanceof List<?> images && !images.isEmpty()));
     }
 
     private ModelCallRequest payloadRequest(InterceptContext context) {
