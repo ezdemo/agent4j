@@ -10,15 +10,17 @@
 //   3. 安装器复用系统 Java 17+ / 已有捆绑 JRE，都没有时自动下载 JRE 25，
 //      最终安装到 ~/.loopra 并配置 PATH
 //
-// 进度可见性：npm 默认隐藏生命周期脚本输出（安全特性）。
-//   - 实时进度：npm install -g loopra-dist --foreground-scripts
-//   - 完整日志：~/.loopra/install.log（无论哪种方式都会记录）
-//   - 安装失败时，npm 会自动打印捕获到的脚本输出
+// 进度可见性：npm 默认隐藏生命周期脚本输出（安全特性）。本脚本会把进度和
+// 安装器输出直接写到控制台设备（Windows CONOUT$ / POSIX /dev/tty），
+// 绕开 npm 的捕获，因此默认 npm install 也能看到实时进度和镜像菜单。
+//   - 完整日志：~/.loopra/install.log（永远记录）
+//   - 非交互环境（CI/管道，无控制台）：跳过菜单，默认 GitHub 直连
+//   - 安装失败时，npm 也会自动打印捕获到的脚本输出
 //
 // 镜像选择：
 //   - 已设置 LOOPRA_MIRROR 时直接使用，不再询问；
-//   - 交互式环境（直接运行脚本或 npm --foreground-scripts）弹出镜像菜单；
-//   - npm 默认模式 / CI / 管道：跳过询问，默认 GitHub 直连（避免隐形挂起）。
+//   - 有控制台的交互环境默认弹出镜像菜单（30 秒未选择则直连）；
+//   - 非交互（CI/管道）跳过询问，默认 GitHub 直连。
 //   选择的镜像以 LOOPRA_MIRROR 传入安装器（加速 JRE 等 GitHub 下载）。
 //
 // 不需要自动安装时，用 npm 官方逃生门跳过脚本：
@@ -30,6 +32,7 @@ const fs = require('fs');
 const os = require('os');
 const path = require('path');
 const readline = require('readline');
+const { Writable } = require('stream');
 const { spawn, spawnSync } = require('child_process');
 
 // 常见 GitHub 代理镜像（均已实测可访问；格式为 URL 前缀，安装器会拼接
@@ -43,6 +46,36 @@ const MIRROR_OPTIONS = [
 ];
 
 const LOG_FILE = path.join(os.homedir(), '.loopra', 'install.log');
+const PROMPT_TIMEOUT_MS = 30000;
+
+// 打开控制台设备（绕过 npm 对 stdout 的捕获）；无控制台（CI）时返回 null。
+// 注意：Windows 无控制台会话中打开 CONOUT$ 可能创建普通文件而不是设备，
+// 必须 fstat 校验并清理，避免在 cwd 留下垃圾文件。
+function openConsoleFd() {
+  const dev = process.platform === 'win32' ? 'CONOUT$' : '/dev/tty';
+  let fd = null;
+  try {
+    fd = fs.openSync(dev, 'w');
+    const st = fs.fstatSync(fd);
+    if (st.isFile()) {
+      // 伪设备文件：不是真实控制台
+      fs.closeSync(fd);
+      fd = null;
+      try {
+        fs.unlinkSync(dev);
+      } catch {}
+      return null;
+    }
+    return fd;
+  } catch {
+    if (fd != null) {
+      try {
+        fs.closeSync(fd);
+      } catch {}
+    }
+    return null;
+  }
+}
 
 function findScript(dir, name) {
   for (const ent of fs.readdirSync(dir, { withFileTypes: true })) {
@@ -57,14 +90,52 @@ function findScript(dir, name) {
   return null;
 }
 
-// 交互式选择镜像；stdin 关闭（EOF）或直接回车 -> 直连（''）
-function askMirror() {
+// 写入终端：stdout 是 TTY 时正常写 stdout；被 npm 捕获（非 TTY）时改写控制台设备。
+// stdout 始终也写一份，便于管道/日志场景观测。
+class TerminalBridge {
+  constructor() {
+    this.consoleFd = null;
+    if (!process.stdout.isTTY) {
+      this.consoleFd = openConsoleFd();
+    }
+  }
+
+  write(text) {
+    try {
+      process.stdout.write(text);
+    } catch {}
+    if (this.consoleFd != null) {
+      try {
+        fs.writeSync(this.consoleFd, text);
+      } catch {}
+    }
+  }
+}
+
+// 交互式选择镜像；EOF / 超时 / 直接回车 -> 直连（''）
+function askMirror(bridge, log) {
   return new Promise((resolve) => {
-    const rl = readline.createInterface({ input: process.stdin, output: process.stdout });
+    let out;
+    if (process.stdout.isTTY) {
+      out = process.stdout;
+    } else if (bridge.consoleFd != null) {
+      out = new Writable({
+        write(chunk, enc, cb) {
+          bridge.write(chunk.toString());
+          cb();
+        },
+      });
+    } else {
+      resolve('');
+      return;
+    }
+
+    const rl = readline.createInterface({ input: process.stdin, output: out });
     let answered = false;
     const finish = (value) => {
       if (!answered) {
         answered = true;
+        clearTimeout(timer);
         rl.close();
         resolve(value);
       }
@@ -74,6 +145,11 @@ function askMirror() {
     MIRROR_OPTIONS.forEach((m, i) => lines.push(`  ${i + 1}) ${m.label}`));
     lines.push('  6) 自定义镜像前缀（如 https://ghfast.top）');
     lines.push('  直接回车 = GitHub 直连');
+
+    const timer = setTimeout(() => {
+      log('[loopra-dist] 未在 30 秒内选择，使用 GitHub 直连');
+      finish('');
+    }, PROMPT_TIMEOUT_MS);
 
     rl.question(lines.join('\n') + '\n请选择 [1-6]: ', (ans) => {
       const n = parseInt(ans.trim(), 10);
@@ -92,16 +168,16 @@ function askMirror() {
   });
 }
 
-// 运行安装器：输出转发到终端 + 日志，返回退出码
-function runInstaller(cmd, args, env, logStream) {
+// 运行安装器：输出转发到终端（绕过 npm 捕获）+ 日志，返回退出码
+function runInstaller(cmd, args, env, bridge, logStream) {
   return new Promise((resolve) => {
     const child = spawn(cmd, args, { stdio: ['inherit', 'pipe', 'pipe'], env });
     child.stdout.on('data', (d) => {
-      process.stdout.write(d);
+      bridge.write(d);
       logStream.write(d);
     });
     child.stderr.on('data', (d) => {
-      process.stderr.write(d);
+      bridge.write(d);
       logStream.write(d);
     });
     child.on('close', (code, signal) => resolve(signal ? 1 : code));
@@ -113,17 +189,16 @@ function runInstaller(cmd, args, env, logStream) {
 }
 
 async function main() {
-  // 逐行双写：终端 + 日志
-  const logFd = (() => {
-    try {
-      fs.mkdirSync(path.dirname(LOG_FILE), { recursive: true });
-      return fs.createWriteStream(LOG_FILE, { flags: 'a' });
-    } catch {
-      return null;
-    }
-  })();
+  const bridge = new TerminalBridge();
+
+  // 双写：终端（桥接）+ 日志
+  let logFd = null;
+  try {
+    fs.mkdirSync(path.dirname(LOG_FILE), { recursive: true });
+    logFd = fs.createWriteStream(LOG_FILE, { flags: 'a' });
+  } catch {}
   const log = (msg) => {
-    console.log(msg);
+    bridge.write(msg + '\n');
     if (logFd) logFd.write(msg + '\n');
   };
 
@@ -140,17 +215,14 @@ async function main() {
     process.exit(1);
   }
 
-  // [2/7] 镜像选择
+  // [2/7] 镜像选择：已有 LOOPRA_MIRROR 直接用；有终端则默认弹出菜单
   let mirror = (process.env.LOOPRA_MIRROR || '').trim().replace(/\/+$/, '');
-  const underNpm = !!process.env.npm_lifecycle_event;
-  const foreground = process.env.npm_config_foreground_scripts === 'true';
   if (!mirror) {
-    if (underNpm && !foreground) {
-      log('[loopra-dist] [2/7] npm 默认模式：跳过交互镜像选择，使用 GitHub 直连');
-      log('[loopra-dist] [2/7] 提示：需要镜像菜单或实时进度，请用 npm install --foreground-scripts');
-    } else {
+    if (process.stdin.isTTY || bridge.consoleFd != null) {
       log('[loopra-dist] [2/7] 选择下载镜像 ...');
-      mirror = await askMirror();
+      mirror = await askMirror(bridge, log);
+    } else {
+      log('[loopra-dist] [2/7] 非交互环境（无控制台），跳过镜像选择，使用 GitHub 直连');
     }
   }
   if (mirror) {
@@ -197,7 +269,7 @@ async function main() {
     log(`[loopra-dist] [5/7] 执行安装器: ${cmd} ${args.join(' ')}`);
     log('[loopra-dist] [5/7] （安装器会检查 Java 17+，必要时自动下载 JRE 25，并写入 ~/.loopra 与 PATH）');
     log(`[loopra-dist] [5/7] 安装日志: ${LOG_FILE}`);
-    const code = await runInstaller(cmd, args, env, logFd);
+    const code = await runInstaller(cmd, args, env, bridge, logFd);
 
     // [6/7] 结果
     if (code !== 0) {
@@ -207,7 +279,7 @@ async function main() {
     }
 
     // [7/7] 完成
-    log('[loopra-dist] [6/7] 安装完成 ✓');
+    log('[loopra-dist] [6/7] 安装完成');
     log('[loopra-dist] [7/7] 现在可以运行: loopra web    （或 loopra web 0 随机端口）');
     log(`[loopra-dist] [7/7] 完整安装日志: ${LOG_FILE}`);
   } finally {
