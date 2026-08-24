@@ -42,11 +42,11 @@
           </button>
         </div>
         <div class="heatmap-wrap">
-          <div class="heatmap-scroll">
-            <div class="month-labels" :style="{ width: heatmapWidth + 'px' }">
-              <span v-for="month in heatmapMonths" :key="month.key" :style="{ left: month.left + 'px' }">{{ month.label }}</span>
+          <div ref="heatmapScroll" class="heatmap-scroll">
+            <div class="month-labels" :style="{ gridTemplateColumns: `repeat(${heatmapCols}, minmax(16px, 22px))`, minWidth: heatmapMinWidth + 'px' }">
+              <span v-for="month in heatmapMonths" :key="month.key" :style="{ gridColumnStart: month.col + 1 }">{{ month.label }}</span>
             </div>
-            <div class="heatmap-grid" :style="{ gridTemplateRows: `repeat(7, 16px)`, gridTemplateColumns: `repeat(${heatmapCols}, 16px)` }">
+            <div class="heatmap-grid" :style="{ gridTemplateRows: `repeat(7, auto)`, gridTemplateColumns: `repeat(${heatmapCols}, minmax(16px, 22px))`, minWidth: heatmapMinWidth + 'px' }">
               <span v-for="(cell, index) in heatmapCells" :key="index" class="heatmap-cell" :class="cell.level" :title="cell.title"></span>
             </div>
           </div>
@@ -121,7 +121,7 @@
 </template>
 
 <script setup>
-import { computed, onMounted, ref, watch } from 'vue'
+import { computed, nextTick, onBeforeUnmount, onMounted, ref, watch } from 'vue'
 import { configAPI } from '../services/api'
 
 const data = ref(null)
@@ -147,7 +147,19 @@ const visibleModels = computed(() => {
 })
 function prevModelsPage() { if (modelsPage.value > 1) modelsPage.value-- }
 function nextModelsPage() { if (modelsPage.value < totalModelPages.value) modelsPage.value++ }
-watch(dailyStats, () => { modelsPage.value = 1 })
+watch(dailyStats, async () => {
+  modelsPage.value = 1
+  await nextTick()
+  scrollToLatest()
+})
+
+// 热力图默认定位到最右侧（最新数据），resize/数据变化时保持一致
+const heatmapScroll = ref(null)
+function scrollToLatest() {
+  if (heatmapScroll.value) heatmapScroll.value.scrollLeft = heatmapScroll.value.scrollWidth
+}
+onMounted(() => window.addEventListener('resize', scrollToLatest))
+onBeforeUnmount(() => window.removeEventListener('resize', scrollToLatest))
 const dateRange = computed(() => {
   const values = dailyStats.value
   if (!values.length) return ''
@@ -172,7 +184,8 @@ const heatmapCols = computed(() => {
   if (!stats.length) return 0
   return Math.ceil((weekdayOffset(stats[0].date) + stats.length) / 7)
 })
-const heatmapWidth = computed(() => heatmapCols.value * (CELL.size + CELL.gap))
+// 最小宽度：每列 16px + 4px 间距，容器更窄时横向滚动；列宽上限 22px，多余宽度由列间隙吸收
+const heatmapMinWidth = computed(() => Math.max(0, heatmapCols.value * (CELL.size + CELL.gap) - CELL.gap))
 
 const heatmapCells = computed(() => {
   const stats = dailyStats.value
@@ -198,16 +211,15 @@ const heatmapMonths = computed(() => {
     if (date.getDate() <= 7 || index === 0) {
       const key = `${date.getFullYear()}-${date.getMonth()}`
       if (!months.some(month => month.key === key)) {
-        months.push({ key, label: `${date.getMonth() + 1}月`, left: Math.floor((offset + index) / 7) * (CELL.size + CELL.gap) })
+        months.push({ key, label: `${date.getMonth() + 1}月`, col: Math.floor((offset + index) / 7) })
       }
     }
   })
-  // 标签宽约 24px、列宽 20px：若某标签与下一个紧贴（间距不足 26px，说明该月不足整列周期），
-  // 隐藏前一个，从完整月份开始显示
+  // 相邻月份列距不足 2 列时（开头月份不足一个月），隐藏前一个，从完整月份开始显示
   const result = []
   for (let i = 0; i < months.length; i++) {
     const next = months[i + 1]
-    if (next && next.left - months[i].left < 26) continue
+    if (next && next.col - months[i].col < 2) continue
     result.push(months[i])
   }
   return result
@@ -270,10 +282,10 @@ defineExpose({ refresh: fetchData })
 .panel-refresh { display: flex; align-items: center; gap: 7px; padding: 3px 0; border: 0; background: transparent; color: var(--fg-2); font: inherit; cursor: pointer; }
 .heatmap-wrap { margin-top: 25px; }
 .heatmap-scroll { overflow-x: auto; padding-bottom: 2px; }
-.month-labels { position: relative; height: 20px; color: var(--fg-3); font-size: 12px; }
-.month-labels span { position: absolute; top: 0; transform: translateX(-1px); white-space: nowrap; }
-.heatmap-grid { display: grid; grid-auto-flow: column; gap: 4px; width: max-content; margin-top: 2px; }
-.heatmap-cell { width: 16px; height: 16px; border-radius: 4px; background: var(--bg-3); }
+.month-labels { display: grid; align-items: end; height: 20px; width: 100%; justify-content: space-between; color: var(--fg-3); font-size: 12px; }
+.month-labels span { white-space: nowrap; overflow: visible; }
+.heatmap-grid { display: grid; grid-auto-flow: column; gap: 4px; width: 100%; justify-content: space-between; margin-top: 2px; }
+.heatmap-cell { aspect-ratio: 1 / 1; border-radius: 4px; background: var(--bg-3); }
 .heatmap-cell.empty { visibility: hidden; }.heatmap-cell.level-0 { background: color-mix(in srgb, var(--fg-4) 8%, var(--bg)); }.heatmap-cell.level-1 { background: #dce5f0; }.heatmap-cell.level-2 { background: #b6c7db; }.heatmap-cell.level-3 { background: #8aa5c4; }.heatmap-cell.level-4 { background: #4a6c94; }
 .heatmap-legend { display: flex; justify-content: flex-end; align-items: center; gap: 5px; margin-top: 12px; color: var(--fg-4); font-size: 11px; }.heatmap-legend i { width: 12px; height: 12px; border-radius: 3px; }.heatmap-legend .level-0 { background: color-mix(in srgb, var(--fg-4) 8%, var(--bg)); }.heatmap-legend .level-1 { background: #dce5f0; }.heatmap-legend .level-2 { background: #b6c7db; }.heatmap-legend .level-3 { background: #8aa5c4; }.heatmap-legend .level-4 { background: #4a6c94; }
 .metric-grid { display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 24px; }.metric-panel { min-height: 182px; padding: 25px 24px; }.metric-values { display: grid; grid-template-columns: 1fr 1fr; gap: 27px 20px; margin-top: 24px; }.metric-values span { display: block; color: var(--fg-3); font-size: 14px; }.metric-values strong { display: block; margin-top: 9px; font-size: 22px; font-weight: 500; }.metric-values.two-columns { grid-template-columns: 1fr 1fr; }
