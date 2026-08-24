@@ -1,5 +1,6 @@
 import {defineStore} from 'pinia'
 import {computed, ref, watch} from 'vue'
+import {applyFontPreset, DEFAULT_FONT} from '../utils/fonts'
 
 export const useAppStore = defineStore('app', () => {
   // 连接状态
@@ -22,6 +23,7 @@ export const useAppStore = defineStore('app', () => {
     language: 'zh-CN',
     theme: 'gray',
     fontSize: 14,
+    fontFamily: DEFAULT_FONT,
     animations: true,
     server: {
       apiBaseUrl: '',
@@ -210,6 +212,7 @@ export const useAppStore = defineStore('app', () => {
       language: 'zh-CN',
       theme: 'gray',
       fontSize: 14,
+      fontFamily: DEFAULT_FONT,
       animations: true,
       server: {
         apiBaseUrl: '',
@@ -426,6 +429,16 @@ export const useAppStore = defineStore('app', () => {
         }
     }
 
+  // 桌面端：外观设置（主题/中文字体）同步写入 userData/ui-settings.json，
+  // 因为 file:// 页面 localStorage 在 Electron 中不可靠，重启会丢
+  const persistUiSettings = () => {
+    if (typeof window === 'undefined' || !window.electronAPI?.uiSettings) return
+    window.electronAPI.uiSettings.set({
+      theme: settings.value.theme,
+      fontFamily: settings.value.fontFamily
+    }).catch(() => {})
+  }
+
   // 初始化
   const initialize = () => {
     loadSettings()
@@ -443,12 +456,29 @@ export const useAppStore = defineStore('app', () => {
     
     document.documentElement.setAttribute('data-theme', settings.value.theme)
     document.documentElement.style.fontSize = `${settings.value.fontSize}px`
+    applyFontPreset(settings.value.fontFamily)
+
+    // 桌面端：启动后从文件读回外观设置（文件优先于 localStorage，覆盖后 watch 自动应用）
+    if (typeof window !== 'undefined' && window.electronAPI?.uiSettings) {
+      window.electronAPI.uiSettings.get().then((saved) => {
+        if (!saved || typeof saved !== 'object') return
+        if (typeof saved.fontFamily === 'string') settings.value.fontFamily = saved.fontFamily
+        if (typeof saved.theme === 'string') settings.value.theme = saved.theme
+      }).catch(() => {})
+    }
   }
 
   // 监听主题变化，自动同步到全局
   watch(() => settings.value.theme, (val) => {
     document.documentElement.setAttribute('data-theme', val)
     localStorage.setItem('loopra-theme', val)
+    persistUiSettings()
+  })
+
+  // 监听中文字体变化，即时切换 --sans/--mono
+  watch(() => settings.value.fontFamily, (val) => {
+    applyFontPreset(val)
+    persistUiSettings()
   })
   
   return {

@@ -98,9 +98,7 @@ describe('BlockRenderer active response state', () => {
       }
     })
 
-    expect(wrapper.findAll('.path-label')).toHaveLength(1)
-    expect(wrapper.find('.path-label').text()).toBe('执行')
-    expect(wrapper.find('.path-steps').text()).toBe('1 个工具')
+    expect(wrapper.find('.path-steps').text()).toBe('思考2轮.读1次文件')
     expect(wrapper.find('.reasoning-head').exists()).toBe(false)
 
     await wrapper.find('.tool-head').trigger('click')
@@ -109,5 +107,24 @@ describe('BlockRenderer active response state', () => {
     await wrapper.find('.reasoning-head').trigger('click')
     expect(wrapper.find('.reasoning-text').text()).toBe('加密思考')
     expect(wrapper.text()).not.toContain('must-not-render')
+  })
+
+  it('shows categorized tool stats in the path group header', () => {
+    const wrapper = mount(BlockRenderer, {
+      props: {
+        blocks: [
+          {type: 'reasoning', content: 'x', showContent: false},
+          {type: 'tool_call', name: 'read', status: '成功', args: {}, result: 'ok'},
+          {type: 'tool_call', name: 'write', status: '成功', args: {}, result: 'ok'},
+          {type: 'tool_call', name: 'bash_start', status: '成功', args: {}, result: 'ok'},
+          {type: 'tool_call', name: 'memory', status: '成功', args: {}, result: 'ok'},
+          {type: 'tool_call', name: 'sub_agent', status: '成功', args: {}, result: 'ok'},
+          {type: 'tool_call', name: 'ask_choice', status: '成功', args: {}, result: 'ok'}
+        ]
+      }
+    })
+
+    expect(wrapper.find('.path-steps').text())
+      .toBe('思考1轮.读1次文件、改1次文件、执行1次命令、记忆1次、子代理1次、其他1次')
   })
 })

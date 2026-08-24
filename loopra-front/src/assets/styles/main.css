@@ -68,7 +68,7 @@
   --r-sm: 4px;
   --r-lg: 10px;
 
-  /* 字体：全局 JetBrains Mono（无中文字形，中文回退系统字体） */
+  /* 字体：全局 JetBrains Mono（英文/数字）+ 系统中文（设置 → 外观 → 中文字体 可切换为枫叶/更纱/思源） */
   --sans: 'JetBrains Mono Variable', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'PingFang SC', 'Microsoft YaHei', 'Noto Sans CJK SC', sans-serif;
   --mono: 'JetBrains Mono Variable', 'SF Mono', 'Cascadia Code', 'Fira Code', Consolas, monospace;
 

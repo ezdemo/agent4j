@@ -1017,6 +1017,157 @@ registerTerminalIpc()
 registerGitEnvironmentIpc(ipcMain)
 registerOnboardingIpc(ipcMain, { getOnboardingWindow: () => onboardingWindow })
 
+// ==================== 桌面端 UI 设置持久化 ====================
+// file:// 页面 localStorage 不可靠，主题/中文字体等外观设置写入 userData/ui-settings.json
+const uiSettingsFile = () => path.join(app.getPath('userData'), 'ui-settings.json')
+
+const isUiSettingsSender = (event) => {
+  try {
+    const url = event.senderFrame?.url || event.sender?.getURL() || ''
+    return /^(file:|http:\/\/(localhost|127\.0\.0\.1):\d+)/.test(url)
+  } catch {
+    return false
+  }
+}
+
+ipcMain.handle('ui-settings-get', (event) => {
+  if (!isUiSettingsSender(event)) return null
+  try {
+    if (!fs.existsSync(uiSettingsFile())) return null
+    return JSON.parse(fs.readFileSync(uiSettingsFile(), 'utf-8'))
+  } catch (error) {
+    console.warn('[ui-settings] read failed:', error.message)
+    return null
+  }
+})
+
+ipcMain.handle('ui-settings-set', (event, payload = {}) => {
+  if (!isUiSettingsSender(event)) return false
+  try {
+    const sanitized = {}
+    if (typeof payload.theme === 'string') sanitized.theme = payload.theme
+    if (typeof payload.fontFamily === 'string') sanitized.fontFamily = payload.fontFamily
+    // 原子写：先写临时文件再替换，避免中途断电损坏配置
+    const file = uiSettingsFile()
+    const tmp = file + '.tmp'
+    fs.writeFileSync(tmp, JSON.stringify(sanitized, null, 2), 'utf-8')
+    fs.renameSync(tmp, file)
+    return true
+  } catch (error) {
+    console.warn('[ui-settings] write failed:', error.message)
+    return false
+  }
+})
+
+// ==================== 系统字体枚举 ====================
+// 枚举本机已安装字体供设置页选择（Windows 用 PowerShell 读注册表并输出 UTF-8，避免 GBK 乱码；
+// Linux/macOS 用 fc-list）。结果进程内缓存，仅首次调用有开销。
+let systemFontsCache = null
+
+// 文件级样式变体（如 'Arial Bold'、'Calibri Light Italic'）不是独立字体家族，过滤掉
+const FONT_STYLE_WORDS = ['Bold', 'Italic', 'Oblique', 'Light', 'Thin', 'Black', 'Heavy', 'Medium', 'SemiBold', 'DemiBold', 'ExtraBold', 'ExtraLight', 'SemiLight', 'Regular', 'Condensed', 'Expanded', 'SemiCondensed', 'ExtraCondensed']
+const FONT_STYLE_RE = new RegExp(`\\s+(${FONT_STYLE_WORDS.join('|')})(\\s+(${FONT_STYLE_WORDS.join('|')}))*$`, 'i')
+
+// 注册表字体名常为 '微软雅黑 & Microsoft YaHei (TrueType)' 复合名，按 & 拆成独立可匹配名
+const normalizeFontName = (raw) => {
+  const parts = raw.replace(/\s+\((TrueType|OpenType)\)\s*$/i, '').split(/\s*&\s*/)
+  const names = []
+  for (const part of parts) {
+    const name = part.trim()
+    // 空名 / 纯样式变体 / 异常长的复合名跳过
+    if (!name || FONT_STYLE_RE.test(name) || name.length > 60) continue
+    names.push(name)
+  }
+  return names
+}
+
+async function listSystemFonts() {
+  if (process.platform === 'win32') {
+    const script = [
+      '$OutputEncoding = [Console]::OutputEncoding = [Text.UTF8Encoding]::new()',
+      '$names = @()',
+      "foreach ($hive in 'HKLM:\\SOFTWARE\\Microsoft\\Windows NT\\CurrentVersion\\Fonts', 'HKCU:\\SOFTWARE\\Microsoft\\Windows NT\\CurrentVersion\\Fonts') {",
+      '  if (Test-Path $hive) {',
+      '    $p = Get-ItemProperty $hive',
+      '    foreach ($prop in $p.PSObject.Properties) {',
+      '      $v = $prop.Value',
+      "      if ($v -is [string] -and $v -match '\\.(ttf|ttc|otf|fon)$') { $names += $prop.Name }",
+      '    }',
+      '  }',
+      '}',
+      '$names | Sort-Object -Unique | ConvertTo-Json -Compress'
+    ].join('\n')
+    try {
+      const { stdout } = await execFileAsync('powershell', ['-NoProfile', '-NonInteractive', '-ExecutionPolicy', 'Bypass', '-Command', script], { windowsHide: true, maxBuffer: 16 * 1024 * 1024 })
+      const rawNames = JSON.parse(stdout.trim() || '[]')
+      const names = new Set()
+      for (const raw of rawNames) for (const name of normalizeFontName(raw)) names.add(name)
+      return [...names].sort((a, b) => a.localeCompare(b, 'zh-Hans-CN'))
+    } catch (error) {
+      console.warn('[system-fonts] list failed:', error.message)
+      return []
+    }
+  }
+  // Linux：fc-list（fontconfig 是 X 环境标配）
+  if (process.platform === 'linux') {
+    try {
+      const { stdout } = await execFileAsync('fc-list', ['--format=%{family}\n'], { windowsHide: true, maxBuffer: 16 * 1024 * 1024 })
+      const names = new Set()
+      for (const line of stdout.split(/\r?\n/)) {
+        for (const part of line.split(',')) {
+          const name = part.trim()
+          if (name && !FONT_STYLE_RE.test(name) && name.length <= 60) names.add(name)
+        }
+      }
+      return [...names].sort((a, b) => a.localeCompare(b, 'zh-Hans-CN'))
+    } catch {
+      return []
+    }
+  }
+  // macOS：fc-list 非系统自带（需安装 fontconfig），优先尝试，失败回退 system_profiler
+  if (process.platform === 'darwin') {
+    try {
+      const { stdout } = await execFileAsync('fc-list', ['--format=%{family}\n'], { windowsHide: true, maxBuffer: 16 * 1024 * 1024 })
+      const names = new Set()
+      for (const line of stdout.split(/\r?\n/)) {
+        for (const part of line.split(',')) {
+          const name = part.trim()
+          if (name && !FONT_STYLE_RE.test(name) && name.length <= 60) names.add(name)
+        }
+      }
+      return [...names].sort((a, b) => a.localeCompare(b, 'zh-Hans-CN'))
+    } catch {
+      /* fc-list 不可用时用 system_profiler 枚举（较慢，但只调用一次） */
+    }
+    try {
+      const { stdout } = await execFileAsync('system_profiler', ['SPFontsDataType', '-json'], { windowsHide: true, maxBuffer: 64 * 1024 * 1024, timeout: 30000 })
+      const data = JSON.parse(stdout)
+      const names = new Set()
+      for (const item of data.SPFontsDataType || []) {
+        const fam = item.family
+        const list = Array.isArray(fam) ? fam : [fam]
+        for (const raw of list) {
+          for (const part of String(raw || '').split(',')) {
+            const name = part.trim()
+            if (name && !FONT_STYLE_RE.test(name) && name.length <= 60) names.add(name)
+          }
+        }
+      }
+      return [...names].sort((a, b) => a.localeCompare(b, 'zh-Hans-CN'))
+    } catch (error) {
+      console.warn('[system-fonts] darwin list failed:', error.message)
+      return []
+    }
+  }
+  return []
+}
+
+ipcMain.handle('system-fonts-list', async (event) => {
+  if (!isUiSettingsSender(event)) return []
+  if (!systemFontsCache) systemFontsCache = await listSystemFonts()
+  return systemFontsCache
+})
+
 ipcMain.handle('get_loopra_web_port', async () => currentPort)
 
 ipcMain.handle('get_electron_version', async () => {

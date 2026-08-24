@@ -102,6 +102,27 @@
                   </div>
                 </div>
               </div>
+              <!-- 中文字体切换仅桌面端可用（主进程枚举系统字体）；Web 端不提供 -->
+              <div v-if="isDesktop" class="setting-row">
+                <div class="setting-info">
+                  <label class="setting-label">中文字体</label>
+                  <p class="setting-hint">界面中文字体（英文/数字保持 JetBrains Mono）</p>
+                </div>
+                <div class="setting-control">
+                  <div class="select-wrapper">
+                    <select v-model="settings.fontFamily" class="form-select" style="min-width:200px">
+                      <option value="system">跟随系统（默认）</option>
+                      <optgroup v-if="systemFonts.length" label="系统已安装字体">
+                        <option v-for="name in systemFonts" :key="name" :value="name">{{ name }}</option>
+                      </optgroup>
+                    </select>
+                    <svg class="select-arrow" fill="none" height="12" stroke="currentColor" stroke-width="2"
+                         viewBox="0 0 24 24" width="12">
+                      <polyline points="6 9 12 15 18 9"/>
+                    </svg>
+                  </div>
+                </div>
+              </div>
             </div>
           </div>
         </section>
@@ -1849,6 +1870,12 @@ const settings = reactive({
   set theme(v) {
     store.settings.theme = v
   },
+  get fontFamily() {
+    return store.settings.fontFamily
+  },
+  set fontFamily(v) {
+    store.settings.fontFamily = v
+  },
   server: {apiBaseUrl: '', autoConnect: true},
   ai: {baseUrl: '', apiKey: '', model: '', reasoningEffort: 'max', availableModelsText: '', prices: {}},
   workspace: {dir: '', mode: 'free'},
@@ -2509,6 +2536,20 @@ const themes = [
   {value: 'gray', label: '灰色'},
   {value: 'dark', label: '深色'}
 ]
+
+// 桌面端判断（系统字体切换仅桌面端可用）
+const isDesktop = computed(() => !!(typeof window !== 'undefined' && window.electronAPI?.systemFonts))
+
+// 系统已安装字体列表（桌面端主进程枚举，三端兼容：Windows 注册表 / macOS fc-list→system_profiler / Linux fc-list）
+const systemFonts = ref([])
+const loadSystemFonts = async () => {
+  if (!isDesktop.value) return
+  try {
+    systemFonts.value = (await window.electronAPI.systemFonts.list()) || []
+  } catch (err) {
+    console.error('加载系统字体失败:', err)
+  }
+}
 
 // 计算属性
 const currentTab = computed(() => tabs.value.find(t => t.id === activeTab.value))
@@ -3685,6 +3726,7 @@ async function toggleLspServer(svr) {
 onMounted(() => {
   loadSettings()
   loadOpenApiData()
+  loadSystemFonts()
 })
 
 // 加载系统提示词

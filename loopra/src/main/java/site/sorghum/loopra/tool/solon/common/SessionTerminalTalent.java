@@ -45,13 +45,10 @@ public class SessionTerminalTalent extends TerminalTalent {
     }
 
     /**
-     * Windows 下 cmd 子进程输出采用系统 OEM 代码页（中文系统为 GBK/936），而底层
-     * 按 UTF-8 解码，导致中文输出乱码。
-     * <ul>
-     *   <li>bash_start/wait/stdin/stop 走 TerminalSessionManager：通过反射替换为按活动代码页构造的实例；
-     *   <li>bash 同步工具（4.0.6 起）直接走 ProcessExecutor：其 outputCharset 为 protected executor 的
-     *      可配置字段，直接 setOutputCharset 修正。
-     * </ul>
+     * Windows 下命令输出的编码并不统一：git/node 等现代工具输出 UTF-8 字节（文件内容原样透传），
+     * 而 cmd 内置命令（echo/type 等）按活动 OEM 代码页输出 GBK/936 字节。固定用任一编码解码
+     * 都会导致另一半场景乱码，因此对两条执行路径（bashSessionManager 与 executor）统一注入
+     * {@link AutoCharset}：UTF-8 严格解码优先，失败回退到活动代码页。
      * 非 Windows 或失败时保持默认行为。
      */
     private void applyWindowsOutputCharsetFix() {
@@ -64,15 +61,16 @@ public class SessionTerminalTalent extends TerminalTalent {
         } catch (Exception ignored) {
             return; // 未知代码页（如 65001 即 UTF-8），保持默认
         }
+        Charset auto = new AutoCharset(charset);
         try {
-            executor.setOutputCharset(charset);
+            executor.setOutputCharset(auto);
         } catch (Exception ignored) {
             // 保持默认 UTF-8 行为，不影响功能
         }
         try {
             Field field = TerminalTalent.class.getDeclaredField("bashSessionManager");
             field.setAccessible(true);
-            field.set(this, new TerminalSessionManager(charset));
+            field.set(this, new TerminalSessionManager(auto));
         } catch (Exception e) {
             // 反射失败时保持默认 UTF-8 行为，不影响功能
         }
@@ -111,8 +109,10 @@ public class SessionTerminalTalent extends TerminalTalent {
         return track(filePath, __cwd, () -> super.edit(filePath, edits, __cwd));
     }
 
+    /**
+     * 注释相关能力 全套用bash_start
+     */
     @Override
-//    @ToolMapping(name = "bash", description = "在终端执行非交互式 Shell 指令。支持多行命令与逻辑路径（如 `cd @pool1/bin/tool/`）。")
     public String bash(@Param(value = "command", description = "要执行的指令。") String command,
                        @Param(name = "timeout", required = false, defaultValue = "120000", description = "可选超时时间，单位为毫秒") Integer timeout,
                        @Param(name = "max_output_chars", required = false, defaultValue = "64000", description = "本次最多返回多少字符输出") Integer maxOutputChars,
