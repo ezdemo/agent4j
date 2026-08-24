@@ -1809,6 +1809,8 @@ const sendMessage = async (images = [], overrideText = null, modelSelection = nu
   // 使用唯一 ID 追踪当前 assistant 消息
   const assistantId = Date.now() + 1
   let silentAssistantId = null
+  // ReasonBreaker 重试回滚点：本轮第一个思考块在 blocks 中的索引（-1 表示尚未定位）
+  let streamResetIndex = -1
 
   // 静默命令不预创建助手占位
   if (!isSilent) {
@@ -1968,7 +1970,18 @@ const sendMessage = async (images = [], overrideText = null, modelSelection = nu
             else if (lb?.type === 'reasoning_started') {
               Object.assign(lb, {type: 'reasoning', content: data.content || '', showContent: false})
             }
-            else msg.blocks.push({type: 'reasoning', content: data.content || '', showContent: false})
+            else {
+              msg.blocks.push({type: 'reasoning', content: data.content || '', showContent: false})
+              // 记录本轮思考起点：ReasonBreaker 重试时服务端发 stream_reset，回滚到这里
+              if (streamResetIndex === -1) streamResetIndex = msg.blocks.length - 1
+            }
+          } else if (data.type === 'stream_reset') {
+            // ReasonBreaker 检测到思考循环后重试：作废本轮已流出的思考/正文，
+            // 回滚到本轮第一个思考块之前（保留工具卡片、choice、子代理容器等既有内容）
+            if (streamResetIndex >= 0 && msg.blocks) {
+              msg.blocks.splice(streamResetIndex)
+            }
+            streamResetIndex = -1
           } else if (data.type === 'reasoning_started') {
             const lb = msg.blocks[msg.blocks.length - 1]
             if (lb?.type !== 'reasoning_started') {

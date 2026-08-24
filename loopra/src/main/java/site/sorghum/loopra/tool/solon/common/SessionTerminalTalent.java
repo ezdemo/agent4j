@@ -45,9 +45,11 @@ public class SessionTerminalTalent extends TerminalTalent {
     }
 
     /**
-     * Windows 下 cmd 子进程输出采用系统 OEM 代码页（中文系统为 GBK/936），而底层
-     * TerminalSessionManager 固定用 UTF-8 解码，导致中文输出乱码（bash 工具与后台会话日志均受影响）。
-     * 通过反射将 bashSessionManager 替换为按活动代码页构造的实例；非 Windows 或失败时保持默认行为。
+     * Windows 下命令输出的编码并不统一：git/node 等现代工具输出 UTF-8 字节（文件内容原样透传），
+     * 而 cmd 内置命令（echo/type 等）按活动 OEM 代码页输出 GBK/936 字节。固定用任一编码解码
+     * 都会导致另一半场景乱码，因此对两条执行路径（bashSessionManager 与 executor）统一注入
+     * {@link AutoCharset}：UTF-8 严格解码优先，失败回退到活动代码页。
+     * 非 Windows 或失败时保持默认行为。
      */
     private void applyWindowsOutputCharsetFix() {
         if (!isWindowsOs()) return;
@@ -59,10 +61,16 @@ public class SessionTerminalTalent extends TerminalTalent {
         } catch (Exception ignored) {
             return; // 未知代码页（如 65001 即 UTF-8），保持默认
         }
+        Charset auto = new AutoCharset(charset);
+        try {
+            executor.setOutputCharset(auto);
+        } catch (Exception ignored) {
+            // 保持默认 UTF-8 行为，不影响功能
+        }
         try {
             Field field = TerminalTalent.class.getDeclaredField("bashSessionManager");
             field.setAccessible(true);
-            field.set(this, new TerminalSessionManager(charset));
+            field.set(this, new TerminalSessionManager(auto));
         } catch (Exception e) {
             // 反射失败时保持默认 UTF-8 行为，不影响功能
         }
@@ -101,14 +109,21 @@ public class SessionTerminalTalent extends TerminalTalent {
         return track(filePath, __cwd, () -> super.edit(filePath, edits, __cwd));
     }
 
+    /**
+     * 注释相关能力 全套用bash_start
+     */
     @Override
-    @ToolMapping(name = "bash", description = "在终端执行非交互式 Shell 指令。支持多行脚本，支持逻辑路径（如 @pool）自动转环境变量。")
     public String bash(@Param(value = "command", description = "要执行的指令。") String command,
-                       @Param(name = "timeout", required = false, defaultValue = "120000") Integer timeout,
-                       @Param(name = "max_output_chars", required = false, defaultValue = "64000") Integer maxOutputChars,
+                       @Param(name = "timeout", required = false, defaultValue = "120000", description = "可选超时时间，单位为毫秒") Integer timeout,
+                       @Param(name = "max_output_chars", required = false, defaultValue = "64000", description = "本次最多返回多少字符输出") Integer maxOutputChars,
                        String __cwd) {
         int timeoutMs = timeout == null || timeout < 0 ? 120_000 : timeout;
         int outputLimit = maxOutputChars == null || maxOutputChars <= 0 ? 64_000 : maxOutputChars;
+        // 以 bash_start 模拟同步执行：yield 与 hard_timeout 同为 timeoutMs。
+        // 命令在 timeoutMs 内结束 → completed 快照，正常返回输出；
+        // 超过 timeoutMs 未结束 → bashStart 返回 running 会话（此时尚未终止），
+        // 与新版 bash 的“同步阻塞 + 硬超时即杀”语义对齐：主动终止并提示超时，
+        // 避免返回不完整的中间输出让模型误判执行完毕。
         final String result;
         try {
             result = super.bashStart(command, null, timeoutMs, outputLimit, timeoutMs, __cwd);
@@ -120,6 +135,16 @@ public class SessionTerminalTalent extends TerminalTalent {
         if (controller != null && sessionId != null && isCommandRunning(result)) {
             controller.registerAbortResource(sessionId,
                     () -> bashSessionManager.terminate(sessionId, "用户停止生成", 64_000));
+        }
+        if (sessionId != null && isCommandRunning(result)) {
+            // 已运行满 timeoutMs 未结束：终止会话并给出超时提示（同步语义）
+            try {
+                bashSessionManager.terminate(sessionId, "执行超时", outputLimit);
+            } catch (Exception ignored) {
+                // 底层硬超时可能已先终止会话
+            }
+            if (controller != null) controller.clearAbortResource(sessionId);
+            return "执行超时：运行时间超过 " + timeoutMs + " 毫秒。";
         }
         if (result != null && result.contains("hard_timeout: true")) {
             return "执行超时：运行时间超过 " + timeoutMs + " 毫秒。";

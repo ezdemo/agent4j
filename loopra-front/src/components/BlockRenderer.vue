@@ -159,11 +159,7 @@
           <span v-else-if="block._allDone" v-html="CHECK_ICON_SM"></span>
           <span v-else v-html="CIRCLE_ICON"></span>
         </span>
-        <span class="path-label">执行</span>
-        <span v-if="block._toolCount > 0" class="path-steps">{{ block._toolCount }} 个工具</span>
-        <span v-else class="path-steps">推理</span>
-        <span v-if="block._toolCount > 0" class="tool-param" :title="block._pathNames">{{ truncatePath(block._uniqueToolNames, 60) }}</span>
-        <span v-else class="tool-param">reason</span>
+        <span class="path-steps" :title="block._pathNames">{{ getPathGroupLabel(block) }}</span>
         <span class="default-icon"
               v-html="CHEVRON_DOWN_ICON"
               :style="{
@@ -711,6 +707,39 @@ const getToolGroupOrderTruncated = (block) => {
 const truncatePath = (text, max) => {
   if (!text) return ''
   return text.length > max ? text.slice(0, max - 1) + '…' : text
+}
+
+// 路径组折叠头统计：按工具类型分类计数（读文件/改文件/执行命令/记忆/子代理/其他）
+const READ_TOOLS = ['read', 'glob', 'grep', 'ls', 'codesearch', 'java_source', 'read_image']
+const WRITE_TOOLS = ['write', 'edit']
+const isBashTool = name => name === 'bash' || name.startsWith('bash_')
+const isMemoryTool = name => name === 'memory'
+const isSubAgentTool = name => name === 'sub_agent'
+
+const getPathGroupLabel = (block) => {
+  const stats = {read: 0, write: 0, bash: 0, memory: 0, subAgent: 0, other: 0}
+  for (const x of block._blocks || []) {
+    if (x.type !== 'tool_call') continue
+    if (READ_TOOLS.includes(x.name)) stats.read++
+    else if (WRITE_TOOLS.includes(x.name)) stats.write++
+    else if (isBashTool(x.name)) stats.bash++
+    else if (isMemoryTool(x.name)) stats.memory++
+    else if (isSubAgentTool(x.name)) stats.subAgent++
+    else stats.other++
+  }
+  const parts = []
+  if (block._thinkCount > 0) parts.push(`思考${block._thinkCount}轮`)
+  if (stats.read > 0) parts.push(`读${stats.read}次文件`)
+  if (stats.write > 0) parts.push(`改${stats.write}次文件`)
+  if (stats.bash > 0) parts.push(`执行${stats.bash}次命令`)
+  if (stats.memory > 0) parts.push(`记忆${stats.memory}次`)
+  if (stats.subAgent > 0) parts.push(`子代理${stats.subAgent}次`)
+  if (stats.other > 0) parts.push(`其他${stats.other}次`)
+  if (parts.length === 0) return '推理'
+  // 思考轮数与其余项之间用 . 分隔，其余用 、
+  return parts.length > 1 && parts[0].startsWith('思考')
+    ? parts[0] + '.' + parts.slice(1).join('、')
+    : parts.join('、')
 }
 
 // Markdown 渲染缓存（含渲染版本：主题切换 / 异步高亮就绪后自动失效并重渲染）
@@ -1874,18 +1903,15 @@ const onCollapseAllBlocks = () => {
   margin-top: 2px;
 }
 
-/* 路径组标签（不带蓝色） */
-.path-label {
-  font-family: var(--mono);
-  font-size: 12px;
-  font-weight: 600;
-  color: var(--fg-2);
-}
-
+/* 路径组折叠头统计文案 */
 .path-steps {
-  font-size: 10px;
-  color: var(--fg-4);
-  flex-shrink: 0;
+  font-size: 12px;
+  font-weight: 500;
+  color: var(--fg-2);
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 
 /* 工具块 */

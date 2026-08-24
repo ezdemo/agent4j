@@ -550,6 +550,61 @@ class RealModelProvidersTest {
         }
     }
 
+    /** Responses 流式摘要应仅通过增量交付，terminal 块不得重复携带全文。 */
+    @Test
+    void responsesProviderDoesNotRepeatSummaryAtStreamEnd() throws Exception {
+        AtomicReference<String> requestBody = new AtomicReference<>();
+        HttpServer server = streamingServer("/responses", requestBody, """
+            data: {"type":"response.output_item.added","output_index":0,"item":{"type":"reasoning","id":"rs_1","summary":[]}}
+
+            data: {"type":"response.reasoning_summary_text.delta","item_id":"rs_1","output_index":0,"summary_index":0,"delta":"let me"}
+
+            data: {"type":"response.reasoning_summary_text.delta","item_id":"rs_1","output_index":0,"summary_index":0,"delta":" think"}
+
+            data: {"type":"response.output_item.done","output_index":0,"item":{"type":"reasoning","id":"rs_1","summary":[{"type":"summary_text","text":"let me think"}]}}
+
+            data: {"type":"response.completed","response":{"usage":{"input_tokens":2,"output_tokens":3}}}
+
+            data: [DONE]
+
+            """);
+        server.start();
+        try {
+            ModelProviderConfig config = new ModelProviderConfig(
+                "responses",
+                "http://127.0.0.1:" + server.getAddress().getPort(),
+                "key",
+                "gpt-5",
+                Map.of()
+            );
+            OpenAiResponsesProvider provider = new OpenAiResponsesProvider(config);
+            ModelCallRequest request = new ModelCallRequest(
+                "gpt-5",
+                List.of(new Message("user", "hi")),
+                List.of(),
+                Map.of("reasoningEffort", "high")
+            );
+
+            List<StreamChunk> chunks;
+            try (Stream<StreamChunk> stream = provider.stream(request)) {
+                chunks = stream.toList();
+            }
+
+            StreamChunk terminal = chunks.get(chunks.size() - 1);
+            assertTrue(terminal.terminal());
+            assertNull(terminal.reasoning(), "增量已交付过摘要，terminal 不应重复携带全文");
+            StringBuilder streamed = new StringBuilder();
+            for (StreamChunk chunk : chunks) {
+                if (!chunk.terminal() && chunk.reasoning() != null) {
+                    streamed.append(chunk.reasoning());
+                }
+            }
+            assertEquals("let me think", streamed.toString(), "摘要应仅通过增量交付一次");
+        } finally {
+            server.stop(0);
+        }
+    }
+
     /** Chat Completions 应在首个 reasoning delta 前交付通用推理开始阶段。 */
     @Test
     void chatCompletionsProviderMarksReasoningStartedOnce() throws Exception {

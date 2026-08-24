@@ -24,6 +24,9 @@ public final class LoopraUserMessagePlugin implements LoopPlugin {
     }
 
     public StepResult execute(LoopContext context) {
+        // null（/continue 等无输入回合）或清洗后无内容的消息都不追加，
+        // 放行到模型节点用历史继续推理；历史也为空时由 BEFORE_MODEL 的
+        // 空输入守卫兜底拦截（内容被清洗剥光的场景已在 sanitize 节点提示并结束）。
         UserMessage message = LoopraPreflight.input(context);
         if (message != null && message.hasContent()) {
             host.appendPreflightUserMessage(message);

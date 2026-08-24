@@ -222,6 +222,17 @@ contextBridge.exposeInMainWorld('electronAPI', {
     merge: (payload) => ipcRenderer.invoke('git-environment-merge', payload)
   },
 
+  // 桌面端 UI 设置持久化（主题/中文字体，写入 userData/ui-settings.json，避免 file:// 下 localStorage 丢失）
+  uiSettings: {
+    get: () => ipcRenderer.invoke('ui-settings-get'),
+    set: (payload) => ipcRenderer.invoke('ui-settings-set', payload)
+  },
+
+  // 系统已安装字体列表（供设置页选择自定义中文字体）
+  systemFonts: {
+    list: () => ipcRenderer.invoke('system-fonts-list')
+  },
+
   // Electron 版本
   getElectronVersion: () => ipcRenderer.invoke('get_electron_version'),
 
