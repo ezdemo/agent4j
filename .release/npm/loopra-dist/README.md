@@ -29,21 +29,18 @@ npm install -g loopra-dist --foreground-scripts
 
 无论哪种方式，每一步进度（校验包 → 镜像选择 → 解压 → 定位安装器 → 执行安装 → 完成）都会记录到 `~/.loopra/install.log`；安装出错时 npm 会自动打印捕获到的脚本输出。
 
-**镜像选择**：交互式环境（直接运行脚本或 `npm --foreground-scripts` 安装）会弹出 GitHub 镜像菜单供选择（`gh-proxy.org` / `ghfast.top` / `gh-proxy.com` / `ghproxy.net` / 自定义，已实测可用），选择结果通过 `LOOPRA_MIRROR` 传给安装器用于加速 JRE 等 GitHub 资源下载：
+**镜像选择（GitHub 代理镜像）**：未设置 `LOOPRA_MIRROR` 时，postinstall 会**自动测速**：并发 HEAD 探测各候选代理（`gh-proxy.org` / `ghfast.top` / `gh-proxy.com` / `ghproxy.net`），每候选 3 轮取中位延迟，自动选用最快者（GitHub 直连的 HEAD 延迟不代表实际下载可用性，不参与比拼）；全部探测失败则回退 GitHub 直连。测速结果示例：
 
 ```bash
-[loopra-dist] 选择下载镜像（用于加速 JRE 等 GitHub 资源下载）：
-  1) GitHub 直连（默认）
-  2) gh-proxy.org
-  3) ghfast.top
-  4) gh-proxy.com
-  5) ghproxy.net
-  6) 自定义镜像前缀（如 https://ghfast.top）
-  直接回车 = GitHub 直连
-请选择 [1-6]:
+[loopra-dist] 测速结果（中位延迟）:
+  gh-proxy.org: FAIL
+  ghfast.top: 652 ms
+  gh-proxy.com: 437 ms
+  ghproxy.net: 736 ms
+[loopra-dist] [2/7] 自动选择: gh-proxy.com (437 ms)
 ```
 
-已设置 `LOOPRA_MIRROR` 时不再询问、直接使用；npm 默认模式 / CI / 管道下跳过询问、走直连（避免隐形挂起）。
+已设置 `LOOPRA_MIRROR` 时直接使用、跳过测速（也支持自定义前缀，如 `https://ghfast.top`）；npm 默认模式 / CI / 管道下同样自动测速，不会弹询问、也不会隐形挂起。
 
 **注意（npm 的安全闸门）**：npm 11.16+ 会提示 allow-scripts 警告（此时脚本仍会执行）；**npm 12 起安装脚本默认被拦截**，首次安装会看到类似提示：
 

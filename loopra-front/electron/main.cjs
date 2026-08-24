@@ -818,8 +818,9 @@ function createWindow() {
 
   mainWindow.on('focus', () => {
     const tab = desktopChatTabs.get(desktopChatActiveTabId)
-    if (!tab || !tab.visible || tab.view.webContents.isDestroyed()) return
-    tab.view.webContents.focus()
+    const wc = tab?.view.webContents
+    if (!tab || !tab.visible || !wc || wc.isDestroyed()) return
+    wc.focus()
     sendDesktopChatTabEvent(tab, 'desktop-chat-tab-focus-composer')
   })
 
@@ -1738,7 +1739,9 @@ function waitForDesktopChatReady(tab, timeoutMs = 15_000) {
 }
 
 function sendDesktopChatTabEvent(tab, channel, payload) {
-  if (!tab || tab.view.webContents.isDestroyed()) return false
+  if (!tab) return false
+  const wc = tab.view.webContents
+  if (!wc || wc.isDestroyed()) return false
   if (!tab.rendererReady) {
     tab.pendingEvents.push([channel, payload])
     return true
@@ -1759,12 +1762,13 @@ function destroyDesktopChatTab(tab) {
   if (!tab) return
   for (const resolve of tab.readyWaiters.splice(0)) resolve(false)
   tab.pendingEvents.length = 0
-  if (!tab.view.webContents.isDestroyed()) tab.view.setVisible(false)
+  const wc = tab.view.webContents
+  if (wc && !wc.isDestroyed()) tab.view.setVisible(false)
   tab.visible = false
   detachDesktopChatTab(tab)
   if (desktopChatTabs.get(tab.id)?.view === tab.view) desktopChatTabs.delete(tab.id)
   if (desktopChatActiveTabId === tab.id) desktopChatActiveTabId = null
-  if (!tab.view.webContents.isDestroyed()) tab.view.webContents.close()
+  if (wc && !wc.isDestroyed()) wc.close()
 }
 
 function hideDesktopChatViews(exceptTabId = null) {
@@ -1799,8 +1803,11 @@ function waitForDesktopChatLoad(view, load, target) {
       if (settled) return
       settled = true
       clearTimeout(timeout)
-      view.webContents.removeListener('destroyed', onDestroyed)
-      view.webContents.removeListener('did-fail-load', onFailedLoad)
+      const wc = view.webContents
+      if (wc && !wc.isDestroyed()) {
+        wc.removeListener('destroyed', onDestroyed)
+        wc.removeListener('did-fail-load', onFailedLoad)
+      }
       callback(value)
     }
     const onDestroyed = () => finish(reject, new Error('Desktop chat tab was destroyed while loading'))
@@ -1848,7 +1855,8 @@ async function loadDesktopChatTab(view, sessionName, workspaceHash, theme, newSe
       return
     } catch (error) {
       lastError = error
-      if (view.webContents.isDestroyed() || attempt === DESKTOP_CHAT_LOAD_ATTEMPTS - 1) break
+      const wc = view.webContents
+      if (!wc || wc.isDestroyed() || attempt === DESKTOP_CHAT_LOAD_ATTEMPTS - 1) break
       const nextTarget = targets[Math.min(attempt + 1, targets.length - 1)]
       console.warn(`[desktop-chat-tab] load failed from ${target}, retrying with ${nextTarget}: ${error.message}`)
       await new Promise((resolve) => setTimeout(resolve, DESKTOP_CHAT_LOAD_RETRY_DELAY_MS))
@@ -1860,9 +1868,12 @@ async function loadDesktopChatTab(view, sessionName, workspaceHash, theme, newSe
 
 async function getOrCreateDesktopChatTab(tabId, sessionName, workspaceHash, theme = 'gray', newSession = false) {
   let existing = desktopChatTabs.get(tabId)
-  if (existing?.view.webContents.isDestroyed()) {
-    desktopChatTabs.delete(tabId)
-    existing = null
+  if (existing) {
+    const wc = existing.view.webContents
+    if (!wc || wc.isDestroyed()) {
+      desktopChatTabs.delete(tabId)
+      existing = null
+    }
   }
   if (existing) {
     if (existing.ready) await existing.ready

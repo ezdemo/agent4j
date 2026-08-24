@@ -1175,15 +1175,19 @@ public class AgentService {
             return Collections.emptyList();
         }
 
-        // 获取一个 Agent 实例来访问 SessionStore；失败时退回独立会话存储（如隔离分支模式在非 Git 仓库不可用）
-        SessionStore store;
-        try {
+        // 仅读取会话目录元数据，绝不因列表查询创建 Agent：
+        // 优先独立会话存储（与 Agent 会话存储同目录同格式）；
+        // 仅当该会话已有缓存 Agent 时复用其存储（如隔离分支等特殊场景）。
+        // 此前这里直接 getOrCreateAgent(...)，导致桌面端每次加载会话列表
+        // 都会为每个项目新建 "default" 会话 Agent（每个 Agent 含 21 个插件实例），
+        // 在项目之间点击切换时插件实例数只增不减。
+        SessionStore store = sessionStoreFor(workspacePath);
+        if (store == null) {
             String sessionKey = generateSessionKey(workspacePath, null);
-            LoopraAgent agent = getOrCreateAgent(sessionKey);
-            store = agent.getCtx().getSessionStore();
-        } catch (Exception e) {
-            log.warn("[web] 通过 Agent 获取会话存储失败，改用独立存储: {}", e.getMessage());
-            store = sessionStoreFor(workspacePath);
+            LoopraAgent agent = sessionCache.peek(sessionKey);
+            if (agent != null) {
+                store = agent.getCtx().getSessionStore();
+            }
         }
         if (store == null) {
             return Collections.emptyList();
@@ -1911,6 +1915,7 @@ public class AgentService {
             return false;
         }
         // 持久化到 config.json，下次启动默认加载此项目
+        String previous = getCurrentProject();
         String normalized = Paths.get(path).toAbsolutePath().normalize().toString();
         try {
             ConfigService.updateConfig(Collections.singletonMap("workspaceDir", normalized));
@@ -1927,6 +1932,14 @@ public class AgentService {
         }
         // 清除默认会话的缓存，让下次访问时使用新路径
         evictAgent(null, null);
+        // 顺带清理旧项目的 default 会话 Agent（仅空闲时），避免桌面端跨项目点击时
+        // 旧项目 Agent 永久滞留缓存；运行中的会话跳过，防止误中断正在执行的回合。
+        if (previous != null && !previous.equals(normalized)) {
+            LoopraAgent previousAgent = sessionCache.peek(generateSessionKey(previous, "default"));
+            if (previousAgent != null && !previousAgent.isRunning()) {
+                evictAgent(previous, "default");
+            }
+        }
         log.info("[web] 项目已切换: {}", normalized);
         return true;
     }
