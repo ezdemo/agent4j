@@ -4,6 +4,7 @@ import 'ant-design-vue/dist/reset.css'
 import 'katex/dist/katex.min.css' // 数学公式渲染样式（含字体）
 import '@vscode/codicons/dist/codicon.css' // VS Code 图标字体（codicon）
 import '@fontsource-variable/jetbrains-mono' // JetBrains Mono 全局字体（含 @font-face）
+// 中文字体：不预置，桌面端可在设置 → 外观 → 中文字体 中选择系统已安装字体
 import './utils/highlight' // 高亮初始化（Shiki 预载在模块加载时自动开始，不阻塞首屏）
 import './assets/styles/main.css'
 
