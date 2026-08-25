@@ -766,7 +766,20 @@ class RealModelProvidersTest {
     void providerInterceptorCanInspectAndModifyBody() throws Exception {
         AtomicReference<String> requestBody = new AtomicReference<>();
         AtomicReference<ModelProvider> seenProvider = new AtomicReference<>();
+        AtomicReference<String> seenProviderId = new AtomicReference<>();
         AtomicReference<String> seenModel = new AtomicReference<>();
+        ProviderInterceptor interceptor = context -> {
+            seenProvider.set(context.provider());
+            seenProviderId.set(context.providerId());
+            seenModel.set(context.modelId());
+            assertEquals("chat", context.providerId());
+            assertEquals("gpt-5", context.request().modelId());
+            assertNotNull(context.body());
+            context.body().set("temperature", 0.2);
+            context.body().set("extra_field", "injected");
+            return null;
+        };
+        ProviderInterceptor.register(interceptor);
         HttpServer server = server("/chat/completions", requestBody, """
             {"choices": [{"message": {"role": "assistant", "content": "hello"}}],
              "usage": {"prompt_tokens": 1, "completion_tokens": 1}}
@@ -780,16 +793,7 @@ class RealModelProvidersTest {
                 "gpt-5",
                 Map.of()
             );
-            OpenAiChatCompletionsProvider provider = new OpenAiChatCompletionsProvider(config, context -> {
-                seenProvider.set(context.provider());
-                seenModel.set(context.modelId());
-                assertEquals("chat", context.providerId());
-                assertEquals("gpt-5", context.request().modelId());
-                assertNotNull(context.body());
-                context.body().set("temperature", 0.2);
-                context.body().set("extra_field", "injected");
-                return null;
-            });
+            OpenAiChatCompletionsProvider provider = new OpenAiChatCompletionsProvider(config);
             ModelCallRequest request = new ModelCallRequest(
                 "gpt-5",
                 List.of(new Message("user", "hi")),
@@ -801,12 +805,14 @@ class RealModelProvidersTest {
 
             assertEquals("hello", response.message().content());
             assertSame(provider, seenProvider.get());
+            assertEquals("chat", seenProviderId.get());
             assertEquals("gpt-5", seenModel.get());
             ONode body = JsonSupport.read(requestBody.get());
             assertEquals(0.2, JsonSupport.child(body, "temperature").getDouble(), 0.0001);
             assertEquals("injected", JsonSupport.text(body, "", "extra_field"));
             assertEquals("gpt-5", JsonSupport.text(body, "", "model"));
         } finally {
+            ProviderInterceptor.unregister(interceptor);
             server.stop(0);
         }
     }
@@ -815,6 +821,14 @@ class RealModelProvidersTest {
     @Test
     void providerInterceptorCanReplaceBody() throws Exception {
         AtomicReference<String> requestBody = new AtomicReference<>();
+        ProviderInterceptor interceptor = context -> {
+            ONode replacement = JsonSupport.object();
+            replacement.set("model", JsonSupport.text(context.body(), "", "model"));
+            replacement.set("stream", false);
+            replacement.set("injected", "replaced");
+            return replacement;
+        };
+        ProviderInterceptor.register(interceptor);
         HttpServer server = server("/chat/completions", requestBody, """
             {"choices": [{"message": {"role": "assistant", "content": "hello"}}],
              "usage": {"prompt_tokens": 1, "completion_tokens": 1}}
@@ -828,13 +842,7 @@ class RealModelProvidersTest {
                 "gpt-5",
                 Map.of()
             );
-            OpenAiChatCompletionsProvider provider = new OpenAiChatCompletionsProvider(config, context -> {
-                ONode replacement = JsonSupport.object();
-                replacement.set("model", JsonSupport.text(context.body(), "", "model"));
-                replacement.set("stream", false);
-                replacement.set("injected", "replaced");
-                return replacement;
-            });
+            OpenAiChatCompletionsProvider provider = new OpenAiChatCompletionsProvider(config);
             ModelCallRequest request = new ModelCallRequest(
                 "gpt-5",
                 List.of(new Message("user", "hi")),
@@ -849,6 +857,7 @@ class RealModelProvidersTest {
             assertEquals("replaced", JsonSupport.text(body, "", "injected"));
             assertNull(JsonSupport.child(body, "messages"));
         } finally {
+            ProviderInterceptor.unregister(interceptor);
             server.stop(0);
         }
     }
@@ -857,6 +866,11 @@ class RealModelProvidersTest {
     @Test
     void providerInterceptorAppliesToStreaming() throws Exception {
         AtomicReference<String> requestBody = new AtomicReference<>();
+        ProviderInterceptor interceptor = context -> {
+            context.body().set("max_tokens", 123);
+            return null;
+        };
+        ProviderInterceptor.register(interceptor);
         HttpServer server = newStreamingServer("/chat/completions", requestBody);
         server.start();
         try {
@@ -867,10 +881,7 @@ class RealModelProvidersTest {
                 "gpt-5",
                 Map.of()
             );
-            OpenAiChatCompletionsProvider provider = new OpenAiChatCompletionsProvider(config, context -> {
-                context.body().set("max_tokens", 123);
-                return null;
-            });
+            OpenAiChatCompletionsProvider provider = new OpenAiChatCompletionsProvider(config);
             ModelCallRequest request = new ModelCallRequest(
                 "gpt-5",
                 List.of(new Message("user", "hi")),
@@ -888,6 +899,175 @@ class RealModelProvidersTest {
             assertTrue(JsonSupport.boolValue(body, false, "stream"));
             assertEquals(123, JsonSupport.intValue(body, 0, "max_tokens"));
         } finally {
+            ProviderInterceptor.unregister(interceptor);
+            server.stop(0);
+        }
+    }
+
+    /** 拦截链按注册顺序执行，后一个拦截器能看到前一个的修改。 */
+    @Test
+    void providerInterceptorChainRunsInOrder() throws Exception {
+        AtomicReference<String> requestBody = new AtomicReference<>();
+        ProviderInterceptor first = context -> {
+            context.body().set("hop", 1);
+            return null;
+        };
+        ProviderInterceptor second = context -> {
+            context.body().set("hop2", JsonSupport.intValue(context.body(), 0, "hop") + 1);
+            return null;
+        };
+        ProviderInterceptor.register(first);
+        ProviderInterceptor.register(second);
+        HttpServer server = server("/chat/completions", requestBody, """
+            {"choices": [{"message": {"role": "assistant", "content": "hello"}}],
+             "usage": {"prompt_tokens": 1, "completion_tokens": 1}}
+            """);
+        server.start();
+        try {
+            ModelProviderConfig config = new ModelProviderConfig(
+                "chat",
+                "http://127.0.0.1:" + server.getAddress().getPort(),
+                "key",
+                "gpt-5",
+                Map.of()
+            );
+            OpenAiChatCompletionsProvider provider = new OpenAiChatCompletionsProvider(config);
+            ModelCallRequest request = new ModelCallRequest(
+                "gpt-5",
+                List.of(new Message("user", "hi")),
+                List.of(),
+                Map.of()
+            );
+
+            provider.call(request);
+
+            ONode body = JsonSupport.read(requestBody.get());
+            assertEquals(1, JsonSupport.intValue(body, 0, "hop"));
+            assertEquals(2, JsonSupport.intValue(body, 0, "hop2"));
+        } finally {
+            ProviderInterceptor.unregister(first);
+            ProviderInterceptor.unregister(second);
+            server.stop(0);
+        }
+    }
+
+    /** 注销拦截器后不再生效，避免跨调用、跨测试污染。 */
+    @Test
+    void providerInterceptorUnregisterStopsInterception() throws Exception {
+        AtomicReference<String> requestBody = new AtomicReference<>();
+        ProviderInterceptor interceptor = context -> {
+            context.body().set("injected", "leaked");
+            return null;
+        };
+        ProviderInterceptor.register(interceptor);
+        HttpServer server = server("/chat/completions", requestBody, """
+            {"choices": [{"message": {"role": "assistant", "content": "hello"}}],
+             "usage": {"prompt_tokens": 1, "completion_tokens": 1}}
+            """);
+        server.start();
+        try {
+            ModelProviderConfig config = new ModelProviderConfig(
+                "chat",
+                "http://127.0.0.1:" + server.getAddress().getPort(),
+                "key",
+                "gpt-5",
+                Map.of()
+            );
+            OpenAiChatCompletionsProvider provider = new OpenAiChatCompletionsProvider(config);
+            ModelCallRequest request = new ModelCallRequest(
+                "gpt-5",
+                List.of(new Message("user", "hi")),
+                List.of(),
+                Map.of()
+            );
+
+            provider.call(request);
+            assertEquals("leaked", JsonSupport.text(JsonSupport.read(requestBody.get()), "", "injected"));
+
+            assertTrue(ProviderInterceptor.unregister(interceptor));
+            provider.call(request);
+            assertNull(JsonSupport.child(JsonSupport.read(requestBody.get()), "injected"));
+        } finally {
+            ProviderInterceptor.unregister(interceptor);
+            server.stop(0);
+        }
+    }
+
+    /** 请求未指定模型时，context.modelId() 回退到 Provider 默认模型。 */
+    @Test
+    void providerInterceptorModelIdFallsBackToConfig() throws Exception {
+        AtomicReference<String> requestBody = new AtomicReference<>();
+        AtomicReference<String> seenModel = new AtomicReference<>();
+        ProviderInterceptor interceptor = context -> {
+            seenModel.set(context.modelId());
+            return null;
+        };
+        ProviderInterceptor.register(interceptor);
+        HttpServer server = server("/chat/completions", requestBody, """
+            {"choices": [{"message": {"role": "assistant", "content": "hello"}}],
+             "usage": {"prompt_tokens": 1, "completion_tokens": 1}}
+            """);
+        server.start();
+        try {
+            ModelProviderConfig config = new ModelProviderConfig(
+                "chat",
+                "http://127.0.0.1:" + server.getAddress().getPort(),
+                "key",
+                "gpt-5",
+                Map.of()
+            );
+            OpenAiChatCompletionsProvider provider = new OpenAiChatCompletionsProvider(config);
+            ModelCallRequest request = new ModelCallRequest(
+                "",
+                List.of(new Message("user", "hi")),
+                List.of(),
+                Map.of()
+            );
+
+            provider.call(request);
+
+            assertEquals("gpt-5", seenModel.get());
+            ONode body = JsonSupport.read(requestBody.get());
+            assertEquals("gpt-5", JsonSupport.text(body, "", "model"));
+        } finally {
+            ProviderInterceptor.unregister(interceptor);
+            server.stop(0);
+        }
+    }
+
+    /** 拦截器抛出异常会直接中断本次模型调用。 */
+    @Test
+    void providerInterceptorExceptionAbortsCall() throws Exception {
+        AtomicReference<String> requestBody = new AtomicReference<>();
+        ProviderInterceptor interceptor = context -> {
+            throw new IllegalStateException("interceptor boom");
+        };
+        ProviderInterceptor.register(interceptor);
+        HttpServer server = server("/chat/completions", requestBody, """
+            {"choices": [{"message": {"role": "assistant", "content": "hello"}}],
+             "usage": {"prompt_tokens": 1, "completion_tokens": 1}}
+            """);
+        server.start();
+        try {
+            ModelProviderConfig config = new ModelProviderConfig(
+                "chat",
+                "http://127.0.0.1:" + server.getAddress().getPort(),
+                "key",
+                "gpt-5",
+                Map.of()
+            );
+            OpenAiChatCompletionsProvider provider = new OpenAiChatCompletionsProvider(config);
+            ModelCallRequest request = new ModelCallRequest(
+                "gpt-5",
+                List.of(new Message("user", "hi")),
+                List.of(),
+                Map.of()
+            );
+
+            assertThrows(IllegalStateException.class, () -> provider.call(request));
+            assertNull(requestBody.get(), "请求体不应发出到服务器");
+        } finally {
+            ProviderInterceptor.unregister(interceptor);
             server.stop(0);
         }
     }

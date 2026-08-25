@@ -26,22 +26,28 @@ public interface ModelProvider {
     ModelCapabilities capabilities();
 
     /**
-     * 构建协议请求体（已通过 Provider 拦截器处理后的最终请求体）。
+     * 构建原始协议请求体（未经拦截器处理）。
      *
-     * <p>同步与流式调用都会先经过该方法再发送。body 是各协议私有的 JSON
-     * 结构（如 Chat Completions、Messages、Responses），由各 Provider
-     * 自行实现。</p>
+     * <p>body 是各协议私有的 JSON 结构（如 Chat Completions、Messages、
+     * Responses），由各 Provider 自行实现。同步与流式调用都会先经过
+     * {@link #_buildBody(ModelCallRequest, boolean)} 跑完拦截器链后再发送，
+     * 一般不需要直接调用本方法。</p>
      */
     ONode buildBody(ModelCallRequest request, boolean stream);
 
     /**
-     * 构建协议请求体（已通过 Provider 拦截器处理后的最终请求体）。
+     * 构建经 Provider 拦截器处理后的最终请求体。
      *
-     * <p>同步与流式调用都会先经过该方法再发送。body 是各协议私有的 JSON
-     * 结构（如 Chat Completions、Messages、Responses），由各 Provider
-     * 自行实现。</p>
+     * <p>默认实现：先调用 {@link #buildBody(ModelCallRequest, boolean)}
+     * 得到原始体，再按注册顺序执行全局拦截器链，返回最终请求体。同步与
+     * 流式调用都会先经过该方法再发送。</p>
      */
-    default ONode _buildBody(ModelCallRequest request, boolean stream){
-        return ProviderInterceptor.run(ProviderInterceptor.INTERCEPT_LIST, this, id(), request, buildBody(request, stream));
+    default ONode _buildBody(ModelCallRequest request, boolean stream) {
+        String modelId = request.modelId();
+        if (modelId == null || modelId.isBlank()) {
+            // 请求未指定模型时回退到 Provider 声明的默认模型
+            modelId = capabilities().models().stream().findFirst().orElse(null);
+        }
+        return ProviderInterceptor.run(this, modelId, request, buildBody(request, stream));
     }
 }

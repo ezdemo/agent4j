@@ -10,12 +10,12 @@ import site.sorghum.cutin.integrations.model.ProviderInterceptor;
 public class MimoProviderInterceptor implements ProviderInterceptor {
 
     public MimoProviderInterceptor() {
-        INTERCEPT_LIST.add(this);
+        ProviderInterceptor.register(this);
     }
 
     @Override
     public ONode intercept(ProviderInterceptContext context) {
-        if (!context.modelId().contains("mimo")){
+        if (context.modelId() == null || !context.modelId().contains("mimo")){
             return null;
         }
         ONode body = context.body();

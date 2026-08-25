@@ -10,12 +10,12 @@ import site.sorghum.cutin.integrations.model.ProviderInterceptor;
 public class DeepseekProviderInterceptor implements ProviderInterceptor {
 
     public DeepseekProviderInterceptor() {
-        INTERCEPT_LIST.add(this);
+        ProviderInterceptor.register(this);
     }
 
     @Override
     public ONode intercept(ProviderInterceptContext context) {
-        if (!context.modelId().contains("deepseek")){
+        if (context.modelId() == null || !context.modelId().contains("deepseek")){
             return null;
         }
         ONode body = context.body();

@@ -28,11 +28,6 @@ public final class OpenAiChatCompletionsProvider implements ModelProvider {
 
     /** 按配置创建 Provider，endpoint 指向 /chat/completions。 */
     public OpenAiChatCompletionsProvider(ModelProviderConfig config) {
-        this(config, new ProviderInterceptor[0]);
-    }
-
-    /** 按配置创建 Provider，并注入请求体拦截器链（同步与流式调用均生效）。 */
-    public OpenAiChatCompletionsProvider(ModelProviderConfig config, ProviderInterceptor... interceptors) {
         this.config = config;
         this.transport = new HttpModelTransport(
             config.endpoint("/chat/completions"),
