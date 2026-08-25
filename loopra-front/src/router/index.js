@@ -32,7 +32,8 @@ const routes = [
   {
     path: '/tools',
     name: 'Tools',
-    component: () => import('../views/Tools.vue'),
+    component: () => import('../views/Settings.vue'),
+    props: {initialTab: 'tools'},
     meta: {
       title: 'Loopra - 工具箱',
       description: '查看可用的AI工具'
@@ -41,7 +42,8 @@ const routes = [
   {
     path: '/sub-agents',
     name: 'SubAgents',
-    component: () => import('../views/SubAgents.vue'),
+    component: () => import('../views/Settings.vue'),
+    props: {initialTab: 'sub-agents'},
     meta: {
       title: 'Loopra - 子代理',
       description: '查看内置子代理及其可用工具'

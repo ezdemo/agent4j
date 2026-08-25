@@ -6,7 +6,7 @@
 
 set -e
 
-VERSION="v26.8.231"
+VERSION="v26.8.243"
 # 下载地址：优先使用用户指定的镜像（LOOPRA_MIRROR），否则 GitHub 直连
 if [ -n "$LOOPRA_MIRROR" ]; then
     PACKAGE_URL="${LOOPRA_MIRROR%/}/https://github.com/ezdemo/loopra/releases/download/${VERSION}/loopra-dist.tar.gz"

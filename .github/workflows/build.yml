@@ -275,6 +275,8 @@ jobs:
         run: |
           NPM_VER="$(echo "${GITHUB_REF_NAME#v}" | cut -d. -f1-3)"
           cp "${GITHUB_WORKSPACE}/release-artifacts/loopra-dist.tar.gz" ./loopra-dist.tar.gz
-          npm version "$NPM_VER" --no-git-tag-version
+          # 版本号可能已在仓库提交（bump 后先提交再打 tag），相同版本不报错
+          # （npm 7+ 对相同版本默认报 Version not changed 并退出，见 26.8.243 发布失败记录）
+          npm version "$NPM_VER" --no-git-tag-version --allow-same-version
           # 首次发布必须显式 --access public（npm 官方文档要求）
           npm publish --provenance --access public

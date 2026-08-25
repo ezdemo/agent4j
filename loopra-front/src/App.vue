@@ -63,9 +63,9 @@
       @delete-session="onSidebarDeleteSession"
       @toggle-theme="toggleTheme"
       @show-skill-market="mainView = 'skills'"
-      @show-tools="showTools = true"
-      @show-sub-agents="mainView = 'sub-agents'"
-      @show-dashboard="showDashboard = true"
+      @show-tools="openSettingsTab('tools')"
+      @show-sub-agents="openSettingsTab('sub-agents')"
+      @show-dashboard="openSettingsTab('dashboard')"
       @show-settings="openSettings"
       @reorder="handleReorderWorkspaces"
     />
@@ -73,7 +73,6 @@
     <!-- 主区域 -->
     <main class="main">
       <SettingsView v-if="mainView === 'skills'" market-only />
-      <SubAgentsView v-else-if="mainView === 'sub-agents'" />
       <ModelChannels
         v-else-if="mainView === 'model-channels'"
         :setup-required="modelChannelsRequireReload"
@@ -201,101 +200,6 @@
       </template>
     </ActionConfirmDialog>
 
-    <!-- 工具弹窗 -->
-    <Teleport to="body">
-      <div v-if="showTools" class="modal-mask" @click.self="showTools = false">
-        <div class="modal modal-tools" role="dialog" aria-modal="true" aria-label="工具列表">
-          <div class="modal-head tools-modal-head">
-            <span class="tools-modal-title">
-              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="m14.7 6.3 3 3"/><path d="m5 21 5.6-5.6"/><path d="m5.5 15.5-2-2a2.1 2.1 0 0 1 3-3l2 2"/><path d="m18.5 8.5 2 2a2.1 2.1 0 0 1-3 3l-2-2"/><path d="m8 16 8-8"/></svg>
-              工具列表
-              <span class="tools-modal-count">{{ tools.length }}</span>
-            </span>
-            <div class="modal-head-actions">
-              <button
-                class="tools-modal-icon refresh-tools-btn"
-                :class="{ refreshing: refreshingTools }"
-                @click="refreshTools"
-                :disabled="refreshingTools"
-                title="刷新工具列表"
-              >
-                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-                  <polyline points="23 4 23 10 17 10"/>
-                  <path d="M20.49 15a9 9 0 1 1-2.12-9.36L23 10"/>
-                </svg>
-              </button>
-              <button class="tools-modal-icon" type="button" title="关闭" aria-label="关闭工具列表" @click="showTools = false">
-                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M18 6 6 18M6 6l12 12"/></svg>
-              </button>
-            </div>
-          </div>
-          <div class="modal-body tool-modal-body">
-            <!-- 筛选栏 -->
-            <div class="tool-filter-bar">
-              <button
-                v-for="f in toolFilters"
-                :key="f.value"
-                class="tool-filter-btn"
-                :class="{ active: toolFilter === f.value }"
-                :aria-pressed="toolFilter === f.value"
-                @click="toolFilter = f.value"
-              >{{ f.label }}</button>
-            </div>
-            <div v-if="filteredTools.length === 0" class="modal-empty">暂无工具</div>
-            <div v-else class="tool-list" role="list">
-              <div class="tool-list-head" aria-hidden="true">
-                <span>工具</span>
-                <span>说明</span>
-                <span>权限</span>
-                <span>自动放行</span>
-                <span>启用</span>
-              </div>
-              <div v-for="t in filteredTools" :key="t.name" class="tool-row" :class="{ disabled: !t.enabled }" role="listitem">
-                <button class="tool-row-info" type="button" :title="t.enabled ? '点击禁用' : '点击启用'" @click="toggleTool(t)">
-                  <code>{{ t.name }}</code>
-                  <span v-if="!t.enabled" class="tool-disabled-state">已禁用</span>
-                </button>
-                <span class="tool-row-desc" :title="t.description">{{ t.description }}</span>
-                <select
-                  class="tool-permission-select"
-                  :value="readOnlyMode(t)"
-                  :disabled="refreshingTools"
-                  :title="`执行权限：${t.readOnly ? '只读' : '写入'}`"
-                  @change="setReadOnlyMode(t, $event.target.value)"
-                >
-                  <option value="default">默认</option>
-                  <option value="readonly">只读</option>
-                  <option value="write">写入</option>
-                </select>
-                <div class="tool-row-actions">
-                  <button
-                    class="tool-toggle-btn auto-toggle"
-                    :class="{ enabled: t.autoApproved }"
-                    :disabled="refreshingTools"
-                    :aria-checked="t.autoApproved"
-                    role="switch"
-                    @click.stop="toggleAutoTool(t)"
-                    title="自动放行">
-                    <div class="toggle-track auto-track"><div class="toggle-thumb"></div></div>
-                  </button>
-                  <button
-                    class="tool-toggle-btn"
-                    :class="{ enabled: t.enabled }"
-                    :disabled="refreshingTools"
-                    :aria-checked="t.enabled"
-                    role="switch"
-                    @click.stop="toggleTool(t)"
-                    :title="t.enabled ? '禁用' : '启用'">
-                    <div class="toggle-track"><div class="toggle-thumb"></div></div>
-                  </button>
-                </div>
-              </div>
-            </div>
-          </div>
-        </div>
-      </div>
-    </Teleport>
-
     <!-- 配置弹窗 -->
     <Teleport to="body">
       <div v-if="showConfig" class="modal-mask" @click.self="showConfig = false">
@@ -334,25 +238,7 @@
       </div>
     </Teleport>
 
-    <!-- 数据面板弹窗 -->
-    <Teleport to="body">
-      <div v-if="showDashboard" class="modal-mask" @click.self="showDashboard = false">
-        <div class="modal modal-dashboard" role="dialog" aria-modal="true" aria-label="数据面板">
-          <div class="modal-head dashboard-modal-head">
-            <span class="dashboard-modal-title">
-              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 20V10"/><path d="M18 20V4"/><path d="M6 20v-4"/></svg>
-              数据面板
-            </span>
-            <button class="dashboard-modal-close" type="button" title="关闭" aria-label="关闭数据面板" @click="showDashboard = false">
-              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M18 6 6 18M6 6l12 12"/></svg>
-            </button>
-          </div>
-          <div class="modal-body">
-            <DashboardPanel ref="dashboardRef" />
-          </div>
-        </div>
-      </div>
-    </Teleport>
+    <!-- 数据面板已并入设置页（左侧菜单「数据面板」） -->
 
     <!-- OpenAPI 管理弹窗 -->
     <!-- 确认对话框 -->
@@ -370,7 +256,7 @@
 </template>
 
 <script setup>
-import {computed, nextTick, onBeforeUnmount, onMounted, ref, watch} from 'vue'
+import {computed, defineAsyncComponent, nextTick, onBeforeUnmount, onMounted, ref, watch} from 'vue'
 import {useRouter} from 'vue-router'
 import {message} from 'ant-design-vue'
 import {useConfirm} from './composables/useConfirm'
@@ -379,6 +265,8 @@ import {applyHighlightTheme} from './utils/highlight'
 import {sanitize} from './utils/sanitize'
 import {useAppStore} from './stores/app'
 import {agentAPI, configAPI, sessionsAPI, systemAPI, toolsAPI} from './services/api'
+// 设置页含 工具/子代理/数据面板 等重组件，按需异步加载，避免拖慢首屏与弹窗打开
+const SettingsView = defineAsyncComponent(() => import('./views/Settings.vue'))
 import {buildUpdatePrompt, loadUpdateSource} from './utils/updateScripts'
 import SetupScreen from './components/SetupScreen.vue'
 import DesktopUpdate from './DesktopUpdate.vue'
@@ -391,10 +279,7 @@ import ElementPanel from './components/ElementPanel.vue'
 import WorkspacePickerModal from './components/WorkspacePickerModal.vue'
 import ActionConfirmDialog from './components/ActionConfirmDialog.vue'
 import ChatView from './views/Chat.vue'
-import SettingsView from './views/Settings.vue'
-import SubAgentsView from './views/SubAgents.vue'
 import ModelChannels from './ModelChannels.vue'
-import DashboardPanel from './components/Dashboard.vue'
 import AIBrowser from './components/AIBrowser.vue'
 import {platform} from '@/services/platform'
 import {hasConfiguredModelChannel} from '@/utils/modelChannels'
@@ -424,22 +309,6 @@ const status = ref({})
 const usage = ref({})
 const tools = ref([])
 const config = ref({})
-const showTools = ref(false)
-const refreshingTools = ref(false)
-const toolFilter = ref('all')
-const toolFilters = [
-  { label: '全部', value: 'all' },
-  { label: '已启用', value: 'enabled' },
-  { label: '已禁用', value: 'disabled' },
-  { label: '自动放行', value: 'autoApproved' },
-]
-const filteredTools = computed(() => {
-  if (toolFilter.value === 'all') return tools.value
-  if (toolFilter.value === 'enabled') return tools.value.filter(t => t.enabled)
-  if (toolFilter.value === 'disabled') return tools.value.filter(t => !t.enabled)
-  if (toolFilter.value === 'autoApproved') return tools.value.filter(t => t.autoApproved)
-  return tools.value
-})
 const isDesktopEnv = ref(false)
 const showSetup = ref(true)  // SplashScreen (桌面) 或 SetupScreen (Web) 成功后设为 false
 
@@ -457,10 +326,14 @@ const showConfig = ref(false)
 const showSettings = ref(false)
 const showUpdatePanel = ref(false) // Web 端更新面板（类似更新窗口的页面内弹层）
 const settingsInitialTab = ref('general')
-const showDashboard = ref(false)
 const rightPanelOpen = ref(false)
 const openSettings = () => {
   settingsInitialTab.value = 'general'
+  showSettings.value = true
+}
+// 从侧栏打开设置弹窗并定位到对应 tab（工具/子代理/数据面板已收进设置页）
+const openSettingsTab = (tab) => {
+  settingsInitialTab.value = tab
   showSettings.value = true
 }
 const createNewChat = async () => {
@@ -605,7 +478,6 @@ watch(mainView, async (view) => {
   await nextTick()
   await chatRef.value?.focusComposer?.()
 })
-const dashboardRef = ref(null)
 const workspace = ref('')
 
 // 版本信息
@@ -877,56 +749,6 @@ const handleGlobalSearchKeydown = (event) => {
 watch(globalSearchQuery, () => {
   globalSearchActiveIndex.value = 0
 })
-
-// 刷新工具列表（不干扰其他数据）
-const refreshTools = async () => {
-  refreshingTools.value = true
-  try {
-    const r = await toolsAPI.list()
-    if (r.success) tools.value = r.data || []
-  } catch {}
-  refreshingTools.value = false
-}
-
-const readOnlyMode = (tool) => tool.readOnlyOverride === true
-  ? 'readonly'
-  : (tool.readOnlyOverride === false ? 'write' : 'default')
-
-const setReadOnlyMode = async (tool, mode) => {
-  const readOnly = mode === 'readonly' ? true : (mode === 'write' ? false : null)
-  refreshingTools.value = true
-  try {
-    await toolsAPI.setReadOnly(tool.name, readOnly)
-    await refreshTools()
-  } catch (err) {
-    console.error('设置工具权限分类失败:', err)
-    refreshingTools.value = false
-  }
-}
-
-// 切换工具启用/禁用状态
-const toggleTool = async (tool) => {
-  refreshingTools.value = true
-  try {
-    await toolsAPI.toggle(tool.name)
-    tool.enabled = !tool.enabled
-  } catch (err) {
-    console.error('切换工具状态失败:', err)
-  }
-  refreshingTools.value = false
-}
-
-// 切换工具自动放行状态
-const toggleAutoTool = async (tool) => {
-  refreshingTools.value = true
-  try {
-    await toolsAPI.autoToggle(tool.name)
-    tool.autoApproved = !tool.autoApproved
-  } catch (err) {
-    console.error('切换自动放行状态失败:', err)
-  }
-  refreshingTools.value = false
-}
 
 const loadSessions = async () => {
   try {
@@ -1914,56 +1736,21 @@ watch(showSettings, (newVal) => {
 }
 
 .modal-settings {
-  width: min(800px, 95vw);
-  max-height: 85vh;
-}
-
-.modal-dashboard {
-  width: 980px;
-  height: 780px;
-  max-width: 92vw;
-  max-height: 84vh;
+  width: min(1400px, 96vw);
+  height: min(920px, 94vh);
+  max-width: 96vw;
+  max-height: 94vh;
   background: var(--bg);
   border-color: var(--border);
 }
 
-.dashboard-modal-head {
-  min-height: 48px;
-  padding: 0 18px;
-  background: var(--bg);
-}
-
-.dashboard-modal-title {
-  display: inline-flex;
-  align-items: center;
-  gap: 8px;
-}
-
-.dashboard-modal-title svg {
-  color: var(--accent);
-}
-
-.dashboard-modal-close {
-  display: inline-grid;
-  width: 28px;
-  height: 28px;
-  place-items: center;
+/* 设置页撑满弹窗（左侧菜单 + 内容区），内部自行滚动 */
+.modal-settings .modal-body {
+  display: flex;
+  min-width: 0;
+  min-height: 0;
   padding: 0;
-  border: 0;
-  border-radius: var(--r-sm);
-  background: transparent;
-  color: var(--fg-3);
-  cursor: pointer;
-}
-
-.dashboard-modal-close:hover {
-  background: var(--bg-3);
-  color: var(--fg);
-}
-
-.modal-dashboard .modal-body {
-  padding: 14px 18px 20px;
-  background: var(--bg-2);
+  overflow: hidden;
 }
 
 .modal-head {
@@ -2009,284 +1796,6 @@ watch(showSettings, (newVal) => {
   display: flex;
   align-items: center;
   gap: 6px;
-}
-
-.modal-tools {
-  width: 980px;
-  height: 780px;
-  max-width: 92vw;
-  max-height: 84vh;
-  background: var(--bg);
-  border-color: var(--border);
-}
-
-.tools-modal-head {
-  min-height: 48px;
-  padding: 0 18px;
-  background: var(--bg);
-}
-
-.tools-modal-title {
-  display: inline-flex;
-  align-items: center;
-  gap: 8px;
-}
-
-.tools-modal-title > svg { color: var(--accent); }
-
-.tools-modal-count {
-  min-width: 20px;
-  padding: 1px 6px;
-  border-radius: var(--r-sm);
-  background: var(--bg-3);
-  color: var(--fg-3);
-  font: 600 11px var(--mono);
-  text-align: center;
-}
-
-.tools-modal-icon {
-  display: inline-grid;
-  width: 28px;
-  height: 28px;
-  place-items: center;
-  padding: 0;
-  border: 0;
-  border-radius: var(--r-sm);
-  background: transparent;
-  color: var(--fg-3);
-  cursor: pointer;
-}
-
-.tools-modal-icon:hover:not(:disabled) { background: var(--bg-3); color: var(--fg); }
-.tools-modal-icon:disabled { cursor: wait; opacity: 0.55; }
-
-.refresh-tools-btn {
-  transition: all var(--transition-fast);
-}
-.refresh-tools-btn:hover {
-  color: var(--accent);
-}
-.refresh-tools-btn.refreshing svg {
-  animation: spin 0.8s linear infinite;
-}
-.refresh-tools-btn:disabled {
-  opacity: 0.5;
-  cursor: not-allowed;
-}
-
-.tool-row {
-  display: grid;
-  grid-template-columns: minmax(154px, 0.7fr) minmax(220px, 1.7fr) 88px 74px 52px;
-  align-items: center;
-  column-gap: 14px;
-  min-height: 50px;
-  padding: 0 12px;
-  border-bottom: 1px solid var(--border);
-  font-size: 13px;
-  transition: background var(--transition-fast), opacity var(--transition-fast);
-}
-.tool-row:last-child { border-bottom: none; }
-.tool-row:hover { background: var(--bg-2); }
-.tool-row.disabled {
-  opacity: 0.7;
-}
-
-.tool-row-info {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-  width: 100%;
-  padding: 0;
-  border: 0;
-  background: transparent;
-  min-width: 0;
-  color: inherit;
-  cursor: pointer;
-  text-align: left;
-}
-.tool-row-info code {
-  overflow: hidden;
-  padding: 3px 6px;
-  border-radius: var(--r-sm);
-  background: var(--bg-3);
-  font-weight: 600;
-  color: var(--fg-2);
-  text-overflow: ellipsis;
-  white-space: nowrap;
-}
-.tool-row:hover .tool-row-info code { color: var(--accent); }
-
-.tool-disabled-state {
-  flex-shrink: 0;
-  color: var(--fg-4);
-  font-size: 11px;
-}
-
-.tool-row-desc {
-  color: var(--fg-3);
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-}
-
-.tool-permission-select {
-  width: 82px;
-  height: 28px;
-  justify-self: center;
-  border: 1px solid var(--border);
-  border-radius: var(--r-sm);
-  outline: none;
-  background: var(--bg);
-  color: var(--fg-2);
-  font-size: 12px;
-  cursor: pointer;
-}
-
-.tool-permission-select:focus {
-  border-color: var(--accent);
-}
-
-.tool-permission-select:disabled {
-  opacity: 0.5;
-  cursor: not-allowed;
-}
-
-.tool-row-actions {
-  display: contents;
-}
-
-/* 切换开关 */
-.tool-toggle-btn {
-  background: none;
-  border: none;
-  cursor: pointer;
-  justify-self: center;
-  padding: 3px;
-  display: flex;
-  align-items: center;
-}
-.tool-toggle-btn:disabled {
-  opacity: 0.5;
-  cursor: not-allowed;
-}
-.tool-toggle-btn .toggle-track {
-  width: 34px;
-  height: 18px;
-  background: var(--fg-4);
-  border: 1px solid var(--border);
-  border-radius: 9px;
-  position: relative;
-  transition: all var(--transition-fast);
-}
-.tool-toggle-btn.enabled .toggle-track {
-  background: var(--success);
-  border-color: var(--success);
-}
-.tool-toggle-btn .toggle-thumb {
-  width: 14px;
-  height: 14px;
-  background: white;
-  border-radius: 50%;
-  position: absolute;
-  top: 2px;
-  left: 2px;
-  transition: all var(--transition-fast);
-  box-shadow: 0 1px 3px rgba(0,0,0,0.2);
-}
-.tool-toggle-btn.enabled .toggle-thumb {
-  left: 18px;
-}
-
-/* 自动放行开关 */
-.tool-toggle-btn.auto-toggle .toggle-track.auto-track {
-  width: 34px;
-  height: 18px;
-}
-.tool-toggle-btn.auto-toggle.enabled .toggle-track.auto-track {
-  background: var(--brand-primary);
-  border-color: var(--brand-primary);
-}
-.tool-toggle-btn.auto-toggle .toggle-thumb {
-  width: 14px;
-  height: 14px;
-  top: 2px;
-  left: 2px;
-}
-.tool-toggle-btn.auto-toggle.enabled .toggle-thumb {
-  left: 18px;
-}
-
-/* 工具弹窗 body 限制高度 */
-.tool-modal-body {
-  max-height: none;
-  overflow-y: auto;
-  padding: 14px 18px 18px;
-  background: var(--bg-2);
-}
-
-/* 筛选栏 */
-.tool-filter-bar {
-  display: flex;
-  gap: 2px;
-  width: fit-content;
-  padding: 3px;
-  margin-bottom: 12px;
-  border: 1px solid var(--border);
-  border-radius: var(--r);
-  background: var(--bg);
-}
-.tool-filter-btn {
-  min-height: 28px;
-  padding: 3px 10px;
-  border: 0;
-  border-radius: var(--r-sm);
-  background: transparent;
-  font-size: 12px;
-  color: var(--fg-3);
-  cursor: pointer;
-  transition: all var(--transition-fast);
-}
-.tool-filter-btn:hover {
-  background: var(--bg-3);
-  color: var(--accent);
-}
-.tool-filter-btn.active {
-  background: color-mix(in srgb, var(--accent) 10%, var(--bg));
-  color: var(--accent);
-  font-weight: 600;
-}
-
-.tool-list {
-  overflow: hidden;
-  border: 1px solid var(--border);
-  border-radius: var(--r);
-  background: var(--bg);
-}
-
-.tool-list-head {
-  display: grid;
-  grid-template-columns: minmax(154px, 0.7fr) minmax(220px, 1.7fr) 88px 74px 52px;
-  column-gap: 14px;
-  align-items: center;
-  min-height: 34px;
-  padding: 0 12px;
-  border-bottom: 1px solid var(--border);
-  background: var(--bg-3);
-  color: var(--fg-3);
-  font-size: 11px;
-  font-weight: 600;
-}
-
-.tool-list-head span:nth-child(n+3) { text-align: center; }
-
-@media (max-width: 700px) {
-  .modal-tools { width: min(96vw, 620px); }
-  .tool-row,
-  .tool-list-head { grid-template-columns: minmax(105px, 0.8fr) minmax(110px, 1.2fr) 76px 62px 48px; column-gap: 7px; }
-  .tool-row { padding: 0 8px; }
-  .tool-list-head { padding: 0 8px; }
-  .tool-filter-bar { width: 100%; overflow-x: auto; }
-  .tool-filter-btn { flex: 1 0 auto; }
 }
 
 .config-row {

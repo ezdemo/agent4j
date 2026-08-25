@@ -18,6 +18,7 @@ import java.util.Map;
 import java.util.concurrent.TimeUnit;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 class LoopraPreflightPluginsTest {
@@ -48,6 +49,39 @@ class LoopraPreflightPluginsTest {
         assertEquals(LoopResult.Status.COMPLETED, result.status());
         assertEquals(List.of("sanitize", "append", "clear"), host.calls);
         assertEquals("cleaned", graph.context.messages().get(0).content());
+    }
+
+    @Test
+    void emptySanitizedInputStopsBeforeModelInsteadOfFailing() throws Exception {
+        RecordingHost host = new RecordingHost(HitlState.NONE);
+        // 模拟纯图片消息被不支持图片的模型清洗为空（UserMessageSanitizer 的降级行为）
+        host.sanitized = UserMessage.of("");
+        Graph graph = graph(host);
+        graph.context.putArtifact(LoopraPreflight.INPUT_ARTIFACT, UserMessage.of("raw"));
+
+        LoopResult result = graph.engine.run(graph.program, graph.context).result().get(5, TimeUnit.SECONDS);
+
+        assertEquals(LoopResult.Status.COMPLETED, result.status());
+        assertEquals(List.of("sanitize"), host.calls);
+        assertTrue(graph.context.messages().isEmpty());
+        String turnResult = String.valueOf(
+                result.finalSnapshot().variables().get(LoopraPreflight.RESULT_VARIABLE));
+        assertTrue(turnResult.contains("没有可供模型处理的消息内容"));
+    }
+
+    @Test
+    void missingInputPassesThroughWithoutAppendingOrFailing() throws Exception {
+        RecordingHost host = new RecordingHost(HitlState.NONE);
+        Graph graph = graph(host);
+
+        LoopResult result = graph.engine.run(graph.program, graph.context).result().get(5, TimeUnit.SECONDS);
+
+        assertEquals(LoopResult.Status.COMPLETED, result.status());
+        // 无输入（/continue 语义）时 sanitize 短路、user-message 放行不追加
+        assertEquals(List.of(), host.calls);
+        assertTrue(graph.context.messages().isEmpty());
+        // 不设置结果提示，交由模型节点前的空输入守卫兜底拦截
+        assertFalse(result.finalSnapshot().variables().containsKey(LoopraPreflight.RESULT_VARIABLE));
     }
 
     private static Graph graph(RecordingHost host) {

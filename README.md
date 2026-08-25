@@ -11,10 +11,10 @@
 
 <p align="center">
   <img src="https://img.shields.io/badge/Java-17-blue?logo=openjdk" alt="Java 17"/>
-  <img src="https://img.shields.io/badge/Solon-4.0.4-important?logo=java" alt="Solon 4.0.4"/>
+  <img src="https://img.shields.io/badge/Solon-4.0.6-important?logo=java" alt="Solon 4.0.6"/>
   <img src="https://img.shields.io/badge/Vue-3.4-4FC08D?logo=vue.js" alt="Vue 3"/>
   <img src="https://img.shields.io/badge/Electron-42.4-47848F?logo=electron" alt="Electron"/>
-  <img src="https://img.shields.io/badge/version-26.8.231-lightgrey" alt="Version 26.8.231"/>
+  <img src="https://img.shields.io/badge/version-26.8.243-lightgrey" alt="Version 26.8.243"/>
   <img src="https://img.shields.io/badge/license-MIT-green" alt="MIT License"/>
 </p>
 
@@ -26,7 +26,7 @@
   <a href="#从源码开发">从源码开发</a>
 </p>
 
-> 当前版本：`26.8.231`。完整变更记录见 [CHANGELOG.md](CHANGELOG.md)。
+> 当前版本：`26.8.243`。完整变更记录见 [CHANGELOG.md](CHANGELOG.md)。
 
 ## 技术交流群
 
@@ -104,6 +104,18 @@ export LOOPRA_MIRROR='https://gh-proxy.org/'; curl -fsSL https://raw.giteeuserco
 ```
 
 未设置 `LOOPRA_MIRROR` 时：直连脚本走 GitHub 官方源，镜像脚本（`-mirror` 变体）默认使用 `gh-proxy.org`。
+
+也可通过 npm 安装（作为 GitHub 直连/镜像之外的备用下载源，分发包可从 npm registry 含 npmmirror 等国内镜像拉取）：
+
+```bash
+# 全局安装并自动安装到 ~/.loopra（postinstall 自动执行，等效官方一键安装脚本）
+npm install -g loopra-dist
+
+# 不需要自动安装时，跳过 postinstall
+npm install --ignore-scripts
+```
+
+> npm 出于安全默认隐藏生命周期脚本输出（安装会正常跑完）；想看实时进度与镜像测速，用 `npm install -g loopra-dist --foreground-scripts`，或查看 `~/.loopra/install.log`。未设置 `LOOPRA_MIRROR` 时，postinstall 会自动测速各候选 GitHub 代理镜像并选用最快者（全部失败则回退直连）。
 
 > **macOS 用户注意**：桌面端（Releases 中的 `Loopra-*.zip`）目前未做 Apple 签名与公证，首次打开可能提示 **“Loopra”已损坏，无法打开**。这是 macOS Gatekeeper 对未签名应用的拦截，安装包本身没有损坏，按下面任一种方式放行即可：
 >
@@ -335,7 +347,7 @@ loopra      →  cutin
 
 | 层 | 技术 |
 |---|---|
-| 核心 | Java 17、Solon 4.0.4、Snack4、OkHttp |
+| 核心 | Java 17、Solon 4.0.6、Snack4、OkHttp |
 | Web | Solon Web、Jetty、SSE、Knife4j |
 | 前端 | Vue 3、Vite、Pinia、Ant Design Vue |
 | 桌面 | Electron、electron-builder |

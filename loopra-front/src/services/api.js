@@ -574,7 +574,7 @@ export const configAPI = {
     return api.get('/usage', { params })
   },
 
-  // 获取数据面板 - GET /api/usage/dashboard?days=7
+  // 获取数据面板 - GET /api/usage/dashboard?days=365
   getDashboard: (days) => {
     const params = days ? { days } : {}
     return api.get('/usage/dashboard', { params })

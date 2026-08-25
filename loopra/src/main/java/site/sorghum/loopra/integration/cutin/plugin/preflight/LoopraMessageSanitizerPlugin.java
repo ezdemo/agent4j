@@ -32,6 +32,15 @@ public final class LoopraMessageSanitizerPlugin implements LoopPlugin {
         context.putArtifact(LoopraPreflight.INPUT_ARTIFACT, sanitized);
         String text = sanitized != null && sanitized.hasContent() ? sanitized.getText() : "";
         context.putVariable("loopraUserMessage", text);
+        if (message.hasContent() && (sanitized == null || !sanitized.hasContent())) {
+            // 原始消息有内容，但清洗后被完全移除（例如纯图片消息被不支持图片的模型剥掉），
+            // 没有可发送的内容：直接结束本轮并提示，避免以空消息调用模型网关
+            // 触发上游 400（如 input must be non-empty）并击溃整个循环。
+            context.putVariable("loopraExitReason", "empty_input");
+            context.putVariable(LoopraPreflight.RESULT_VARIABLE,
+                "没有可供模型处理的消息内容（图片可能因当前模型不支持图片输入而被移除）。请用文字描述你的需求后再试。");
+            return new StepResult.Goto(LoopraPreflight.OUTPUT_NODE);
+        }
         return StepResult.Continue.INSTANCE;
     }
 

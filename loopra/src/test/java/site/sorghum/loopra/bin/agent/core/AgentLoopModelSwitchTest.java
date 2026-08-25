@@ -2,12 +2,14 @@ package site.sorghum.loopra.bin.agent.core;
 
 import org.junit.jupiter.api.Test;
 import site.sorghum.cutin.core.context.DefaultLoopContext;
+import site.sorghum.cutin.core.context.Message;
 import site.sorghum.cutin.core.loop.DefaultLoopEngine;
 import site.sorghum.cutin.core.model.ModelCallRequest;
 import site.sorghum.cutin.core.model.ModelRegistry;
 import site.sorghum.cutin.core.model.StreamChunk;
 import site.sorghum.cutin.core.plugin.DefaultLoopRegistrar;
 import site.sorghum.loopra.bin.agent.context.ConversationContext;
+import site.sorghum.loopra.bin.agent.model.UserMessage;
 import site.sorghum.loopra.bin.agent.prompt.PromptPrefix;
 import site.sorghum.loopra.bin.model.TestLoopraProvider;
 import site.sorghum.loopra.bin.tool.ToolRegistry;
@@ -35,6 +37,9 @@ class AgentLoopModelSwitchTest {
         ToolRegistry registry = new ToolRegistry().setDisabledTools(Set.of());
         ConversationContext context = new ConversationContext(
                 new PromptPrefix("system", registry.toOpenAiTools()));
+        // 与主循环前置节点一致：用户消息必须先进入 Loopra 上下文，否则
+        // BEFORE_MODEL 的空输入守卫（GOTO output）会拦截本次调用
+        context.addUser(UserMessage.of("hi"));
         AtomicReference<String> streamedModel = new AtomicReference<>();
         TestLoopraProvider provider = TestLoopraProvider.builder()
                 .model("model-a")
@@ -57,7 +62,9 @@ class AgentLoopModelSwitchTest {
         // 网关层面：流式调用新模型必须路由到 provider（修复前此处抛 no provider for model）
         DefaultLoopEngine engine = cutinEngine(loop);
         DefaultLoopContext cutinContext = engine.newContext("test", Map.of());
-        ModelCallRequest request = new ModelCallRequest("model-b", List.of(), List.of(), Map.of());
+        // 携带一条真实用户消息，避免命中 BEFORE_MODEL 的空输入守卫（GOTO output）
+        ModelCallRequest request = new ModelCallRequest(
+                "model-b", List.of(new Message("user", "hi")), List.of(), Map.of());
         try (Stream<StreamChunk> chunks = cutinContext.models().stream(request, cutinContext)) {
             chunks.forEach(chunk -> { });
         }

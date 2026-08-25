@@ -12,14 +12,14 @@
 
     <groupId>site.sorghum.agent</groupId>
     <artifactId>loopra</artifactId>
-    <version>26.8.231</version>
+    <version>26.8.243</version>
     <name>loopra</name>
     <description>Cutin-based Loopra replica: original public Java API and Solon web API, one module.</description>
 
     <properties>
         <lombok.version>1.18.34</lombok.version>
-        <solon.version>4.0.5-SNAPSHOT</solon.version>
-        <solon-ai.version>4.0.5-SNAPSHOT</solon-ai.version>
+        <solon.version>4.0.6</solon.version>
+        <solon-ai.version>4.0.6</solon-ai.version>
         <okhttp.version>4.12.0</okhttp.version>
         <snack4.version>4.0.49</snack4.version>
         <acp.version>0.14.0</acp.version>

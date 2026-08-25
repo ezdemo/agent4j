@@ -4,6 +4,46 @@
 
 ---
 
+## [26.8.243] - 2026-08-24
+
+### Added
+
+#### 🚀 安装、启动与更新
+
+- ✨ 新增 npm 发布流程（OIDC trusted publishing）与 `loopra-dist` 发布包：分发包原样收纳 GitHub Releases 上的 `loopra-dist.tar.gz`，可从 npm registry（含 npmmirror 等国内镜像）拉取，作为 GitHub 直连/镜像之外的备用下载源
+- ✨ `loopra-dist` 支持 postinstall 自动安装：`npm install -g loopra-dist` 即解压分发包并按当前平台自动执行包内安装器（Windows → `install.ps1`，macOS/Linux → `install.sh`），等效于官方一键安装脚本；不需要自动安装时可用 `npm install --ignore-scripts` 跳过
+- ✨ npm 安装镜像自动测速：未设置 `LOOPRA_MIRROR` 时并发 HEAD 探测候选代理（`gh-proxy.org` / `ghfast.top` / `gh-proxy.com` / `ghproxy.net`）多轮取中位延迟，自动选用最快者（GitHub 直连 HEAD 延迟不代表实际下载可用性，不参与比拼），全部探测失败回退直连；测速与安装每一步进度记录到 `~/.loopra/install.log`
+
+#### 💬 界面与交互
+
+- ✨ 桌面端新增中文字体切换：设置页可枚举系统字体并选择，英文/数字统一使用 JetBrains Mono Variable；UI 设置持久化到 `userData/ui-settings.json`（file:// 页面 localStorage 在 Electron 中不可靠，重启会丢失）
+- ✨ 路径组折叠头按工具类型分类统计（读 / 写 / 执行 / 记忆 / 子代理等）
+- ✨ Dashboard 重构为年度用量视图：近一年 GitHub 风格热力图 + 月度标签，默认滚动定位到最新数据
+- ✨ 模型渠道设置页改为侧边栏 + 详情主从布局
+
+### Changed
+
+- 🔄 Solon 升级至 4.0.6（含 solon-ai 4.0.6）
+- 🔄 会话列表加载不再为每个项目创建 Agent：仅读取会话目录元数据，优先独立会话存储，仅当会话已有缓存 Agent 时复用其存储（此前桌面端每次加载会话列表都会为每个项目新建 `default` 会话 Agent，每个 Agent 含 21 个插件实例，跨项目切换时插件实例只增不减）
+- 🔄 切换项目时顺带清理旧项目空闲的 `default` 会话 Agent 缓存（运行中的会话跳过，防止误中断正在执行的回合）
+- 🔄 Electron 标签管理全面空安全：`webContents` 判空与 `isDestroyed()` 前置检查，避免销毁竞态
+
+### Fixed
+
+- 🐛 修复推理摘要重复渲染；ReasonBreaker 检测到思考循环重试时，按服务端 `stream_reset` 回滚到本轮第一个思考块之前（保留工具卡片、choice、子代理容器等既有内容）
+- 🐛 修复 Windows 下命令输出中文乱码：采用 UTF-8 优先、系统活动代码页兜底的自适应解码（git/node/python 等向管道输出 UTF-8 字节，cmd 内置命令按 OEM 代码页输出 GBK 字节，固定任一编码都会导致另一半场景乱码）
+- 🐛 修复模型渠道设置页布局：侧边栏固定高度、渠道列表内部滚动，行内模型卡片防塌缩（补 `min-height` 防止文字被裁剪）
+- 🐛 修复热力图列宽弹性自适应
+- 🐛 npm publish 升级 Node 24 并显式 `--access public`，修复 trusted publishing 发布失败
+- 🐛 build.yml 补充显式 checkout，修复 npm 发布步骤找不到 `.release/npm/loopra-dist` 的问题
+- 🐛 npm 安装器绕过 npm 对 stdout 的捕获（进度与测速结果直接写控制台设备 `CONOUT$` / `/dev/tty`），默认 `npm install` 也能看到实时进度和测速结果；非交互环境（CI/管道）跳过询问默认直连；交互环境镜像菜单 30 秒未选择则回退直连
+
+### Chore
+
+- 🔧 bump-version 脚本支持同步 `loopra-dist` 的 `package.json` 版本
+
+---
+
 ## [26.8.231] - 2026-08-23
 
 ### Added
