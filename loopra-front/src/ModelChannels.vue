@@ -509,14 +509,14 @@ onMounted(load)
 .model-channels-setup-notice { width: min(100%, 400px); box-sizing: border-box; padding: 20px; border: 1px solid var(--border); border-top: 3px solid var(--accent); border-radius: 7px; background: var(--bg); box-shadow: 0 18px 48px rgba(0, 0, 0, .24); }
 .model-channels-setup-notice h2 { margin: 0; color: var(--fg); font-size: 16px; line-height: 1.4; }
 .model-channels-setup-notice p { margin: 8px 0 18px; color: var(--fg-2); font-size: 13px; line-height: 1.55; }
-.model-channels-setup-confirm { display: inline-flex; align-items: center; justify-content: center; min-height: 32px; padding: 0 13px; border: 0; border-radius: 5px; background: var(--accent); color: #fff; font: inherit; font-size: 13px; cursor: pointer; }
+.model-channels-setup-confirm { display: inline-flex; align-items: center; justify-content: center; min-height: 32px; padding: 0 13px; border: 0; border-radius: 5px; background: var(--accent-btn); color: #fff; font: inherit; font-size: 13px; cursor: pointer; }
 .model-channels-setup-confirm:hover { filter: brightness(.96); }
 
 .model-channels-back:hover { background: var(--bg-3); color: var(--fg); }
 .model-channels-back svg, .model-config-delete svg { width: 17px; height: 17px; }
 .model-collapse-icon { width: 16px; height: 16px; flex: 0 0 auto; transition: transform .15s ease; }
 .model-collapse-icon.expanded { transform: rotate(90deg); }
-.model-channels-save { height: 32px; margin-left: auto; padding: 0 14px; border: 0; border-radius: 5px; background: var(--accent); color: #fff; font: inherit; font-size: 13px; cursor: pointer; }
+.model-channels-save { height: 32px; margin-left: auto; padding: 0 14px; border: 0; border-radius: 5px; background: var(--accent-btn); color: #fff; font: inherit; font-size: 13px; cursor: pointer; }
 .model-channels-save:disabled { opacity: .55; cursor: default; }
 .model-channels[data-theme="dark"] .model-channels-save:not(:disabled) { background: #d4d4d8; color: #18181b; }
 .model-channels[data-theme="dark"] .model-channels-save:not(:disabled):hover { background: #f4f4f5; }

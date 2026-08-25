@@ -402,8 +402,8 @@ function formatWorkspacePath(path) {
 }
 
 .workspace-add-control .workspace-add-submit {
-  border-color: var(--accent);
-  background: var(--accent);
+  border-color: var(--accent-btn);
+  background: var(--accent-btn);
   color: #fff;
 }
 

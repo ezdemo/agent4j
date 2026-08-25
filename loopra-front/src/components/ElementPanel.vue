@@ -799,7 +799,7 @@ onBeforeUnmount(() => {
   justify-content: center;
   border: 0;
   border-radius: var(--r);
-  background: var(--accent);
+  background: var(--accent-btn);
   color: #fff;
   cursor: pointer;
   transition: background var(--t), transform var(--t);
@@ -1339,7 +1339,7 @@ onBeforeUnmount(() => {
   justify-content: center;
   border: none;
   border-radius: var(--r);
-  background: var(--accent);
+  background: var(--accent-btn);
   color: #fff;
   cursor: pointer;
   transition: all 0.15s;

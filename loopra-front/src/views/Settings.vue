@@ -3935,7 +3935,7 @@ const saveLoopraMd = async () => {
   padding: 2px 6px;
   font-size: 10px;
   font-weight: 600;
-  background: var(--accent);
+  background: var(--accent-btn);
   color: white;
   border-radius: 10px;
   line-height: 1;
@@ -5076,9 +5076,9 @@ const saveLoopraMd = async () => {
 }
 
 .btn-primary {
-  background: var(--accent);
+  background: var(--accent-btn);
   color: white;
-  border-color: var(--accent);
+  border-color: var(--accent-btn);
 }
 
 .btn-primary:hover:not(:disabled) {

@@ -1136,7 +1136,7 @@ defineExpose({
 }
 
 .btn-primary {
-  background: var(--accent);
+  background: var(--accent-btn);
   border-color: transparent;
   color: #fff;
 }
@@ -1144,7 +1144,7 @@ defineExpose({
 .btn-primary:hover:not(:disabled) {
   opacity: 0.9;
   /* 关键：重设主色背景，避免 .btn:hover 的浅灰背景盖掉白字 */
-  background: var(--accent);
+  background: var(--accent-btn);
 }
 
 .btn-ghost {

@@ -809,7 +809,7 @@ onBeforeUnmount(() => {
 }
 
 .link-popover-btn:hover {
-  background: var(--accent, #3b82f6);
+  background: var(--accent-btn, var(--accent));
   color: #fff;
 }
 

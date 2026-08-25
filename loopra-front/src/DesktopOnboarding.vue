@@ -1063,7 +1063,7 @@ async function loadWorkspaceInfo() {
 }
 
 .ob-step.active .ob-step-index {
-  background: var(--accent);
+  background: var(--accent-btn);
   color: #fff;
 }
 
@@ -1579,8 +1579,8 @@ async function loadWorkspaceInfo() {
 }
 
 .ob-footer .btn-primary {
-  background: var(--accent);
-  border-color: var(--accent);
+  background: var(--accent-btn);
+  border-color: var(--accent-btn);
   color: #fff;
 }
 

@@ -262,7 +262,7 @@ onBeforeUnmount(() => {
 
 .ai-browser-content { position: relative; min-height: 0; background: #fff; }
 .ai-browser-empty { height: 100%; display: grid; place-content: center; justify-items: center; gap: 14px; color: var(--fg-3); }
-.ai-browser-primary { padding: 7px 12px; border: 0; border-radius: 5px; background: var(--accent); color: #fff; cursor: pointer; font: inherit; font-size: 13px; }
+.ai-browser-primary { padding: 7px 12px; border: 0; border-radius: 5px; background: var(--accent-btn); color: #fff; cursor: pointer; font: inherit; font-size: 13px; }
 .ai-browser-status { display: flex; align-items: center; justify-content: space-between; gap: 16px; padding: 0 12px; border-top: 1px solid var(--border); color: var(--fg-4); font-size: 11px; white-space: nowrap; overflow: hidden; }
 .ai-browser-status span { overflow: hidden; text-overflow: ellipsis; }
 

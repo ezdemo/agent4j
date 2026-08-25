@@ -2382,7 +2382,7 @@ defineExpose({focus: () => inputField.value?.focus(), addFileContext, addElement
 }
 
 .send-btn.active {
-  background: var(--accent);
+  background: var(--accent-btn);
   color: #fff;
 }
 
@@ -2782,7 +2782,7 @@ defineExpose({focus: () => inputField.value?.focus(), addFileContext, addElement
   min-width: 14px;
   height: 14px;
   padding: 0 3px;
-  background: var(--accent);
+  background: var(--accent-btn);
   color: white;
   font-size: 9px;
   font-weight: 700;
@@ -3267,7 +3267,7 @@ defineExpose({focus: () => inputField.value?.focus(), addFileContext, addElement
 .quick-command-form-actions { display: flex; justify-content: flex-end; gap: 6px; }
 .quick-command-form-actions button { padding: 4px 9px; border: 1px solid var(--border); border-radius: var(--r-sm); background: transparent; color: var(--fg-3); cursor: pointer; font: inherit; font-size: 11px; }
 .quick-command-form-actions button:hover { color: var(--fg); background: var(--bg); }
-.quick-command-form-actions button.primary { border-color: var(--accent); background: var(--accent); color: var(--bg); }
+.quick-command-form-actions button.primary { border-color: var(--accent-btn); background: var(--accent-btn); color: #fff; }
 .quick-command-form-actions button:disabled { cursor: not-allowed; opacity: .45; }
 
 /* Usage bar — 融入 input-box 底部 */
@@ -3534,8 +3534,8 @@ defineExpose({focus: () => inputField.value?.focus(), addFileContext, addElement
   padding: 0 4px;
   place-items: center;
   border-radius: 999px;
-  background: var(--accent);
-  color: var(--bg);
+  background: var(--accent-btn);
+  color: #fff;
   font-size: 10px;
   font-weight: 700;
   line-height: 1;
@@ -3619,8 +3619,8 @@ defineExpose({focus: () => inputField.value?.focus(), addFileContext, addElement
 .skill-item-check {
   padding: 3px;
   border-radius: 50%;
-  background: var(--accent);
-  color: var(--bg);
+  background: var(--accent-btn);
+  color: #fff;
   flex-shrink: 0;
 }
 

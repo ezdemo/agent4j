@@ -45,6 +45,7 @@
   --bg-hover: #f0f0f1;
   --bg-active: #e8e8ea;
   --accent: #52525b;
+  --accent-btn: #52525b;
   --accent-bg: var(--blue-bg);
 
   /* 毛玻璃 — 浅色模式：半透明但清晰可辨 */
@@ -159,6 +160,7 @@
   --border: #36373d;
   --border-2: #4a4d55;
   --accent: #d1d4da;
+  --accent-btn: #52525b;
   --accent-bg: #303137;
   --blue-bg: #303137;
   --green-bg: #133625;
@@ -220,6 +222,7 @@ body {
   --border: #CAC4D0;
   --border-2: #79747E;
   --accent: #4CAF50;
+  --accent-btn: var(--accent);
   --accent-bg: #E8F5E9;
   --blue: #2196F3;
   --blue-bg: #E3F2FD;
@@ -293,6 +296,7 @@ body {
   --border: #c9b494;
   --border-2: #b8a07a;
   --accent: #8b4513;
+  --accent-btn: var(--accent);
   --accent-bg: #f0dfc0;
   --blue: #5b4a2a;
   --blue-bg: #f0dfc0;
@@ -415,7 +419,7 @@ textarea { resize: none; }
   white-space: nowrap;
 }
 .btn-primary {
-  background: var(--accent);
+  background: var(--accent-btn);
   color: #fff;
 }
 .btn-primary:hover { background: var(--blue-dark); }
@@ -615,8 +619,8 @@ textarea { resize: none; }
 [data-theme="dark"] .ant-btn-primary,
 [data-theme="retro"] .ant-btn-primary,
 [data-theme="retro-yellow"] .ant-btn-primary {
-  background: var(--accent);
-  border-color: var(--accent);
+  background: var(--accent-btn);
+  border-color: var(--accent-btn);
 }
 [data-theme="retro"] .ant-btn-primary {
   color: #FFFFFF;
@@ -748,8 +752,8 @@ textarea { resize: none; }
 [data-theme="retro"] .ant-modal-footer .ant-btn-primary,
 [data-theme="retro-yellow"] .ant-modal-confirm-btns .ant-btn-primary,
 [data-theme="retro-yellow"] .ant-modal-footer .ant-btn-primary {
-  background: var(--accent) !important;
-  border-color: var(--accent) !important;
+  background: var(--accent-btn) !important;
+  border-color: var(--accent-btn) !important;
   color: #fff !important;
 }
 [data-theme="dark"] .ant-modal-confirm-btns .ant-btn:not(.ant-btn-primary):hover,

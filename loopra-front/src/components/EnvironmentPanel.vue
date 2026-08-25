@@ -504,7 +504,7 @@ defineExpose({refresh})
 .environment-action-row { display: flex; flex-wrap: wrap; gap: 6px; }
 .environment-button { flex: 1 1 auto; min-height: 28px; padding: 5px 8px; border: 1px solid var(--border); border-radius: 5px; color: var(--fg-2); background: var(--bg-2); cursor: pointer; font-size: 11px; }
 .environment-button:hover:not(:disabled) { border-color: var(--accent); color: var(--accent); }
-.environment-button.primary { border-color: var(--accent); color: #fff; background: var(--accent); }
+.environment-button.primary { border-color: var(--accent-btn); color: #fff; background: var(--accent-btn); }
 .environment-button:disabled { opacity: .45; cursor: default; }
 .environment-button.ai { display: inline-flex; align-items: center; justify-content: center; gap: 5px; border-color: color-mix(in srgb, var(--accent) 28%, var(--border)); color: var(--accent); }
 .environment-generate-icon { width: 12px; height: 12px; }

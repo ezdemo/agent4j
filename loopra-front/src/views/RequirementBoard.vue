@@ -528,7 +528,8 @@ function toChatLogMessages(rawMessages) {
          expanded: !hasResult
        })
     }
-    if (m.content) lastAssistantItem.blocks.push({ type: 'content', content: m.content })
+    // 纯空白正文（思考间隙流出的 \n\n）不建块，与流式行为一致
+    if (m.content && m.content.trim()) lastAssistantItem.blocks.push({ type: 'content', content: m.content })
     const fileChanges = m.file_changes || m.fileChanges
     if (Array.isArray(fileChanges) && fileChanges.length > 0) mergeFileChanges(lastAssistantItem.blocks, fileChanges)
   }
@@ -906,8 +907,8 @@ onBeforeUnmount(() => {
 .req-btn:disabled { opacity: 0.55; cursor: not-allowed; }
 .req-btn svg { width: 14px; height: 14px; }
 .req-btn-sm { height: 26px; padding: 0 10px; font-size: 12px; }
-.req-btn-primary { background: var(--accent, #52525b); border-color: var(--accent, #52525b); color: #fff; }
-.req-btn-primary:hover { background: var(--accent, #52525b); color: #fff; opacity: 0.88; }
+.req-btn-primary { background: var(--accent-btn, var(--accent)); border-color: var(--accent-btn, var(--accent)); color: #fff; }
+.req-btn-primary:hover { background: var(--accent-btn, var(--accent)); color: #fff; opacity: 0.88; }
 .req-btn-success { background: #22c55e; border-color: #22c55e; color: #fff; }
 .req-btn-success:hover { background: #16a34a; border-color: #16a34a; color: #fff; }
 .req-btn-danger { background: #ef4444; border-color: #ef4444; color: #fff; }

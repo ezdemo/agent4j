@@ -2733,7 +2733,7 @@ defineExpose({clearMessages, resetLocalMessages, loadSession, sendCommand, start
 
 .plan-approve-btn {
   padding: 0 10px;
-  background: var(--accent);
+  background: var(--accent-btn);
   color: #fff;
   font-size: 12px;
 }
@@ -3186,7 +3186,7 @@ defineExpose({clearMessages, resetLocalMessages, loadSession, sendCommand, start
   width: 36px;
   height: 36px;
   border-radius: 50%;
-  background: var(--accent);
+  background: var(--accent-btn);
   color: #fff;
   border: 2px solid var(--bg);
   box-shadow: 0 2px 8px rgba(0, 0, 0, 0.2);

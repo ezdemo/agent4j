@@ -174,7 +174,8 @@ export const buildHistoryItems = (raw = [], includeWebHidden = false) => {
           expanded: !hasResult
         })
       }
-      if (m.content) lastAssistantItem.blocks.push({type: 'content', content: m.content})
+      // 纯空白正文（思考间隙流出的 \n\n）不建块，与流式行为一致
+      if (m.content && m.content.trim()) lastAssistantItem.blocks.push({type: 'content', content: m.content})
       const fileChanges = m.file_changes || m.fileChanges
       if (Array.isArray(fileChanges) && fileChanges.length > 0) {
         mergeFileChanges(lastAssistantItem.blocks, fileChanges)

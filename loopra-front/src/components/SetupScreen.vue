@@ -392,7 +392,7 @@ onMounted(() => {
 }
 
 .btn-primary {
-  background: var(--accent);
+  background: var(--accent-btn);
   color: #fff;
 }
 .btn-primary:hover:not(:disabled) {

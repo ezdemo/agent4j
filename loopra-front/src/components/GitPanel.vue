@@ -830,7 +830,7 @@ defineExpose({ loadStatus })
   padding: 6px 18px;
   border: none;
   border-radius: 6px;
-  background: var(--accent);
+  background: var(--accent-btn);
   color: #fff;
   font-size: 14px;
   font-weight: 600;
@@ -1123,7 +1123,7 @@ defineExpose({ loadStatus })
   padding: 6px 20px;
   border: none;
   border-radius: 6px;
-  background: var(--accent);
+  background: var(--accent-btn);
   color: #fff;
   font-size: 12px;
   font-weight: 600;
@@ -1176,7 +1176,7 @@ defineExpose({ loadStatus })
   padding: 5px 0;
   border: none;
   border-radius: 4px;
-  background: var(--accent);
+  background: var(--accent-btn);
   color: #fff;
   font-size: 13px;
   font-weight: 600;

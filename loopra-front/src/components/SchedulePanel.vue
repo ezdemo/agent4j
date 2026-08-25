@@ -481,7 +481,7 @@ textarea.sch-input { resize: vertical; min-height: 36px; }
   transition: all 0.15s;
 }
 .sch-type-tabs button.active {
-  background: var(--accent);
+  background: var(--accent-btn);
   color: #fff;
 }
 .sch-form-actions {
@@ -618,8 +618,8 @@ textarea.sch-input { resize: vertical; min-height: 36px; }
   color: var(--accent);
 }
 .sch-filter-chip.active {
-  background: var(--accent);
-  border-color: var(--accent);
+  background: var(--accent-btn);
+  border-color: var(--accent-btn);
   color: #fff;
 }
 .sch-filter-chip.is-current:not(.active) {
