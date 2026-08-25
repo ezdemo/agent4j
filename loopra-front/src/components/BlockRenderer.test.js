@@ -127,4 +127,22 @@ describe('BlockRenderer active response state', () => {
     expect(wrapper.find('.path-steps').text())
       .toBe('思考1轮.读1次文件、改1次文件、执行1次命令、记忆1次、子代理1次、其他1次')
   })
+
+  it('merges reasoning blocks separated by blank content into one folded group', () => {
+    const wrapper = mount(BlockRenderer, {
+      props: {
+        blocks: [
+          {type: 'reasoning', content: '第一段思考', showContent: false},
+          {type: 'content', content: '\n\n'},
+          {type: 'reasoning', content: '第二段思考', showContent: false}
+        ]
+      }
+    })
+
+    // 空白正文不拆散连续思考：合并为一个折叠组，标题显示 思考2轮
+    expect(wrapper.findAll('.block-tool')).toHaveLength(1)
+    expect(wrapper.find('.path-steps').text()).toBe('思考2轮')
+    // 空白正文块不渲染
+    expect(wrapper.find('.block-content').exists()).toBe(false)
+  })
 })

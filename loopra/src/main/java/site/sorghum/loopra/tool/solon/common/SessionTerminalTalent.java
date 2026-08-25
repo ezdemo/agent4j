@@ -113,6 +113,10 @@ public class SessionTerminalTalent extends TerminalTalent {
      * 注释相关能力 全套用bash_start
      */
     @Override
+    @ToolMapping(
+            name = "bash",
+            description = "在终端执行非交互式 Shell 指令。支持多行命令与逻辑路径（如 `cd @pool1/bin/tool/`）。"
+    )
     public String bash(@Param(value = "command", description = "要执行的指令。") String command,
                        @Param(name = "timeout", required = false, defaultValue = "120000", description = "可选超时时间，单位为毫秒") Integer timeout,
                        @Param(name = "max_output_chars", required = false, defaultValue = "64000", description = "本次最多返回多少字符输出") Integer maxOutputChars,

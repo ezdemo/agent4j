@@ -634,6 +634,8 @@ const isTerminalResponseBlock = (block) => {
 
 const isReasoningBlock = block => block?.type === 'reasoning' || block?.type === 'reasoning_started'
 const isPathBlock = block => isReasoningBlock(block) || (block?.type === 'tool_call' && block.name !== 'finish')
+// 纯空白正文块（如思考间隙流出的 \n\n）：不打断 path 合并，也不渲染
+const isBlankContent = block => block?.type === 'content' && !(block.content || '').trim()
 
 /** 将连续思考块 + tool_call(非 finish) 合并为 path_group */
 const processedBlocks = computed(() => {
@@ -651,6 +653,9 @@ const processedBlocks = computed(() => {
         const nb = src[j]
         if (isPathBlock(nb)) {
           group.push(nb)
+          j++
+        } else if (isBlankContent(nb)) {
+          // 空白正文夹在思考/工具之间：跳过，不打断合并
           j++
         } else {
           break
@@ -684,6 +689,9 @@ const processedBlocks = computed(() => {
         _running: toolRunning || awaitingTerminalResponse
       })
       i = j
+    } else if (isBlankContent(b)) {
+      // 独立空白正文块不渲染
+      i++
     } else {
       out.push(b)
       i++

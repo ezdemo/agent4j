@@ -1881,7 +1881,8 @@ const sendMessage = async (images = [], overrideText = null, modelSelection = nu
               const lb = container.blocks[container.blocks.length - 1]
               const content = data.token || data.content || ''
               if (lb?.type === 'content') lb.content += content
-              else container.blocks.push({type: 'content', content: content})
+              // 纯空白正文（思考间隙流出的 \n\n）不创建独立块，避免拆散连续思考
+              else if (content.trim()) container.blocks.push({type: 'content', content: content})
             } else if (data.type === 'sub_reasoning') {
               const lb = container.blocks[container.blocks.length - 1]
               const reasoningContent = data.token || data.content || ''
@@ -1990,7 +1991,8 @@ const sendMessage = async (images = [], overrideText = null, modelSelection = nu
           } else if (data.type === 'content') {
             const lb = msg.blocks[msg.blocks.length - 1]
             if (lb?.type === 'content') lb.content += (data.content || '')
-            else msg.blocks.push({type: 'content', content: data.content || ''})
+            // 纯空白正文（思考间隙流出的 \n\n）不创建独立块，避免拆散连续思考
+            else if ((data.content || '').trim()) msg.blocks.push({type: 'content', content: data.content || ''})
           } else if (data.type === 'tool_call') {
             let name = data.name || '', args = data.args || data.arguments || ''
             if (typeof args === 'string') try {
