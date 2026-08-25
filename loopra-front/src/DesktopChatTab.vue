@@ -146,6 +146,7 @@ import EditorTabs from './components/EditorTabs.vue'
 import FileEditor from './components/FileEditor.vue'
 import ActionConfirmDialog from './components/ActionConfirmDialog.vue'
 import {fileIconFor} from './utils/fileIcons'
+import {applyHighlightTheme} from './utils/highlight'
 
 const EnvironmentPanel = defineAsyncComponent(() => import('./components/EnvironmentPanel.vue'))
 const RightPanel = defineAsyncComponent(() => import('./components/RightPanel.vue'))
@@ -159,6 +160,8 @@ const workspaceHash = ref(params.get('workspaceHash') || null)
 const store = useAppStore()
 const pageTheme = ref(params.get('theme') === 'dark' ? 'dark' : store.settings.theme)
 const theme = computed(() => pageTheme.value)
+// 页面主题（dark | gray）同步 Shiki 高亮主题：桌面 Chat Tab 不挂载 App.vue，需自行跟随，否则暗色下代码 token 仍为浅色主题配色
+watch(pageTheme, applyHighlightTheme, {immediate: true})
 const workspaces = ref([])
 const sessions = ref([])
 const chatRef = ref(null)
@@ -219,8 +222,11 @@ onMounted(() => {
   stopRightPanelListener = window.electronAPI?.events?.listen('desktop-chat-tab-toggle-right-panel', toggleRightPanel)
   stopTerminalListener = window.electronAPI?.events?.listen('desktop-chat-tab-toggle-terminal', toggleTerminal)
   stopThemeListener = window.electronAPI?.events?.listen('desktop-chat-tab-theme', (nextTheme) => {
-    pageTheme.value = nextTheme === 'dark' ? 'dark' : 'gray'
-    document.documentElement.setAttribute('data-theme', pageTheme.value)
+    const applied = nextTheme === 'dark' ? 'dark' : 'gray'
+    // 同步 store 与高亮主题：store 的 theme watcher 会更新 documentElement data-theme 并持久化，避免仅改页面视觉、token 配色滞留旧主题
+    store.settings.theme = applied
+    pageTheme.value = applied
+    document.documentElement.setAttribute('data-theme', applied)
   })
   stopElementInspectionListener = window.electronAPI?.events?.listen('desktop-chat-tab-element-inspection', addElementInspectionToSession)
   stopRefreshHistoryListener = window.electronAPI?.events?.listen('desktop-chat-tab-refresh-history', () => chatRef.value?.refreshHistory())

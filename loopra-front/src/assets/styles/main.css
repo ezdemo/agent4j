@@ -372,6 +372,12 @@ code {
   border-radius: var(--r-sm);
 }
 
+/* 暗色主题：行内代码用高对比底 + 明确亮色前景（默认继承的 --fg 在玻璃底上不够醒目） */
+[data-theme="dark"] code {
+  background: #26282e;
+  color: #e8eaed;
+}
+
 pre {
   font-family: var(--mono);
   font-size: 13px;
@@ -389,7 +395,7 @@ pre {
   overflow-y: hidden;
   padding: 4px 0;
 }
-pre code { background: none; padding: 0; }
+pre code { background: none; padding: 0; color: var(--fg); } /* 无 token 的回退文本用主题前景色，暗色下保持亮色 */
 pre code.hljs { background: transparent; } /* 让 pre 背景透出，避免 hljs 自带背景色干扰 */
 
 button { font: inherit; cursor: pointer; border: none; background: none; color: inherit; }

@@ -1786,6 +1786,41 @@ const onCollapseAllBlocks = () => {
   background: rgba(255, 123, 114, 0.08);
 }
 
+/* ============ 暗色主题：代码块纯色深底（提升 token 对比度） ============
+ * 消息气泡与代码块均为半透明玻璃底（--glass-bg-2）叠加 backdrop blur，
+ * 暗色下两层玻璃混合出浑浊偏亮的底色，Shiki token 颜色被削弱、看起来发灰看不清。
+ * 暗色下改为不透明纯深色底，去掉 blur，与 github-dark 底色同源，token 对比度最大化。
+ */
+[data-theme="dark"] .block-content :deep(.code-block-wrap),
+[data-theme="dark"] .finish-content :deep(.code-block-wrap) {
+  background: #1c1e23;
+  backdrop-filter: none;
+  -webkit-backdrop-filter: none;
+  border-color: rgba(255, 255, 255, 0.10);
+}
+
+[data-theme="dark"] .block-content :deep(.code-block-wrap.collapsible:not(.expanded)::before),
+[data-theme="dark"] .finish-content :deep(.code-block-wrap.collapsible:not(.expanded)::before) {
+  background: linear-gradient(to top, #1c1e23, transparent);
+}
+
+/* 思考卡片内代码块：同样叠加在玻璃底上，统一深底 */
+[data-theme="dark"] .reasoning-text :deep(.code-block-wrap) {
+  background: #1c1e23;
+  border-radius: var(--r-sm);
+}
+
+[data-theme="dark"] .reasoning-text :deep(.code-block-wrap.collapsible:not(.expanded)::before) {
+  background: linear-gradient(to top, #1c1e23, transparent);
+}
+
+/* 代码默认前景色：无 token 的空白/回退文本在暗色下也要亮色显示 */
+[data-theme="dark"] .block-content :deep(pre code),
+[data-theme="dark"] .finish-content :deep(pre code),
+[data-theme="dark"] .reasoning-text :deep(pre code) {
+  color: var(--fg);
+}
+
 /* 本轮文件变更 */
 .block-file-changes {
   overflow: hidden;
