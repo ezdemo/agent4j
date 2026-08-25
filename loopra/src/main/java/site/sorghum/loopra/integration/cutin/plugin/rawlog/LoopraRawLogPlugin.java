@@ -5,6 +5,7 @@ import site.sorghum.cutin.core.json.JsonSupport;
 import site.sorghum.cutin.core.loop.InterceptContext;
 import site.sorghum.cutin.core.loop.InterceptDecision;
 import site.sorghum.cutin.core.loop.InterceptPoint;
+import site.sorghum.cutin.core.model.ModelCallError;
 import site.sorghum.cutin.core.model.ModelHttpExchange;
 import site.sorghum.cutin.core.model.ModelResponse;
 import site.sorghum.cutin.core.plugin.AgentPlugin;
@@ -15,7 +16,8 @@ import java.util.LinkedHashMap;
 import java.util.Map;
 
 /**
- * 在模型响应完成后把 provider 的原始请求与响应体打印到应用日志。
+ * 在模型响应完成后把 provider 的原始请求与响应体打印到应用日志，
+ * 模型调用失败时打印错误消息与因果链。
  *
  * <p>同步调用时 {@link ModelResponse#raw()} 为完整 JSON 响应体；
  * 流式调用时为全部 SSE 数据行按到达顺序以换行拼接的内容。
@@ -44,6 +46,7 @@ public final class LoopraRawLogPlugin implements LoopPlugin {
     @Override
     public void register(LoopRegistrar registrar) {
         registrar.registerInterceptor(InterceptPoint.AFTER_MODEL, -1000, this::printRaw);
+        registrar.registerInterceptor(InterceptPoint.ON_MODEL_ERROR, -1000, this::printError);
     }
 
     private InterceptDecision printRaw(InterceptContext context) {
@@ -67,6 +70,22 @@ public final class LoopraRawLogPlugin implements LoopPlugin {
             return InterceptDecision.pass();
         }
         log.info("[raw] provider 原始响应体：\n{}", raw);
+        return InterceptDecision.pass();
+    }
+
+    /** 模型调用失败时打印错误消息与因果链，便于定位原始错误载荷。 */
+    private InterceptDecision printError(InterceptContext context) {
+        if (!(context.payload() instanceof ModelCallError error)) {
+            return InterceptDecision.pass();
+        }
+        String message = error.message();
+        if (message != null && !message.isBlank()) {
+            log.info("[raw] provider 模型调用失败：\n{}", message);
+        }
+        Throwable cause = error.cause();
+        if (cause != null && cause.getMessage() != null && !cause.getMessage().isBlank()) {
+            log.info("[raw] provider 模型调用失败原因：{}: {}", cause.getClass().getName(), cause.getMessage());
+        }
         return InterceptDecision.pass();
     }
 

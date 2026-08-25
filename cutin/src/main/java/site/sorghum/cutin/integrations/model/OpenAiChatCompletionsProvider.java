@@ -78,7 +78,8 @@ public final class OpenAiChatCompletionsProvider implements ModelProvider {
     /** 构建 Chat Completions 请求体：模型、流标记、消息、工具与扩展选项。 */
     private ONode buildBody(ModelCallRequest request, boolean stream) {
         ONode body = JsonSupport.object();
-        body.set("model", model(request));
+        String model = model(request);
+        body.set("model", model);
         body.set("stream", stream);
 
         String serviceTier = option(request, "serviceTier");

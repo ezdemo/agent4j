@@ -16,6 +16,7 @@ import site.sorghum.cutin.core.model.ModelResponse;
 import site.sorghum.cutin.core.model.StreamChunk;
 import site.sorghum.cutin.core.plugin.PluginBeanManager;
 import site.sorghum.cutin.core.loop.Steps;
+import site.sorghum.cutin.integrations.model.ModelProviderException;
 
 import java.nio.file.Files;
 import java.nio.file.Path;
@@ -79,6 +80,63 @@ class LoopraHttpLogPluginTest {
         assertTrue(log.contains("message-2"));
         assertTrue(log.contains("https://example.test/v1/responses"));
         assertTrue(log.contains("\"reasoningEffort\":\"high\""));
+    }
+
+    @Test
+    void writesErrorEntryWhenModelCallFails() throws Exception {
+        DefaultLoopEngine engine = new DefaultLoopEngine();
+        engine.addModelProvider(new FailingProvider());
+        PluginBeanManager manager = new PluginBeanManager(engine.registrar());
+        manager.registerPlugin(new LoopraHttpLogPlugin(
+            "https://example.test/v1/responses",
+            tempDirectory,
+            Clock.fixed(Instant.parse("2026-08-17T01:02:03Z"), ZoneOffset.UTC)
+        ));
+        manager.startAll();
+
+        LoopProgram program = LoopProgram.builder("http-log-error")
+            .node("model", NodeType.MODEL, Steps.modelFromContext("fake"))
+            .node("out", NodeType.OUTPUT, ignored -> StepResult.Exit.INSTANCE)
+            .next("model", "out")
+            .start("model")
+            .build();
+
+        engine.run(program, engine.newContext(
+            "ctx-error",
+            List.of(new Message("user", "boom")),
+            Map.of("sessionId", "session/e"),
+            Budget.unlimited(),
+            null
+        )).result().join();
+
+        Path logFile = tempDirectory.resolve("session_e.log");
+        String log = Files.readString(logFile);
+        assertTrue(log.contains(">>> Request"), "请求记录应已写入");
+        assertTrue(log.contains(">>> Error"), "错误记录应已写入");
+        assertTrue(log.contains("provider returned HTTP 400"));
+    }
+
+    private static final class FailingProvider implements ModelProvider {
+
+        @Override
+        public String id() {
+            return "fake";
+        }
+
+        @Override
+        public ModelResponse call(ModelCallRequest request) {
+            throw new ModelProviderException("provider returned HTTP 400: {\"error\":\"bad request\"}");
+        }
+
+        @Override
+        public Stream<StreamChunk> stream(ModelCallRequest request) {
+            throw new ModelProviderException("provider returned HTTP 400: {\"error\":\"bad request\"}");
+        }
+
+        @Override
+        public ModelCapabilities capabilities() {
+            return new ModelCapabilities(Set.of("fake"), true, true);
+        }
     }
 
     private static final class EchoProvider implements ModelProvider {

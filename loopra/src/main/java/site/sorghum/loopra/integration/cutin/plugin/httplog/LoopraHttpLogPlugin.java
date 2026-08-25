@@ -6,6 +6,7 @@ import site.sorghum.cutin.core.json.JsonSupport;
 import site.sorghum.cutin.core.loop.InterceptContext;
 import site.sorghum.cutin.core.loop.InterceptDecision;
 import site.sorghum.cutin.core.loop.InterceptPoint;
+import site.sorghum.cutin.core.model.ModelCallError;
 import site.sorghum.cutin.core.model.ModelCallRequest;
 import site.sorghum.cutin.core.plugin.AgentPlugin;
 import site.sorghum.cutin.core.plugin.LoopPlugin;
@@ -26,7 +27,8 @@ import java.util.Map;
 import java.util.function.UnaryOperator;
 
 /**
- * 在模型请求发送前将 Cutin 模型请求写入 Loopra HTTP 日志目录。
+ * 在模型请求发送前将 Cutin 模型请求写入 Loopra HTTP 日志目录，
+ * 模型调用失败时把错误信息写入同一条会话日志。
  *
  * <p>日志按会话分文件保存于 {@code ~/.loopra/logs/http}，每个会话仅保留最近两条，
  * 与 Cutin 重构前的 HTTP 请求日志策略一致。</p>
@@ -85,6 +87,7 @@ public final class LoopraHttpLogPlugin implements LoopPlugin {
     @Override
     public void register(LoopRegistrar registrar) {
         registrar.registerInterceptor(InterceptPoint.BEFORE_MODEL, 2000, this::writeRequestLog);
+        registrar.registerInterceptor(InterceptPoint.ON_MODEL_ERROR, -1000, this::writeErrorLog);
     }
 
     private InterceptDecision writeRequestLog(InterceptContext context) {
@@ -94,7 +97,23 @@ public final class LoopraHttpLogPlugin implements LoopPlugin {
         return InterceptDecision.pass();
     }
 
+    /** 模型调用失败时追加一条错误记录，与 BEFORE_MODEL 已写入的请求记录成对出现。 */
+    private InterceptDecision writeErrorLog(InterceptContext context) {
+        if (context.payload() instanceof ModelCallError error) {
+            writeError(context.context(), error);
+        }
+        return InterceptDecision.pass();
+    }
+
     private void write(LoopContext context, ModelCallRequest request) {
+        appendEntry(context, formatEntry(request));
+    }
+
+    private void writeError(LoopContext context, ModelCallError error) {
+        appendEntry(context, formatErrorEntry(error));
+    }
+
+    private void appendEntry(LoopContext context, String entry) {
         String sessionName = sessionName(context);
         Path logFile = logDirectory.resolve(sanitizeFileName(sessionName) + ".log");
         try {
@@ -102,7 +121,7 @@ public final class LoopraHttpLogPlugin implements LoopPlugin {
             String existing = Files.exists(logFile) ? Files.readString(logFile, StandardCharsets.UTF_8) : "";
             Files.writeString(
                 logFile,
-                retainLatestEntry(existing) + formatEntry(request),
+                retainLatestEntry(existing) + entry,
                 StandardCharsets.UTF_8,
                 StandardOpenOption.CREATE,
                 StandardOpenOption.TRUNCATE_EXISTING
@@ -124,6 +143,20 @@ public final class LoopraHttpLogPlugin implements LoopPlugin {
             + ">>> AI API Call : " + TIMESTAMP_FORMAT.format(Instant.now(clock)) + '\n'
             + ">>> URL         : " + apiUrl + '\n'
             + ">>> Request     :\n"
+            + JsonSupport.write(body) + '\n'
+            + "<<< END\n\n";
+    }
+
+    private String formatErrorEntry(ModelCallError error) {
+        Map<String, Object> body = new LinkedHashMap<>();
+        body.put("error", error.message());
+        if (error.cause() != null) {
+            body.put("cause", error.cause().getClass().getName() + ": " + error.cause().getMessage());
+        }
+        return SEPARATOR
+            + ">>> AI API Call : " + TIMESTAMP_FORMAT.format(Instant.now(clock)) + '\n'
+            + ">>> URL         : " + apiUrl + '\n'
+            + ">>> Error       :\n"
             + JsonSupport.write(body) + '\n'
             + "<<< END\n\n";
     }

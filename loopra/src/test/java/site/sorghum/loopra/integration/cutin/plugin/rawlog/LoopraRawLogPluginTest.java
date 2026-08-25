@@ -20,6 +20,7 @@ import site.sorghum.cutin.core.model.ModelProvider;
 import site.sorghum.cutin.core.model.ModelResponse;
 import site.sorghum.cutin.core.model.StreamChunk;
 import site.sorghum.cutin.core.plugin.PluginBeanManager;
+import site.sorghum.cutin.integrations.model.ModelProviderException;
 
 import java.util.List;
 import java.util.Set;
@@ -67,6 +68,69 @@ class LoopraRawLogPluginTest {
             assertTrue(messages.stream().anyMatch(m -> m.contains("\"model\":\"fake\"")));
         } finally {
             logger.detachAppender(appender);
+        }
+    }
+
+    @Test
+    void printsModelErrorOnFailure() {
+        ListAppender<ILoggingEvent> appender = new ListAppender<>();
+        appender.start();
+        Logger logger = (Logger) LoggerFactory.getLogger(LoopraRawLogPlugin.class);
+        logger.setLevel(Level.INFO);
+        logger.addAppender(appender);
+
+        try {
+            DefaultLoopEngine engine = new DefaultLoopEngine();
+            engine.addModelProvider(new FailingProvider());
+            PluginBeanManager manager = new PluginBeanManager(engine.registrar());
+            manager.registerPlugin(new LoopraRawLogPlugin());
+            manager.startAll();
+
+            LoopProgram program = LoopProgram.builder("raw-log-error")
+                .node("model", NodeType.MODEL, Steps.modelFromContext("fake"))
+                .node("out", NodeType.OUTPUT, ignored -> StepResult.Exit.INSTANCE)
+                .next("model", "out")
+                .start("model")
+                .build();
+
+            engine.run(program, engine.newContext(
+                "ctx-error",
+                List.of(new Message("user", "boom")),
+                java.util.Map.of(),
+                Budget.unlimited(),
+                null
+            )).result().join();
+
+            List<String> messages = appender.list.stream()
+                .map(ILoggingEvent::getFormattedMessage)
+                .toList();
+            assertTrue(messages.stream().anyMatch(m -> m.contains("模型调用失败")));
+            assertTrue(messages.stream().anyMatch(m -> m.contains("provider returned HTTP 400")));
+        } finally {
+            logger.detachAppender(appender);
+        }
+    }
+
+    private static final class FailingProvider implements ModelProvider {
+
+        @Override
+        public String id() {
+            return "fake";
+        }
+
+        @Override
+        public ModelResponse call(ModelCallRequest request) {
+            throw new ModelProviderException("provider returned HTTP 400: {\"error\":\"bad request\"}");
+        }
+
+        @Override
+        public Stream<StreamChunk> stream(ModelCallRequest request) {
+            throw new ModelProviderException("provider returned HTTP 400: {\"error\":\"bad request\"}");
+        }
+
+        @Override
+        public ModelCapabilities capabilities() {
+            return new ModelCapabilities(Set.of("fake"), true, true);
         }
     }
 
