@@ -5,6 +5,7 @@ import ch.qos.logback.classic.Logger;
 import ch.qos.logback.classic.spi.ILoggingEvent;
 import ch.qos.logback.core.read.ListAppender;
 import org.junit.jupiter.api.Test;
+import org.noear.snack4.ONode;
 import org.slf4j.LoggerFactory;
 import site.sorghum.cutin.core.context.Budget;
 import site.sorghum.cutin.core.context.Message;
@@ -132,6 +133,11 @@ class LoopraRawLogPluginTest {
         public ModelCapabilities capabilities() {
             return new ModelCapabilities(Set.of("fake"), true, true);
         }
+
+        @Override
+        public ONode buildBody(ModelCallRequest request, boolean stream) {
+            return null;
+        }
     }
 
     private static final class RawProvider implements ModelProvider {
@@ -159,6 +165,11 @@ class LoopraRawLogPluginTest {
         @Override
         public ModelCapabilities capabilities() {
             return new ModelCapabilities(Set.of("fake"), true, true);
+        }
+
+        @Override
+        public ONode buildBody(ModelCallRequest request, boolean stream) {
+            return null;
         }
     }
 }

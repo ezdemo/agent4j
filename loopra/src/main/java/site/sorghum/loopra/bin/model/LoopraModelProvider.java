@@ -3,15 +3,13 @@ package site.sorghum.loopra.bin.model;
 import lombok.Getter;
 import lombok.Setter;
 import org.noear.snack4.ONode;
+import org.noear.solon.Solon;
 import site.sorghum.cutin.core.model.ModelCallRequest;
 import site.sorghum.cutin.core.model.ModelCapabilities;
 import site.sorghum.cutin.core.model.ModelProvider;
 import site.sorghum.cutin.core.model.ModelResponse;
 import site.sorghum.cutin.core.model.StreamChunk;
-import site.sorghum.cutin.integrations.model.AnthropicMessagesProvider;
-import site.sorghum.cutin.integrations.model.ModelProviderConfig;
-import site.sorghum.cutin.integrations.model.OpenAiChatCompletionsProvider;
-import site.sorghum.cutin.integrations.model.OpenAiResponsesProvider;
+import site.sorghum.cutin.integrations.model.*;
 import site.sorghum.loopra.bin.agent.model.ChatMessage;
 
 import java.util.HashMap;
@@ -122,6 +120,14 @@ public class LoopraModelProvider implements ModelProvider {
         trackedRef.set(tracked);
         activeStream = tracked;
         return tracked;
+    }
+
+    /**
+     * {@inheritDoc} 委托底层协议 Provider 构建最终请求体。
+     */
+    @Override
+    public ONode buildBody(ModelCallRequest request, boolean stream) {
+        return provider().buildBody(prepareRequest(request), stream);
     }
 
     @Override

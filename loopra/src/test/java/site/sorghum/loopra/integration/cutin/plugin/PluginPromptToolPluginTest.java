@@ -31,6 +31,7 @@ import site.sorghum.loopra.integration.cutin.plugin.prompt.PromptRegistry;
 import site.sorghum.loopra.integration.cutin.plugin.prompt.PromptSlice;
 import site.sorghum.loopra.integration.cutin.plugin.prompt.PromptSliceProvider;
 import site.sorghum.loopra.integration.cutin.plugin.tool.LoopraToolGatewayPlugin;
+import org.noear.snack4.ONode;
 import org.noear.solon.ai.chat.tool.FunctionTool;
 
 import java.lang.reflect.Type;
@@ -227,6 +228,11 @@ class PluginPromptToolPluginTest {
         @Override
         public ModelCapabilities capabilities() {
             return new ModelCapabilities(Set.of("fake"), true, true);
+        }
+
+        @Override
+        public ONode buildBody(ModelCallRequest request, boolean stream) {
+            return null;
         }
     }
 

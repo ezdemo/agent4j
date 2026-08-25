@@ -1,6 +1,7 @@
 package site.sorghum.loopra.integration.cutin;
 
 import org.junit.jupiter.api.Test;
+import org.noear.snack4.ONode;
 import site.sorghum.cutin.core.context.Message;
 import site.sorghum.cutin.core.context.Usage;
 import site.sorghum.cutin.core.loop.*;
@@ -169,6 +170,11 @@ class LoopraRetryPolicyPluginTest {
         public ModelCapabilities capabilities() {
             return new ModelCapabilities(Set.of("fake"), true, true);
         }
+
+        @Override
+        public ONode buildBody(ModelCallRequest request, boolean stream) {
+            return null;
+        }
     }
 
     private static final class HasNextFailureProvider implements ModelProvider {
@@ -215,6 +221,11 @@ class LoopraRetryPolicyPluginTest {
         @Override
         public ModelCapabilities capabilities() {
             return new ModelCapabilities(Set.of("fake"), true, true);
+        }
+
+        @Override
+        public ONode buildBody(ModelCallRequest request, boolean stream) {
+            return null;
         }
     }
 }

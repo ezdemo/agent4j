@@ -1,6 +1,7 @@
 package site.sorghum.cutin.core.runtime;
 
 import org.junit.jupiter.api.Test;
+import org.noear.snack4.ONode;
 import site.sorghum.cutin.core.context.LoopContext;
 import site.sorghum.cutin.core.context.Message;
 import site.sorghum.cutin.core.context.Usage;
@@ -88,6 +89,11 @@ class ModelAndToolLifecycleTest {
         @Override
         public ModelCapabilities capabilities() {
             return new ModelCapabilities(Set.of("fake"), true, true);
+        }
+
+        @Override
+        public ONode buildBody(ModelCallRequest request, boolean stream) {
+            return null;
         }
     }
 

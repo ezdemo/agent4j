@@ -28,6 +28,11 @@ public final class OpenAiChatCompletionsProvider implements ModelProvider {
 
     /** 按配置创建 Provider，endpoint 指向 /chat/completions。 */
     public OpenAiChatCompletionsProvider(ModelProviderConfig config) {
+        this(config, new ProviderInterceptor[0]);
+    }
+
+    /** 按配置创建 Provider，并注入请求体拦截器链（同步与流式调用均生效）。 */
+    public OpenAiChatCompletionsProvider(ModelProviderConfig config, ProviderInterceptor... interceptors) {
         this.config = config;
         this.transport = new HttpModelTransport(
             config.endpoint("/chat/completions"),
@@ -44,7 +49,7 @@ public final class OpenAiChatCompletionsProvider implements ModelProvider {
     /** 同步调用：POST 请求后解析消息、工具调用与用量，并附带原始请求与响应体。 */
     @Override
     public ModelResponse call(ModelCallRequest request) {
-        ONode body = buildBody(request, false);
+        ONode body = _buildBody(request, false);
         String raw = transport.postRaw(body);
         ONode response = JsonSupport.read(raw);
         Message message = parseMessage(JsonSupport.child(response, "choices", 0, "message"));
@@ -55,7 +60,7 @@ public final class OpenAiChatCompletionsProvider implements ModelProvider {
     /** 流式调用：解析 SSE 增量块，并在流尾追加聚合出的工具调用与用量。 */
     @Override
     public Stream<StreamChunk> stream(ModelCallRequest request) {
-        ONode body = buildBody(request, true);
+        ONode body = _buildBody(request, true);
         site.sorghum.cutin.core.model.ModelHttpExchange exchange = transport.exchangeFor(body);
         Accumulator accumulator = new Accumulator(exchange);
         Stream<StreamChunk> chunks = transport.postSse(body)
@@ -75,8 +80,9 @@ public final class OpenAiChatCompletionsProvider implements ModelProvider {
         return new ModelCapabilities(Set.of(config.model()), true, true);
     }
 
-    /** 构建 Chat Completions 请求体：模型、流标记、消息、工具与扩展选项。 */
-    private ONode buildBody(ModelCallRequest request, boolean stream) {
+    /** {@inheritDoc} 构建 Chat Completions 请求体：模型、流标记、消息、工具与扩展选项。 */
+    @Override
+    public ONode buildBody(ModelCallRequest request, boolean stream) {
         ONode body = JsonSupport.object();
         String model = model(request);
         body.set("model", model);

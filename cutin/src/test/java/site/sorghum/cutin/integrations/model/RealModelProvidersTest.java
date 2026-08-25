@@ -8,6 +8,7 @@ import site.sorghum.cutin.core.context.Message;
 import site.sorghum.cutin.core.context.Usage;
 import site.sorghum.cutin.core.json.JsonSupport;
 import site.sorghum.cutin.core.model.ModelCallRequest;
+import site.sorghum.cutin.core.model.ModelProvider;
 import site.sorghum.cutin.core.model.ModelResponse;
 import site.sorghum.cutin.core.model.ModelStreamPhase;
 import site.sorghum.cutin.core.model.StreamChunk;
@@ -755,6 +756,137 @@ class RealModelProvidersTest {
             assertEquals(1, last.get().toolCalls().size(), () -> "last=" + last.get());
             assertEquals("read", last.get().toolCalls().get(0).toolId());
             assertEquals("c.txt", last.get().toolCalls().get(0).arguments().get("path"));
+        } finally {
+            server.stop(0);
+        }
+    }
+
+    /** ProviderInterceptor 可检查上下文并就地修改请求体（同步调用）。 */
+    @Test
+    void providerInterceptorCanInspectAndModifyBody() throws Exception {
+        AtomicReference<String> requestBody = new AtomicReference<>();
+        AtomicReference<ModelProvider> seenProvider = new AtomicReference<>();
+        AtomicReference<String> seenModel = new AtomicReference<>();
+        HttpServer server = server("/chat/completions", requestBody, """
+            {"choices": [{"message": {"role": "assistant", "content": "hello"}}],
+             "usage": {"prompt_tokens": 1, "completion_tokens": 1}}
+            """);
+        server.start();
+        try {
+            ModelProviderConfig config = new ModelProviderConfig(
+                "chat",
+                "http://127.0.0.1:" + server.getAddress().getPort(),
+                "key",
+                "gpt-5",
+                Map.of()
+            );
+            OpenAiChatCompletionsProvider provider = new OpenAiChatCompletionsProvider(config, context -> {
+                seenProvider.set(context.provider());
+                seenModel.set(context.modelId());
+                assertEquals("chat", context.providerId());
+                assertEquals("gpt-5", context.request().modelId());
+                assertNotNull(context.body());
+                context.body().set("temperature", 0.2);
+                context.body().set("extra_field", "injected");
+                return null;
+            });
+            ModelCallRequest request = new ModelCallRequest(
+                "gpt-5",
+                List.of(new Message("user", "hi")),
+                List.of(),
+                Map.of()
+            );
+
+            ModelResponse response = provider.call(request);
+
+            assertEquals("hello", response.message().content());
+            assertSame(provider, seenProvider.get());
+            assertEquals("gpt-5", seenModel.get());
+            ONode body = JsonSupport.read(requestBody.get());
+            assertEquals(0.2, JsonSupport.child(body, "temperature").getDouble(), 0.0001);
+            assertEquals("injected", JsonSupport.text(body, "", "extra_field"));
+            assertEquals("gpt-5", JsonSupport.text(body, "", "model"));
+        } finally {
+            server.stop(0);
+        }
+    }
+
+    /** ProviderInterceptor 返回新节点时应整体替换请求体（同步调用）。 */
+    @Test
+    void providerInterceptorCanReplaceBody() throws Exception {
+        AtomicReference<String> requestBody = new AtomicReference<>();
+        HttpServer server = server("/chat/completions", requestBody, """
+            {"choices": [{"message": {"role": "assistant", "content": "hello"}}],
+             "usage": {"prompt_tokens": 1, "completion_tokens": 1}}
+            """);
+        server.start();
+        try {
+            ModelProviderConfig config = new ModelProviderConfig(
+                "chat",
+                "http://127.0.0.1:" + server.getAddress().getPort(),
+                "key",
+                "gpt-5",
+                Map.of()
+            );
+            OpenAiChatCompletionsProvider provider = new OpenAiChatCompletionsProvider(config, context -> {
+                ONode replacement = JsonSupport.object();
+                replacement.set("model", JsonSupport.text(context.body(), "", "model"));
+                replacement.set("stream", false);
+                replacement.set("injected", "replaced");
+                return replacement;
+            });
+            ModelCallRequest request = new ModelCallRequest(
+                "gpt-5",
+                List.of(new Message("user", "hi")),
+                List.of(),
+                Map.of()
+            );
+
+            provider.call(request);
+
+            ONode body = JsonSupport.read(requestBody.get());
+            assertEquals("gpt-5", JsonSupport.text(body, "", "model"));
+            assertEquals("replaced", JsonSupport.text(body, "", "injected"));
+            assertNull(JsonSupport.child(body, "messages"));
+        } finally {
+            server.stop(0);
+        }
+    }
+
+    /** ProviderInterceptor 对流式调用同样生效，注入字段应出现在发送的请求体中。 */
+    @Test
+    void providerInterceptorAppliesToStreaming() throws Exception {
+        AtomicReference<String> requestBody = new AtomicReference<>();
+        HttpServer server = newStreamingServer("/chat/completions", requestBody);
+        server.start();
+        try {
+            ModelProviderConfig config = new ModelProviderConfig(
+                "chat",
+                "http://127.0.0.1:" + server.getAddress().getPort(),
+                "key",
+                "gpt-5",
+                Map.of()
+            );
+            OpenAiChatCompletionsProvider provider = new OpenAiChatCompletionsProvider(config, context -> {
+                context.body().set("max_tokens", 123);
+                return null;
+            });
+            ModelCallRequest request = new ModelCallRequest(
+                "gpt-5",
+                List.of(new Message("user", "hi")),
+                List.of(),
+                Map.of()
+            );
+
+            String content;
+            try (Stream<StreamChunk> chunks = provider.stream(request)) {
+                content = chunks.map(StreamChunk::content).reduce("", String::concat);
+            }
+
+            assertEquals("hello", content);
+            ONode body = JsonSupport.read(requestBody.get());
+            assertTrue(JsonSupport.boolValue(body, false, "stream"));
+            assertEquals(123, JsonSupport.intValue(body, 0, "max_tokens"));
         } finally {
             server.stop(0);
         }

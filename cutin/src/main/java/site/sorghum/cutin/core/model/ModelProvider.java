@@ -1,5 +1,8 @@
 package site.sorghum.cutin.core.model;
 
+import org.noear.snack4.ONode;
+import site.sorghum.cutin.integrations.model.ProviderInterceptor;
+
 import java.util.stream.Stream;
 
 /**
@@ -21,4 +24,24 @@ public interface ModelProvider {
 
     /** 返回该 Provider 的能力声明。 */
     ModelCapabilities capabilities();
+
+    /**
+     * 构建协议请求体（已通过 Provider 拦截器处理后的最终请求体）。
+     *
+     * <p>同步与流式调用都会先经过该方法再发送。body 是各协议私有的 JSON
+     * 结构（如 Chat Completions、Messages、Responses），由各 Provider
+     * 自行实现。</p>
+     */
+    ONode buildBody(ModelCallRequest request, boolean stream);
+
+    /**
+     * 构建协议请求体（已通过 Provider 拦截器处理后的最终请求体）。
+     *
+     * <p>同步与流式调用都会先经过该方法再发送。body 是各协议私有的 JSON
+     * 结构（如 Chat Completions、Messages、Responses），由各 Provider
+     * 自行实现。</p>
+     */
+    default ONode _buildBody(ModelCallRequest request, boolean stream){
+        return ProviderInterceptor.run(ProviderInterceptor.INTERCEPT_LIST, this, id(), request, buildBody(request, stream));
+    }
 }

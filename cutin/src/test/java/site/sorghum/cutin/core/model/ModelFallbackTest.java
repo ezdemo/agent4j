@@ -1,6 +1,7 @@
 package site.sorghum.cutin.core.model;
 
 import org.junit.jupiter.api.Test;
+import org.noear.snack4.ONode;
 import site.sorghum.cutin.core.context.Message;
 import site.sorghum.cutin.core.context.Usage;
 import site.sorghum.cutin.core.loop.*;
@@ -59,6 +60,11 @@ class ModelFallbackTest {
         public ModelCapabilities capabilities() {
             return new ModelCapabilities(Set.of("shared"), true, true);
         }
+
+        @Override
+        public ONode buildBody(ModelCallRequest request, boolean stream) {
+            return null;
+        }
     }
 
     static class WorkingProvider implements ModelProvider {
@@ -85,6 +91,11 @@ class ModelFallbackTest {
         @Override
         public ModelCapabilities capabilities() {
             return new ModelCapabilities(Set.of("shared"), true, true);
+        }
+
+        @Override
+        public ONode buildBody(ModelCallRequest request, boolean stream) {
+            return null;
         }
     }
 }

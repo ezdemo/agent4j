@@ -30,7 +30,7 @@ public final class AnthropicMessagesProvider implements ModelProvider {
     /** HTTP 传输层。 */
     private final HttpModelTransport transport;
 
-    /** 按配置创建 Provider，endpoint 指向 /v1/messages。 */
+    /** 按配置创建 Provider，并注入请求体拦截器链（同步与流式调用均生效）。 */
     public AnthropicMessagesProvider(ModelProviderConfig config) {
         this.config = config;
         this.transport = new HttpModelTransport(
@@ -52,7 +52,7 @@ public final class AnthropicMessagesProvider implements ModelProvider {
     /** 同步调用：解析内容块（text、thinking、tool_use）与用量，并附带原始请求与响应体。 */
     @Override
     public ModelResponse call(ModelCallRequest request) {
-        ONode body = buildBody(request, false);
+        ONode body = _buildBody(request, false);
         String raw = transport.postRaw(body);
         ONode response = JsonSupport.read(raw);
         return new ModelResponse(
@@ -67,7 +67,7 @@ public final class AnthropicMessagesProvider implements ModelProvider {
     /** 流式调用：按 Anthropic SSE 事件转换为 StreamChunk，并在流尾聚合工具与 thinking。 */
     @Override
     public Stream<StreamChunk> stream(ModelCallRequest request) {
-        ONode body = buildBody(request, true);
+        ONode body = _buildBody(request, true);
         site.sorghum.cutin.core.model.ModelHttpExchange exchange = transport.exchangeFor(body);
         Accumulator accumulator = new Accumulator(exchange);
         Stream<StreamChunk> chunks = transport.postSse(body)
@@ -87,10 +87,12 @@ public final class AnthropicMessagesProvider implements ModelProvider {
         return new ModelCapabilities(Set.of(config.model()), true, true);
     }
 
-    /** 构建 Messages 请求体：模型、max_tokens、system、消息、工具与流标记。 */
-    private ONode buildBody(ModelCallRequest request, boolean stream) {
+    /** {@inheritDoc} 构建 Messages 请求体：模型、max_tokens、system、消息、工具与流标记。 */
+    @Override
+    public ONode buildBody(ModelCallRequest request, boolean stream) {
         ONode body = JsonSupport.object();
-        body.set("model", model(request));
+        String model = model(request);
+        body.set("model", model);
         body.set("max_tokens", maxTokens(request));
         body.set("stream", stream);
 

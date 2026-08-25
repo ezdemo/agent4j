@@ -24,7 +24,7 @@ public final class OpenAiResponsesProvider implements ModelProvider {
     /** HTTP 传输层。 */
     private final HttpModelTransport transport;
 
-    /** 按配置创建 Provider，endpoint 指向 /responses。 */
+    /** 按配置创建 Provider，并注入请求体拦截器链（同步与流式调用均生效）。 */
     public OpenAiResponsesProvider(ModelProviderConfig config) {
         this.config = config;
         this.transport = new HttpModelTransport(
@@ -42,7 +42,7 @@ public final class OpenAiResponsesProvider implements ModelProvider {
     /** 同步调用：解析输出条目（消息、推理、函数调用）与用量，并附带原始请求与响应体。 */
     @Override
     public ModelResponse call(ModelCallRequest request) {
-        ONode body = buildBody(request, false);
+        ONode body = _buildBody(request, false);
         String raw = transport.postRaw(body);
         ONode response = JsonSupport.read(raw);
         return new ModelResponse(
@@ -57,7 +57,7 @@ public final class OpenAiResponsesProvider implements ModelProvider {
     /** 流式调用：按 Responses SSE 事件转换为 StreamChunk，并在流尾聚合工具调用。 */
     @Override
     public Stream<StreamChunk> stream(ModelCallRequest request) {
-        ONode body = buildBody(request, true);
+        ONode body = _buildBody(request, true);
         site.sorghum.cutin.core.model.ModelHttpExchange exchange = transport.exchangeFor(body);
         Accumulator accumulator = new Accumulator(exchange);
         Stream<StreamChunk> chunks = transport.postSse(body)
@@ -77,10 +77,12 @@ public final class OpenAiResponsesProvider implements ModelProvider {
         return new ModelCapabilities(Set.of(config.model()), true, true);
     }
 
-    /** 构建 Responses 请求体：模型、指令、输入条目、工具与推理选项。 */
-    private ONode buildBody(ModelCallRequest request, boolean stream) {
+    /** {@inheritDoc} 构建 Responses 请求体：模型、指令、输入条目、工具与推理选项。 */
+    @Override
+    public ONode buildBody(ModelCallRequest request, boolean stream) {
         ONode body = JsonSupport.object();
-        body.set("model", model(request));
+        String model = model(request);
+        body.set("model", model);
         body.set("stream", stream);
 
         String serviceTier = option(request, "serviceTier");
@@ -96,6 +98,11 @@ public final class OpenAiResponsesProvider implements ModelProvider {
             ONode include = JsonSupport.array();
             include.add("reasoning.encrypted_content");
             body.set("include", include);
+        }else {
+            ONode reasoning = JsonSupport.object();
+            reasoning.set("effort", "none");
+            reasoning.set("summary", "auto");
+            body.set("reasoning", reasoning);
         }
 
         StringBuilder instructions = new StringBuilder();
