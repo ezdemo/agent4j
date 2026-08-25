@@ -610,6 +610,19 @@ async function installOrUpdate() {
   }
 
   try {
+    // 更新前先停止运行中的旧服务：释放 Windows 下 loopra-web.jar 文件占用，
+    // 避免 install.ps1 覆盖 jar 失败；更新完成后自动重启以加载新版本
+    const wasRunning = running.value
+    if (wasRunning) {
+      installLogs.value.push('>> 检测到核心服务正在运行，先停止旧服务...')
+      await stopService()
+      if (errorMessage.value) {
+        installLogs.value.push(`>> ❌ 停止旧服务失败: ${errorMessage.value}，已中止更新`)
+        return
+      }
+      installLogs.value.push('>> 旧服务已停止')
+    }
+
     // 仅使用安装包内置核心运行时本地安装/更新（不做在线下载回退）
     await loopraWebService.installLocal()
     installLogs.value.push('')
@@ -617,6 +630,21 @@ async function installOrUpdate() {
     installed.value = true
     // 安装后刷新核心与 Java 状态
     await Promise.all([refreshCore(), refreshJava()])
+
+    // 更新完成后自动重启服务，加载新版本
+    installLogs.value.push('')
+    if (running.value) {
+      // 停止后端口仍有服务在运行（如 CLI 启动的 4567，不属于本次更新对象）：不打断，仅提示
+      installLogs.value.push('>> 检测到端口已有其他进程运行服务（可能由 CLI 启动），已跳过自动重启；新版本将在下次启动服务时生效')
+    } else {
+      installLogs.value.push('✅ 更新完成，正在自动重启服务...')
+      await startService({ overlay: true })
+      if (errorMessage.value) {
+        installLogs.value.push(`>> ⚠️ 服务自动重启失败: ${errorMessage.value}，可点击「启动服务」手动启动`)
+      } else {
+        installLogs.value.push('✅ 服务已重启，当前使用新版本')
+      }
+    }
   } catch (e) {
     errorMessage.value = `安装失败: ${e.message || e}`
   } finally {
@@ -670,8 +698,8 @@ async function startService(options = {}) {
         port.value = targetPort
         enterPulse.value = true
         await registerBrowserBridge()
-        // 跳过等待：启动完成即自动进入 Loopra 主界面
-        if (skipWait.value && !autoEntered) {
+        // 跳过等待：启动完成即自动进入 Loopra 主界面（更新窗口不自动跳转，由用户确认后进入）
+        if (!updateMode && skipWait.value && !autoEntered) {
           autoEntered = true
           setTimeout(() => enterLoopra(), 600)
         }
