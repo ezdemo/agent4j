@@ -115,7 +115,7 @@
               <path d="M9 6h11M9 12h11M9 18h11M4 6h.01M4 12h.01M4 18h.01"/>
             </svg>
             <span class="composer-queue-text" :title="item.text">{{ item.text }}</span>
-            <button type="button" class="composer-queue-guide" title="停止当前生成并立即发送" @click="$emit('guideQueued', item.id)">
+            <button type="button" class="composer-queue-guide" title="停止当前生成，等待服务端断流后发送" @click="$emit('guideQueued', item.id)">
               <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" aria-hidden="true"><path d="M5 12h14M13 6l6 6-6 6"/></svg>
               <span>引导</span>
             </button>

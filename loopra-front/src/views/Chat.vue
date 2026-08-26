@@ -920,15 +920,39 @@ const sendNextQueuedMessage = async (sessionName, workspaceHash) => {
   await sendMessage(next.images, next.text, next.modelSelection, sessionName, workspaceHash, next.reasoningEffort, null, next.fastMode, next.linkedProjectHashes)
 }
 
+/** 等待指定会话的 SSE 流被服务端主动关闭（streaming=false）。 */
+const waitForStreamClosed = (sessionName, timeoutMs) => new Promise(resolve => {
+  const started = Date.now()
+  const timer = setInterval(() => {
+    if (!store.getSessionStreaming(sessionName) || Date.now() - started > timeoutMs) {
+      clearInterval(timer)
+      resolve()
+    }
+  }, 200)
+})
+
 const guideQueuedMessage = async (id) => {
   if (guidingQueuedMessage.value) return
   guidingQueuedMessage.value = true
   try {
     const queued = takeQueuedMessage(props.sessionName, props.workspaceHash, id)
     if (!queued) return
-    // 无条件中止当前生成：无论流式输出还是后台任务运行，都先停止再立即发送排队消息
+    // 无条件中止当前生成：无论流式输出还是后台任务运行，都先停止再发送排队消息
     if (streaming.value || sessionTaskRunning.value) {
       await abortChat()
+      // 与停止按钮语义一致：等旧 SSE 流真正关闭（streaming=false，即服务端主动断流）后再发送新消息。
+      // 否则旧运行在 abort 后的残留事件（推理/正文增量）会与新运行事件交错，
+      // 在同一气泡里呈现为“思考被拆成多段、内容碎片混排”。
+      if (store.getSessionStreaming(props.sessionName)) {
+        await waitForStreamClosed(props.sessionName, 10000)
+      }
+      if (store.getSessionStreaming(props.sessionName)) {
+        // 超时兜底：服务端未及时关闭旧流。放回队列，由旧流结束回调（onDone → sendNextQueuedMessage）自动续发。
+        addQueuedMessage(props.sessionName, queued.workspaceHash, queued.images, queued.text,
+            queued.modelSelection, queued.reasoningEffort, queued.fastMode, queued.linkedProjectHashes)
+        message.warning('等待停止超时，消息已放回队列；旧流结束后将自动发送')
+        return
+      }
     }
     await sendMessage(queued.images, queued.text, queued.modelSelection, props.sessionName, queued.workspaceHash, queued.reasoningEffort, null, queued.fastMode, queued.linkedProjectHashes)
   } finally {

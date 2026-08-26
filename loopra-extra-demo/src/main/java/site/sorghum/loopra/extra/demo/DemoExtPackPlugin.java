@@ -1,5 +1,6 @@
 package site.sorghum.loopra.extra.demo;
 
+import org.noear.solon.Solon;
 import org.noear.solon.core.AppContext;
 import org.noear.solon.core.Plugin;
 import org.slf4j.Logger;
@@ -34,7 +35,11 @@ public class DemoExtPackPlugin implements Plugin {
 
     @Override
     public void stop() {
-        // 停止回调：清理路由/job/事件等资源（示例无外部资源，仅记录）
-        log.info("[extpack-demo] 插件已停止");
+        // 停止回调：移除本插件挂载的路由。
+        // Solon 热插拔容器 stop 不会自动反注册全局 Router 上的路由，需显式移除；
+        // 按路径前缀移除，与官方插件开发范式一致（start 添加、stop 移除，便于热更新）。
+        Solon.app().router().remove("/api/ext-demo/**");
+        Solon.app().router().remove(DemoExtController.class);
+        log.info("[extpack-demo] 插件已停止，路由 /api/ext-demo/* 已卸载");
     }
 }
