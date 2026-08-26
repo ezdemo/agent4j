@@ -35,7 +35,7 @@
           <h2>{{ currentTab?.label || '设置' }}</h2>
           <p class="header-desc">{{ currentTab?.description }}</p>
         </div>
-        <div v-if="activeTab !== 'openapi' && activeTab !== 'mcp' && activeTab !== 'lsp' && activeTab !== 'skill-market' && activeTab !== 'plugins' && activeTab !== 'about' && activeTab !== 'pet' && activeTab !== 'prompt' && activeTab !== 'model-channels' && activeTab !== 'tools' && activeTab !== 'sub-agents' && activeTab !== 'dashboard'" class="header-actions">
+        <div v-if="activeTab !== 'openapi' && activeTab !== 'mcp' && activeTab !== 'lsp' && activeTab !== 'skill-market' && activeTab !== 'plugins' && activeTab !== 'extpacks' && activeTab !== 'about' && activeTab !== 'pet' && activeTab !== 'prompt' && activeTab !== 'model-channels' && activeTab !== 'tools' && activeTab !== 'sub-agents' && activeTab !== 'dashboard'" class="header-actions">
           <button v-if="activeTab === 'ai'" class="btn btn-secondary" style="padding:6px 12px;" @click="openAutoFillDialog" title="自动填入配置">
             <svg fill="none" height="14" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24" width="14">
               <polyline points="1 4 1 10 7 10"/>
@@ -158,6 +158,102 @@
                     />
                     <span class="toggle-slider"></span>
                   </label>
+                </div>
+              </div>
+            </div>
+          </div>
+        </section>
+
+        <!-- 拓展包（Solon H-SPI） -->
+        <section v-if="activeTab === 'extpacks'" class="settings-section">
+          <div class="section-card plugin-card">
+            <div class="card-header plugin-header">
+              <div>
+                <h3>拓展包</h3>
+                <p>Solon H-SPI 拓展包：安装 jar 即扩展 Agent 工具与拦截能力（~/.loopra/extpacks）</p>
+              </div>
+              <button class="btn-icon-xs" title="刷新" :disabled="extPacksLoading" @click="loadExtPacks">
+                <svg :class="{'animate-spin': extPacksLoading}" fill="none" height="14" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24" width="14">
+                  <path d="M1 4v6h6M23 20v-6h-6"/>
+                  <path d="M20.49 9A9 9 0 0 0 5.64 5.64L1 10m22 4-4.64 4.36A9 9 0 0 1 3.51 15"/>
+                </svg>
+              </button>
+            </div>
+            <div class="card-body">
+              <div class="input-group" style="margin-bottom:12px;">
+                <input
+                  v-model="extPackSource"
+                  class="form-input"
+                  placeholder="http(s)://.../xxx.jar 直链 或 本地 jar 路径"
+                  type="text"
+                  @keyup.enter="installExtPack"
+                />
+                <button v-if="isDesktop" class="btn btn-secondary" title="选择本地 jar 文件" @click="chooseExtPackFile">
+                  <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                    <path d="M22 19a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5l2 3h9a2 2 0 0 1 2 2z"/>
+                  </svg>
+                  选择文件
+                </button>
+                <button class="btn btn-secondary" :disabled="extPackInstalling" @click="installExtPack">
+                  <svg v-if="extPackInstalling" class="animate-spin" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                    <path d="M21 12a9 9 0 11-6.219-8.56"/>
+                  </svg>
+                  <svg v-else width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                    <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/>
+                    <polyline points="17 8 12 3 7 8"/>
+                    <line x1="12" y1="3" x2="12" y2="15"/>
+                  </svg>
+                  {{ extPackInstalling ? '安装中' : '安装' }}
+                </button>
+              </div>
+              <div class="plugin-list">
+                <div v-if="extPacksLoading && extPacks.length === 0" class="plugin-empty">正在加载拓展包...</div>
+                <div v-else-if="extPacks.length === 0" class="plugin-empty">暂无已安装拓展包，粘贴上方 jar 地址安装</div>
+                <div v-for="pack in extPacks" v-else :key="pack.id" class="plugin-row">
+                  <div class="plugin-info">
+                    <div class="plugin-title">
+                      <span>{{ pack.id }}</span>
+                      <code>v{{ pack.version }}</code>
+                    </div>
+                    <p v-if="pack.sourceUrl" class="plugin-remark" :title="pack.sourceUrl">{{ pack.sourceUrl }}</p>
+                    <div class="plugin-meta">
+                      <span class="plugin-instances" :class="{active: pack.started}">{{ pack.started ? '运行中' : '已停止' }}</span>
+                      <span>{{ pack.bridgeCount }} 个桥接</span>
+                      <span v-if="pack.bridgeClasses && pack.bridgeClasses.length" :title="pack.bridgeClasses.join('\n')">{{ pack.bridgeClasses.length }} 个桥接类</span>
+                    </div>
+                  </div>
+                  <div class="plugin-runtime">
+                    <button
+                      v-if="!pack.started"
+                      class="btn btn-ghost btn-sm"
+                      :disabled="extPackAction === pack.id"
+                      @click="startExtPack(pack)"
+                      title="启动拓展包（加载 Solon 容器并桥接 Agent 能力）"
+                    >启动</button>
+                    <button
+                      v-else
+                      class="btn btn-ghost btn-sm"
+                      :disabled="extPackAction === pack.id"
+                      @click="stopExtPack(pack)"
+                      title="停止拓展包（注销 Agent 桥接并卸载 Solon 容器）"
+                    >停止</button>
+                    <button
+                      class="btn btn-ghost btn-sm"
+                      style="color:var(--red)"
+                      :disabled="extPackAction === pack.id"
+                      @click="uninstallExtPack(pack)"
+                      title="卸载拓展包"
+                    >卸载</button>
+                    <label class="toggle-switch" :class="{disabled: extPackAction === pack.id}" title="停用后启动/重启时跳过">
+                      <input
+                        type="checkbox"
+                        :checked="pack.enabled"
+                        :disabled="extPackAction === pack.id"
+                        @change="toggleExtPack(pack, $event.target.checked)"
+                      />
+                      <span class="toggle-slider"></span>
+                    </label>
+                  </div>
                 </div>
               </div>
             </div>
@@ -1809,6 +1905,7 @@ import {
   agentAPI,
   configAPI,
   DEFAULT_API_BASE,
+  extpackAPI,
   lspAPI,
   mcpAPI,
   openApiAPI,
@@ -1879,6 +1976,119 @@ const togglePlugin = async (plugin, enabled) => {
   } finally {
     pluginToggling.value = null
   }
+}
+
+// 拓展包（Solon H-SPI）
+const extPacks = ref([])
+const extPacksLoading = ref(false)
+const extPackInstalling = ref(false)
+const extPackAction = ref(null)
+const extPackSource = ref('')
+
+const loadExtPacks = async () => {
+  extPacksLoading.value = true
+  try {
+    const response = await extpackAPI.list()
+    extPacks.value = response.success && Array.isArray(response.data) ? response.data : []
+  } catch (error) {
+    message.error('加载拓展包失败: ' + (error.message || error))
+  } finally {
+    extPacksLoading.value = false
+  }
+}
+
+const installExtPack = async () => {
+  const source = extPackSource.value.trim()
+  if (!source) {
+    message.warning('请输入 jar 直链或本地路径')
+    return
+  }
+  extPackInstalling.value = true
+  try {
+    await extpackAPI.install(source)
+    message.success('拓展包安装并启动成功')
+    extPackSource.value = ''
+    await loadExtPacks()
+  } catch (error) {
+    message.error('安装失败: ' + (error.message || error))
+  } finally {
+    extPackInstalling.value = false
+  }
+}
+
+// 桌面端：弹出系统文件选择器选 jar，选中后直接安装
+const chooseExtPackFile = async () => {
+  let filePath
+  try {
+    filePath = await window.electronAPI?.pickJarFile?.()
+  } catch (error) {
+    message.error('选择文件失败: ' + (error.message || error))
+    return
+  }
+  if (!filePath) return
+  extPackSource.value = filePath
+  await installExtPack()
+}
+
+const startExtPack = async (pack) => {
+  extPackAction.value = pack.id
+  try {
+    await extpackAPI.start(pack.id)
+    message.success('拓展包已启动: ' + pack.id)
+    await loadExtPacks()
+  } catch (error) {
+    message.error('启动失败: ' + (error.message || error))
+  } finally {
+    extPackAction.value = null
+  }
+}
+
+const stopExtPack = async (pack) => {
+  extPackAction.value = pack.id
+  try {
+    await extpackAPI.stop(pack.id)
+    message.success('拓展包已停止: ' + pack.id)
+    await loadExtPacks()
+  } catch (error) {
+    message.error('停止失败: ' + (error.message || error))
+  } finally {
+    extPackAction.value = null
+  }
+}
+
+const toggleExtPack = async (pack, enabled) => {
+  extPackAction.value = pack.id
+  try {
+    await extpackAPI.setEnabled(pack.id, enabled)
+    message.success(`拓展包 ${pack.id} 已${enabled ? '启用' : '停用'}`)
+    await loadExtPacks()
+  } catch (error) {
+    message.error('切换失败: ' + (error.message || error))
+  } finally {
+    extPackAction.value = null
+  }
+}
+
+const uninstallExtPack = async (pack) => {
+  Modal.confirm({
+    title: '卸载拓展包',
+    content: `确定要卸载「${pack.id}」吗？将停止运行并删除本地 jar 文件。`,
+    okText: '卸载',
+    okType: 'danger',
+    cancelText: '取消',
+    onOk: async () => {
+      extPackAction.value = pack.id
+      try {
+        await extpackAPI.uninstall(pack.id)
+        message.success('拓展包已卸载: ' + pack.id)
+        await loadExtPacks()
+      } catch (error) {
+        message.error('卸载失败: ' + (error.message || error))
+      } finally {
+        extPackAction.value = null
+      }
+    }
+  })
 }
 
 // 主题直接绑定 store
@@ -2487,6 +2697,16 @@ const tabs = computed(() => [
     </svg>`
   },
   {
+    id: 'extpacks',
+    label: '拓展包',
+    description: '安装 Solon H-SPI 拓展包扩展 Agent 能力',
+    icon: `<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+      <path d="M21 16V8a2 2 0 0 0-1-1.73l-7-4a2 2 0 0 0-2 0l-7 4A2 2 0 0 0 3 8v8a2 2 0 0 0 1 1.73l7 4a2 2 0 0 0 2 0l7-4A2 2 0 0 0 21 16z"/>
+      <polyline points="3.27 6.96 12 12.01 20.73 6.96"/>
+      <line x1="12" y1="22.08" x2="12" y2="12"/>
+    </svg>`
+  },
+  {
     id: 'prompt',
     label: '系统提示词',
     description: '编辑 ~/.loopra/loopra.md 系统提示词文件',
@@ -2616,6 +2836,9 @@ watch(activeTab, async (tab) => {
   }
   if (tab === 'plugins') {
     loadPlugins()
+  }
+  if (tab === 'extpacks') {
+    loadExtPacks()
   }
 }, {immediate: true})
 

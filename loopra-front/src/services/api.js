@@ -734,6 +734,16 @@ export const pluginAPI = {
   setEnabled: (id, enabled) => api.post(`/plugins/${encodeURIComponent(id)}/toggle`, {enabled})
 }
 
+// Solon H-SPI 拓展包管理 API（~/.loopra/extpacks）
+export const extpackAPI = {
+  list: () => api.get('/extpacks'),
+  install: (source) => api.post('/extpacks/install', {source}),
+  start: (id) => api.post(`/extpacks/${encodeURIComponent(id)}/start`),
+  stop: (id) => api.post(`/extpacks/${encodeURIComponent(id)}/stop`),
+  uninstall: (id) => api.post(`/extpacks/${encodeURIComponent(id)}/uninstall`),
+  setEnabled: (id, enabled) => api.post(`/extpacks/${encodeURIComponent(id)}/toggle`, {enabled})
+}
+
 // OpenAPI 管理 API
 export const openApiAPI = {
     getSources: () => {

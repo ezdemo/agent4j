@@ -120,6 +120,13 @@
             <version>2.0.5</version>
         </dependency>
 
+        <!-- Solon H-SPI 热插拔：拓展包（ExtPack）加载与管理 -->
+        <dependency>
+            <groupId>org.noear</groupId>
+            <artifactId>solon-hotplug</artifactId>
+            <version>${solon.version}</version>
+        </dependency>
+
         <!-- HTTP client and local tokenizer -->
         <dependency>
             <groupId>com.squareup.okhttp3</groupId>

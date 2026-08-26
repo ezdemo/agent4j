@@ -1742,6 +1742,16 @@ ipcMain.handle('pick_loopra_workspace_folder', async (event) => {
   return result.canceled ? '' : (result.filePaths[0] || '')
 })
 
+ipcMain.handle('pick_jar_file', async (event) => {
+  if (event.sender !== mainWindow?.webContents) throw new Error('Unauthorized jar picker request')
+  const result = await dialog.showOpenDialog(mainWindow, {
+    title: '选择拓展包 jar 文件',
+    properties: ['openFile'],
+    filters: [{ name: 'JAR 拓展包', extensions: ['jar'] }]
+  })
+  return result.canceled ? '' : (result.filePaths[0] || '')
+})
+
 // ==================== Desktop Chat Tabs ====================
 
 ipcMain.handle('desktop-chat-tab-create', async (event, rawTab) => {

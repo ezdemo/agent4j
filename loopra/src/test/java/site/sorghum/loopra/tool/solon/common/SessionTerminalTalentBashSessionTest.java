@@ -183,8 +183,20 @@ class SessionTerminalTalentBashSessionTest {
     Charset charset = (Charset) charsetField.get(manager);
 
     assertNotEquals(StandardCharsets.UTF_8, charset, "Windows 下不应再用 UTF-8 解码子进程输出");
-    assertTrue("GBK".equals(charset.name()) || "CP936".equals(charset.name())
-            || charset.name().startsWith("CP"), "应按活动代码页命名（如 CP936/GBK），实际: " + charset);
+    String name = charset.name();
+    if (name.startsWith("x-auto-")) {
+      // AutoCharset：UTF-8 优先、活动代码页兜底；验证兜底编码确实为活动代码页
+      Field fallbackField = AutoCharset.class.getDeclaredField("fallback");
+      fallbackField.setAccessible(true);
+      Charset fallback = (Charset) fallbackField.get(charset);
+      String fallbackName = fallback.name();
+      assertTrue("GBK".equals(fallbackName) || "CP936".equals(fallbackName)
+              || fallbackName.startsWith("CP"),
+          "AutoCharset 兜底应为活动代码页（如 CP936/GBK），实际: " + fallbackName);
+    } else {
+      assertTrue("GBK".equals(name) || "CP936".equals(name) || name.startsWith("CP"),
+          "应按活动代码页命名（如 CP936/GBK），实际: " + name);
+    }
   }
 
   @Test

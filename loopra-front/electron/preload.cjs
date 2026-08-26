@@ -196,6 +196,9 @@ contextBridge.exposeInMainWorld('electronAPI', {
   // 打开本地文件夹（系统原生文件管理器）
   openFolder: (folderPath) => ipcRenderer.invoke('open-folder', folderPath),
 
+  // 选择拓展包 jar 文件（系统原生文件选择器，返回绝对路径，取消返回空串）
+  pickJarFile: () => ipcRenderer.invoke('pick_jar_file'),
+
   // 文件资源管理器（桌面端，主进程直接操作文件系统，不接后端）
   fileExplorer: {
     list: (dirPath) => ipcRenderer.invoke('file-explorer-list', dirPath),

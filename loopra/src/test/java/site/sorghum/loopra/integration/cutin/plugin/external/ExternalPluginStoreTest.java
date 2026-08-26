@@ -9,11 +9,13 @@ import site.sorghum.cutin.core.plugin.PluginBeanManager;
 import site.sorghum.loopra.integration.cutin.plugin.external.ExternalPluginStore.InstalledPlugin;
 
 import java.io.ByteArrayOutputStream;
+import java.io.IOException;
 import java.io.InputStream;
 import java.net.InetSocketAddress;
 import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
 import java.nio.file.Path;
+import java.util.Comparator;
 import java.util.List;
 import java.util.jar.JarEntry;
 import java.util.jar.JarOutputStream;
@@ -29,8 +31,11 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
  */
 class ExternalPluginStoreTest {
 
-    /** 临时安装目录。 */
-    @TempDir
+    /**
+     * 临时安装目录。不用 @TempDir：Windows 下插件类加载器关闭后 jar 句柄可能延迟释放
+     * （JarFile 缓存/GC 时序），测试结束 @TempDir 清理会失败；改为手动创建、尽力删除
+     * （与 SessionTerminalTalentBashSessionTest / LoopraAgentInjectionTest 同策略）。
+     */
     Path tempDir;
 
     /** 本地 HTTP 服务。 */
@@ -41,6 +46,7 @@ class ExternalPluginStoreTest {
 
     @BeforeEach
     void setUp() throws Exception {
+        tempDir = Files.createTempDirectory("ext-plugin-store");
         store = new ExternalPluginStore(tempDir);
         server = HttpServer.create(new InetSocketAddress(0), 0);
         byte[] jarBytes = buildPluginJar();
@@ -55,6 +61,18 @@ class ExternalPluginStoreTest {
     @AfterEach
     void tearDown() {
         server.stop(0);
+        // 尽力删除：句柄未释放时容忍残留（临时目录，系统会清理）
+        try (var paths = Files.walk(tempDir)) {
+            paths.sorted(Comparator.reverseOrder()).forEach(p -> {
+                try {
+                    Files.deleteIfExists(p);
+                } catch (IOException ignored) {
+                    // 文件仍被占用，跳过
+                }
+            });
+        } catch (IOException ignored) {
+            // 目录不可遍历，跳过
+        }
     }
 
     /** 直链安装：下载 jar、从文件名推断 id/version、写入清单并可被管理器加载。 */

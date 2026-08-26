@@ -46,6 +46,7 @@ import site.sorghum.loopra.integration.cutin.CutinMessageBridge;
 import site.sorghum.loopra.integration.cutin.plugin.compaction.LoopraCompactionHost;
 import site.sorghum.loopra.integration.cutin.plugin.compaction.LoopraCompactionPlugin;
 import site.sorghum.loopra.integration.cutin.plugin.LoopraPluginRuntime;
+import site.sorghum.loopra.integration.extpack.LoopraExtPackRuntime;
 import site.sorghum.loopra.integration.cutin.plugin.external.ExternalPluginStore;
 import site.sorghum.loopra.integration.cutin.plugin.exit.LoopraExitHost;
 import site.sorghum.loopra.integration.cutin.plugin.exit.LoopraExitPlugin;
@@ -401,6 +402,8 @@ public class AgentLoop implements
         new ExternalPluginStore().loadInto(plugins);
         plugins.startAll();
         LoopraPluginRuntime.attach(plugins, config == null ? Set.of() : config.disabledPlugins());
+        // 拓展包桥接：登记本 AgentLoop 的注册中心，已启动拓展包自动补注册
+        LoopraExtPackRuntime.attach(cutinEngine.registrar());
         return plugins;
     }
 
@@ -411,6 +414,7 @@ public class AgentLoop implements
 
     void disposeCutinPlugins() {
         LoopraPluginRuntime.detach(cutinPlugins);
+        LoopraExtPackRuntime.detach(cutinEngine.registrar());
         cutinPlugins.stopAll();
     }
 
