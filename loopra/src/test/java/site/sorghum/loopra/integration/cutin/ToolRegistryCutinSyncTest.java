@@ -105,6 +105,8 @@ class ToolRegistryCutinSyncTest {
         // 复现“禁用 tool-gateway 后工具仍上传”的根因：
         // gateway 注册时闭包捕获当时的 bridge 实例；refresh() 的 syncCutinRegistry 会
         // setTools 换成新 bridge 实例，导致 stop 时 unregister(旧实例) 实例不匹配而移除失败。
+        // 双区视图后 gateway 的 bridge 进外部注册区、不再被 setTools 替换，因此 stop 可正常
+        // 注销自己的实例；legacy 侧旧实例注销失败仍有 clearTools 整体清空兜底。
         ToolRegistry registry = new ToolRegistry();
         registry.setEnvironment(SessionEnvironment.local(Paths.get(System.getProperty("user.dir"))));
         registry.register(simpleTool("ping"));
@@ -114,13 +116,39 @@ class ToolRegistryCutinSyncTest {
         Tool current = registry.cutinRegistry().find("ping").orElseThrow();
         assertNotSame(bridgeAtRegister, current, "sync 必须把视图换成新 bridge 实例");
 
+        // 旧实例（注册时捕获）注销必然失败——网关 stop 无法移除 legacy 同步区的桥接
         boolean removed = registry.cutinRegistry().unregister("ping", bridgeAtRegister);
-        assertFalse(removed, "旧实例注销必然失败——网关 stop 无法移除视图里的工具");
+        assertFalse(removed, "旧实例注销必然失败——网关 stop 无法移除 legacy 同步区的桥接");
 
         // 兜底：clearTools 整体清空，模型请求的 tools 为空
         registry.clearTools();
         assertFalse(registry.cutinRegistry().find("ping").isPresent());
         assertEquals(0, registry.toOpenAiTools().getArray().size());
+    }
+
+    @Test
+    void externalReregisterReplacesSameIdInstance() {
+        // 复现“插件热重启后工具定义过期”场景：gateway stop→start 时
+        // DefaultLoopRegistrar 会把旧实例恢复进外部区；start 重新注册的新实例
+        // 必须覆盖旧实例，否则视图一直执行过期定义。
+        ToolRegistry registry = new ToolRegistry();
+        registry.setEnvironment(SessionEnvironment.local(Paths.get(System.getProperty("user.dir"))));
+        registry.register(simpleTool("ping"));
+
+        Tool first = simpleCutinTool("ping");
+        registry.cutinRegistry().register(first);
+        assertSame(first, registry.cutinRegistry().find("ping").orElseThrow());
+
+        // 热重启：外部区已有旧实例，新实例同 id 重新注册必须生效
+        Tool second = simpleCutinTool("ping");
+        registry.cutinRegistry().register(second);
+        assertSame(second, registry.cutinRegistry().find("ping").orElseThrow(),
+            "重复注册同 id 必须以最新实例为准");
+
+        // 旧实例注销应失败（已被新实例替换），新实例注销成功
+        assertFalse(registry.cutinRegistry().unregister("ping", first));
+        assertTrue(registry.cutinRegistry().unregister("ping", second));
+        assertFalse(registry.cutinRegistry().find("ping").isPresent());
     }
 
     @Test

@@ -20,7 +20,8 @@ import java.util.concurrent.CopyOnWriteArrayList;
  * 视图分两区：Loopra 工具表同步区（{@link #setTools} 全量替换）与外部
  * 注册区（{@link #register}/{@link #unregister} 管理，如拓展包桥接与
  * cutin 插件贡献的工具）。同步区刷新不会清除外部注册工具，避免拓展包
- * 工具被 loopra 工具表同步整体抹掉；同名冲突时外部注册优先。
+ * 工具被 loopra 工具表同步整体抹掉；同名冲突时外部注册优先，且重复
+ * 注册以最新实例为准（插件热重启后新桥接实例必须生效）。
  * </p>
  */
 public final class CutinToolRegistryView implements ToolRegistry {
@@ -76,8 +77,13 @@ public final class CutinToolRegistryView implements ToolRegistry {
 
     @Override
     public void register(Tool tool) {
-        Tool previous = extTools.putIfAbsent(tool.id(), tool);
-        if (previous == null) {
+        // 覆盖式注册：插件热重启（stop→start）时 DefaultLoopRegistrar 会把旧实例
+        // 恢复进外部区，若此处 putIfAbsent 拒绝新实例，视图将一直执行过期工具定义。
+        Tool previous = extTools.put(tool.id(), tool);
+        if (previous != tool) {
+            if (previous != null) {
+                extOrdered.remove(previous);
+            }
             extOrdered.add(tool);
             // 外部注册优先：让位同 id 的 loopra 同步工具，避免定义重复
             if (loopraTools.remove(tool.id()) != null) {
