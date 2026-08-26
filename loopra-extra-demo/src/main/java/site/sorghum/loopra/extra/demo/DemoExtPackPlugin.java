@@ -3,6 +3,8 @@ package site.sorghum.loopra.extra.demo;
 import org.noear.solon.Solon;
 import org.noear.solon.core.AppContext;
 import org.noear.solon.core.Plugin;
+import org.noear.solon.core.event.EventBus;
+import org.noear.solon.core.event.EventListener;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -14,6 +16,7 @@ import org.slf4j.LoggerFactory;
  * {@code PluginPackage.start()} 时实例化并回调。</p>
  */
 public class DemoExtPackPlugin implements Plugin {
+    AppContext context;
 
     private static final Logger log = LoggerFactory.getLogger(DemoExtPackPlugin.class);
 
@@ -23,8 +26,9 @@ public class DemoExtPackPlugin implements Plugin {
 
     @Override
     public void start(AppContext context) {
+        this.context = context;
         // 容器已可用：注册路由组件（也可在此 beanScan 自己的包、注册 Job/事件等）
-        context.beanMake(DemoExtController.class);
+        context.beanScan(DemoExtPackPlugin.class);
         log.info("[extpack-demo] 插件已启动，路由 /api/ext-demo/* 已挂载");
     }
 
@@ -38,8 +42,12 @@ public class DemoExtPackPlugin implements Plugin {
         // 停止回调：移除本插件挂载的路由。
         // Solon 热插拔容器 stop 不会自动反注册全局 Router 上的路由，需显式移除；
         // 按路径前缀移除，与官方插件开发范式一致（start 添加、stop 移除，便于热更新）。
-        Solon.app().router().remove("/api/ext-demo/**");
-        Solon.app().router().remove(DemoExtController.class);
+        context.beanForeach(bw -> {
+            if (bw.raw() instanceof EventListener) {
+                EventBus.unsubscribe(bw.raw());
+            }
+        });
+        Solon.app().router().remove("/api/ext-demo");
         log.info("[extpack-demo] 插件已停止，路由 /api/ext-demo/* 已卸载");
     }
 }
