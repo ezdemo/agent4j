@@ -1,10 +1,5 @@
 <template>
   <section class="desktop-home">
-    <div class="desktop-home-search">
-      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="11" cy="11" r="6"/><path d="m16 16 4 4"/></svg>
-      <input v-model="query" type="search" placeholder="搜索会话" />
-    </div>
-
     <div class="desktop-home-grid">
       <aside class="desktop-projects">
         <div class="desktop-home-heading">
@@ -108,6 +103,10 @@
       </aside>
 
       <div class="desktop-sessions">
+        <div class="desktop-home-search">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="11" cy="11" r="6"/><path d="m16 16 4 4"/></svg>
+          <input v-model="query" type="search" placeholder="搜索会话" />
+        </div>
         <div class="desktop-home-heading">
           <div class="desktop-heading-title">
             <span>{{ activeWorkspace?.name || '全部会话' }}</span>
@@ -647,15 +646,15 @@ onBeforeUnmount(() => {
 </script>
 
 <style scoped>
-.desktop-home { --project-column: 236px; --column-gap: 32px; height: 100%; min-height: 0; display: flex; flex-direction: column; overflow: hidden; padding: 20px clamp(24px, 5vw, 88px) 24px; box-sizing: border-box; }
-.desktop-home-search { height: 38px; margin: 0 0 20px calc(var(--project-column) + var(--column-gap)); display: flex; align-items: center; gap: 10px; padding: 0 13px; box-sizing: border-box; color: var(--fg-4, #9ca3af); background: var(--bg-3, #f6f6f6); border-radius: 6px; flex: 0 0 auto; }
+.desktop-home { --project-column: 236px; --column-gap: 32px; height: 100%; min-height: 0; display: flex; flex-direction: column; overflow: hidden; padding: 20px clamp(16px, 3vw, 56px) 24px; box-sizing: border-box; }
+.desktop-home-search { height: 38px; margin: 0 0 14px; display: flex; align-items: center; gap: 10px; padding: 0 13px; box-sizing: border-box; color: var(--fg-4, #9ca3af); background: var(--bg-3, #f6f6f6); border-radius: 6px; flex: 0 0 auto; }
 .desktop-home-search svg { width: 16px; height: 16px; flex: 0 0 auto; }
 .desktop-home-search input { min-width: 0; flex: 1; border: 0; outline: 0; background: transparent; color: var(--fg, #202124); font: inherit; font-size: 13px; }
 .desktop-home-grid { min-height: 0; flex: 1; display: grid; grid-template-columns: var(--project-column) minmax(0, 1fr); gap: var(--column-gap); width: 100%; overflow: hidden; }
 .desktop-projects, .desktop-sessions { min-height: 0; display: flex; flex-direction: column; }
-.desktop-home-heading { height: 32px; display: flex; align-items: center; justify-content: space-between; margin-bottom: 4px; color: var(--fg, #202124); font-size: 14px; font-weight: 650; flex: 0 0 auto; }
+.desktop-home-heading { min-height: 32px; display: flex; align-items: center; justify-content: space-between; margin-bottom: 4px; color: var(--fg, #202124); font-size: 14px; font-weight: 650; flex: 0 0 auto; }.desktop-home-heading > span { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .desktop-home-heading button { display: inline-flex; align-items: center; gap: 5px; border: 0; background: transparent; color: var(--fg-2, #5f6368); font: inherit; font-size: 13px; cursor: pointer; padding: 4px; border-radius: 4px; }.desktop-home-heading button:hover { background: var(--bg-3, #f3f4f6); color: var(--fg, #202124); }.desktop-home-heading button svg { width: 15px; height: 15px; }
-.desktop-heading-actions { display: flex; align-items: center; gap: 4px; }.desktop-home-heading .desktop-refresh-projects, .desktop-home-heading .desktop-add-project { width: 24px; height: 24px; justify-content: center; padding: 3px; box-sizing: border-box; flex: 0 0 24px; color: var(--fg-3, #727987); }.desktop-home-heading .desktop-refresh-projects:disabled { cursor: wait; opacity: 0.65; }.desktop-home-heading .desktop-refresh-projects :deep(svg) { width: 12px; height: 12px; }.desktop-home-heading .desktop-add-project svg { width: 16px; height: 16px; }.spinning { animation: desktop-spin 0.8s linear infinite; } @keyframes desktop-spin { to { transform: rotate(360deg); } }
+.desktop-heading-actions { display: flex; align-items: center; gap: 4px; flex: 0 0 auto; white-space: nowrap; }.desktop-home-heading .desktop-refresh-projects, .desktop-home-heading .desktop-add-project { width: 24px; height: 24px; justify-content: center; padding: 3px; box-sizing: border-box; flex: 0 0 24px; color: var(--fg-3, #727987); }.desktop-home-heading .desktop-refresh-projects:disabled { cursor: wait; opacity: 0.65; }.desktop-home-heading .desktop-refresh-projects :deep(svg) { width: 12px; height: 12px; }.desktop-home-heading .desktop-add-project svg { width: 16px; height: 16px; }.spinning { animation: desktop-spin 0.8s linear infinite; } @keyframes desktop-spin { to { transform: rotate(360deg); } }
 .desktop-project-list, .desktop-session-timeline { min-height: 0; overflow: auto; }.desktop-project-list { display: grid; gap: 2px; flex: 1; align-content: start; }.desktop-session-timeline { padding-right: 4px; }.desktop-session-list { display: grid; gap: 2px; }.desktop-session-group + .desktop-session-group { margin-top: 18px; }.desktop-session-group h3 { height: 24px; display: flex; align-items: center; margin: 0 0 4px; color: var(--fg-3, #727987); font-size: 13px; font-weight: 500; }
 .desktop-project-list::-webkit-scrollbar, .desktop-session-timeline::-webkit-scrollbar { width: 0; height: 0; }
 .desktop-project-list:hover::-webkit-scrollbar, .desktop-session-timeline:hover::-webkit-scrollbar { width: 6px; }
@@ -669,7 +668,7 @@ onBeforeUnmount(() => {
 .desktop-heading-title { display: flex; align-items: center; gap: 6px; min-width: 0; }.desktop-heading-title > span { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .desktop-home-heading .desktop-multi-toggle { display: inline-flex; align-items: center; justify-content: center; width: 24px; height: 24px; padding: 3px; box-sizing: border-box; flex: 0 0 24px; color: var(--fg-3, #727987); }.desktop-home-heading .desktop-multi-toggle:hover { background: var(--bg-3, #f2f3f5); color: var(--fg, #202124); }.desktop-home-heading .desktop-multi-toggle.active { background: color-mix(in srgb, var(--accent) 14%, transparent); color: var(--accent); }.desktop-multi-toggle svg { width: 15px; height: 15px; }
 .desktop-heading-actions .desktop-select-all { display: inline-flex; align-items: center; justify-content: center; height: 24px; padding: 2px 8px; border-radius: 5px; background: var(--bg-3, #f2f3f5); color: var(--fg-2, #525866); font-size: 12px; font-weight: 600; }.desktop-heading-actions .desktop-select-all:hover { background: var(--bg-4, #e8e9eb); color: var(--fg, #202124); }
-.desktop-heading-actions .desktop-new-session { display: inline-flex; align-items: center; gap: 6px; height: 30px; padding: 0 14px; border-radius: 6px; background: var(--accent-btn, var(--accent)); color: #fff; font-size: 13px; font-weight: 600; box-shadow: 0 1px 2px rgba(0, 0, 0, 0.08); transition: filter .12s ease, transform .12s ease; }.desktop-heading-actions .desktop-new-session:hover { background: var(--accent-btn, var(--accent)); color: #fff; filter: brightness(1.08); }.desktop-heading-actions .desktop-new-session:active { filter: brightness(0.94); transform: translateY(1px); }.desktop-heading-actions .desktop-new-session svg { width: 14px; height: 14px; }
+.desktop-heading-actions .desktop-new-session { display: inline-flex; align-items: center; gap: 6px; height: 33px; padding: 0 20px; border-radius: 6px; background: var(--accent-btn, var(--accent)); color: #fff; font-size: 13px; font-weight: 600; box-shadow: 0 1px 2px rgba(0, 0, 0, 0.08); transition: filter .12s ease, transform .12s ease; }.desktop-heading-actions .desktop-new-session:hover { background: var(--accent-btn, var(--accent)); color: #fff; filter: brightness(1.08); }.desktop-heading-actions .desktop-new-session:active { filter: brightness(0.94); transform: translateY(1px); }.desktop-heading-actions .desktop-new-session svg { width: 14px; height: 14px; }
 .desktop-context-menu { position: fixed; z-index: 1000; width: 156px; padding: 4px; border: 1px solid var(--border, #e5e7eb); border-radius: 6px; background: var(--bg, #fff); box-shadow: var(--shadow-lg, 0 10px 28px rgba(0, 0, 0, 0.16)); }.desktop-context-menu button { width: 100%; height: 32px; display: flex; align-items: center; gap: 8px; padding: 0 8px; border: 0; border-radius: 4px; background: transparent; color: var(--fg-2, #525866); font: inherit; font-size: 13px; text-align: left; cursor: pointer; }.desktop-context-menu button:hover { color: var(--fg, #202124); background: var(--bg-3, #f2f3f5); }.desktop-context-menu button.danger { color: #c2413b; }.desktop-context-menu button.danger:hover { color: #b42318; background: rgba(220, 38, 38, 0.09); }.desktop-context-menu svg { width: 15px; height: 15px; }.desktop-context-menu-divider { height: 1px; margin: 4px; background: var(--border, #e5e7eb); }
 .desktop-rename-mask { position: fixed; inset: 0; z-index: 1100; display: flex; align-items: center; justify-content: center; background: rgba(15, 17, 20, 0.4); }
 .desktop-rename-dialog { width: 320px; padding: 18px; border-radius: 10px; background: var(--bg, #fff); box-shadow: var(--shadow-lg, 0 10px 28px rgba(0, 0, 0, 0.16)); box-sizing: border-box; }
@@ -681,5 +680,5 @@ onBeforeUnmount(() => {
 .desktop-rename-cancel { background: var(--bg-3, #f2f3f5); color: var(--fg-2, #525866); }.desktop-rename-cancel:hover { background: var(--bg-4, #e8e9eb); }
 .desktop-rename-confirm { background: var(--accent-btn, var(--accent)); color: #fff; }.desktop-rename-confirm:hover { filter: brightness(1.05); }.desktop-rename-confirm:disabled { opacity: 0.55; cursor: not-allowed; }
 @media (max-width: 1000px) { .desktop-home { --project-column: 220px; --column-gap: 24px; padding-inline: 24px; } }
-@media (max-width: 720px) { .desktop-home { --project-column: 1fr; --column-gap: 24px; padding: 18px 18px 22px; overflow: auto; }.desktop-home-search { margin-left: 0; margin-bottom: 16px; }.desktop-home-grid { flex: initial; grid-template-columns: 1fr; overflow: visible; }.desktop-project-list, .desktop-session-timeline { overflow: visible; } }
+@media (max-width: 720px) { .desktop-home { --project-column: 1fr; --column-gap: 24px; padding: 18px 18px 22px; overflow: auto; }.desktop-home-search { margin-bottom: 16px; }.desktop-home-grid { flex: initial; grid-template-columns: 1fr; overflow: visible; }.desktop-project-list, .desktop-session-timeline { overflow: visible; } }
 </style>
