@@ -731,8 +731,8 @@ public class AgentLoop implements
                 .anyMatch(s -> "loopra-tool-gateway".equals(s.id()) && s.active());
         if (!gatewayActive) {
             // 网关禁用 = 下线全部工具：清空 legacy 与 cutin 视图，模型请求的 tools 为空数组。
-            // 不能只靠 gateway stop 时的 unregister——syncCutinRegistry 的 setTools 会把视图里的
-            // bridge 换成新实例，导致注销闭包（持有旧实例）移除失败，工具残留仍会上传。
+            // 视图区分 loopra 同步区与外部注册区（拓展包桥接、插件工具），
+            // 外部注册工具不随 syncCutinRegistry 清除，需 clearTools 整体清空兜底。
             registry.clearTools();
             ONode empty = registry.toOpenAiTools();
             return planMode ? filterReadOnlyTools(empty) : empty;
@@ -2200,7 +2200,9 @@ public class AgentLoop implements
                     ONode tc = tcArray.get(idx);
                     ToolCall toolCall = getToolCall(tc);
                     FunctionTool fc = registry.get(toolCall.getName());
-                    if (fc == null) {
+                    // 拓展包/插件贡献的工具只注册在 cutin 视图（CutinToolRegistryView
+                    // 外部注册区），存在性检查须同时覆盖两侧，避免“已注册却报工具不存在”。
+                    if (fc == null && !registry.cutinRegistry().find(toolCall.getName()).isPresent()) {
                         String result = "工具不存在";
                         safeListener("toolResult", () -> listener.onToolResult(toolCall.getName(), result));
                         safeOutputDebug("toolResult", () -> output.onToolResult(toolCall.getName(), result));
@@ -2208,8 +2210,9 @@ public class AgentLoop implements
                     }
 
                     // 计划模式硬约束：非只读工具直接拒绝。
-                    // 正常情况下写工具已从工具列表移除，此处兼容模型凭记忆幻觉调用的兑底。
-                    if (cutinContext == null && planMode && !ToolMetadata.isReadOnly(fc)) {
+                    // 正常情况下写工具已从工具列表移除，此处兼容模型凭记忆幻觉调用的兑底；
+                    // 仅存在于 cutin 视图的外部工具（fc == null）不受 legacy 策略约束，由 cutin 拦截链负责。
+                    if (fc != null && cutinContext == null && planMode && !ToolMetadata.isReadOnly(fc)) {
                         String result = rejectedToolResult(
                                 "当前处于计划模式，仅允许只读工具；本次调用已被拒绝。请继续使用只读工具探索，完成后用 submit_plan 提交计划。",
                                 "plan_mode");
@@ -2219,7 +2222,7 @@ public class AgentLoop implements
                     }
 
                     String argumentsJson = toolCall.getArgumentsStr();
-                    if (cutinContext == null && !ToolMetadata.isStormExempt(fc)) {
+                    if (fc != null && cutinContext == null && !ToolMetadata.isStormExempt(fc)) {
                         boolean readOnly = ToolMetadata.isReadOnly(fc);
                         StormBreaker.SuppressResult suppression =
                                 stormBreaker.inspect(toolCall.getName(), argumentsJson, readOnly);

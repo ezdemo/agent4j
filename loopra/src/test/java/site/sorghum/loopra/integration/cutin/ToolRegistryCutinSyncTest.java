@@ -3,8 +3,11 @@ package site.sorghum.loopra.integration.cutin;
 import org.junit.jupiter.api.Test;
 import org.noear.snack4.ONode;
 import org.noear.solon.ai.chat.tool.FunctionTool;
+import site.sorghum.cutin.core.context.LoopContext;
 import site.sorghum.cutin.core.tool.Tool;
+import site.sorghum.cutin.core.tool.ToolCall;
 import site.sorghum.cutin.core.tool.ToolDefinition;
+import site.sorghum.cutin.core.tool.ToolResult;
 import site.sorghum.loopra.bin.agent.environment.SessionEnvironment;
 import site.sorghum.loopra.bin.tool.ToolRegistry;
 
@@ -118,6 +121,110 @@ class ToolRegistryCutinSyncTest {
         registry.clearTools();
         assertFalse(registry.cutinRegistry().find("ping").isPresent());
         assertEquals(0, registry.toOpenAiTools().getArray().size());
+    }
+
+    @Test
+    void externallyRegisteredToolsSurviveSyncReplacement() {
+        // 拓展包/插件贡献的工具经 register 进入外部注册区，loopra 工具表刷新
+        // （setTools 全量替换同步区）不得抹掉它们。
+        ToolRegistry registry = new ToolRegistry();
+        registry.setEnvironment(SessionEnvironment.local(Paths.get(System.getProperty("user.dir"))));
+        registry.register(simpleTool("ping"));
+
+        Tool ext = simpleCutinTool("demo-greeting");
+        registry.cutinRegistry().register(ext);
+        assertTrue(registry.cutinRegistry().find("demo-greeting").isPresent());
+
+        registry.refresh(); // 触发 syncCutinRegistry → setTools 全量替换同步区
+        assertTrue(registry.cutinRegistry().find("demo-greeting").isPresent(),
+            "loopra 工具表同步不能抹掉外部注册（拓展包）工具");
+        assertTrue(registry.cutinRegistry().find("ping").isPresent());
+
+        // 外部注册工具仍可通过 unregister 移除
+        assertTrue(registry.cutinRegistry().unregister("demo-greeting", ext));
+        assertFalse(registry.cutinRegistry().find("demo-greeting").isPresent());
+    }
+
+    @Test
+    void externalRegistrationWinsOverSyncOnSameId() {
+        ToolRegistry registry = new ToolRegistry();
+        registry.setEnvironment(SessionEnvironment.local(Paths.get(System.getProperty("user.dir"))));
+        registry.register(simpleTool("ping"));
+
+        Tool ext = simpleCutinTool("ping");
+        registry.cutinRegistry().register(ext);
+        assertSame(ext, registry.cutinRegistry().find("ping").orElseThrow(),
+            "同名冲突时外部注册优先");
+
+        registry.refresh(); // 同步区重建也不覆盖外部注册的同名工具
+        assertSame(ext, registry.cutinRegistry().find("ping").orElseThrow());
+    }
+
+    @Test
+    void clearToolsAlsoClearsExternallyRegisteredTools() {
+        ToolRegistry registry = new ToolRegistry();
+        registry.setEnvironment(SessionEnvironment.local(Paths.get(System.getProperty("user.dir"))));
+        registry.register(simpleTool("ping"));
+        registry.cutinRegistry().register(simpleCutinTool("demo-greeting"));
+
+        registry.clearTools();
+
+        assertFalse(registry.cutinRegistry().find("ping").isPresent());
+        assertFalse(registry.cutinRegistry().find("demo-greeting").isPresent(),
+            "clearTools 应连外部注册工具一起清空");
+        assertEquals(0, registry.toOpenAiTools().getArray().size());
+    }
+
+    @Test
+    void externallyRegisteredToolsAreVisibleToModelAndCacheInvalidates() {
+        ToolRegistry registry = new ToolRegistry();
+        registry.setEnvironment(SessionEnvironment.local(Paths.get(System.getProperty("user.dir"))));
+        registry.register(simpleTool("ping"));
+
+        // 注册前缓存已生成，外部工具注册后必须失效缓存并可见
+        assertFalse(hasTool(registry.toOpenAiTools(), "demo-greeting"));
+        Tool ext = simpleCutinTool("demo-greeting");
+        registry.cutinRegistry().register(ext);
+
+        ONode tools = registry.toOpenAiTools();
+        assertTrue(hasTool(tools, "demo-greeting"), "外部工具应出现在模型可见的 tools 数组");
+        assertTrue(hasTool(tools, "ping"));
+        ONode fn = tools.getArray().stream()
+            .filter(n -> "demo-greeting".equals(n.get("function").get("name").getString()))
+            .findFirst().orElseThrow().get("function");
+        assertEquals("External tool.", fn.get("description").getString());
+        assertTrue(fn.get("parameters").isObject());
+
+        // 注销后缓存同样失效，工具从模型可见列表移除
+        assertTrue(registry.cutinRegistry().unregister("demo-greeting", ext));
+        assertFalse(hasTool(registry.toOpenAiTools(), "demo-greeting"));
+    }
+
+    private static boolean hasTool(ONode tools, String name) {
+        if (tools == null || !tools.isArray()) {
+            return false;
+        }
+        return tools.getArray().stream()
+            .anyMatch(n -> name.equals(n.get("function").get("name").getString()));
+    }
+
+    private static Tool simpleCutinTool(String name) {
+        return new Tool() {
+            @Override
+            public String id() {
+                return name;
+            }
+
+            @Override
+            public ToolDefinition definition() {
+                return new ToolDefinition(name, "External tool.", Map.of());
+            }
+
+            @Override
+            public ToolResult call(ToolCall call, LoopContext context) {
+                return ToolResult.success(call.id(), "ok");
+            }
+        };
     }
 
     private static FunctionTool simpleTool(String name) {

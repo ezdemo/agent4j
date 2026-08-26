@@ -29,7 +29,14 @@ public class ToolRegistry {
     private final LinkedHashMap<String, FunctionTool> allScannedTools = new LinkedHashMap<>();
 
     /** cutin 引擎看到的动态工具视图，随本注册表热刷新。 */
-    private final CutinToolRegistryView cutinRegistry = new CutinToolRegistryView();
+    private final CutinToolRegistryView cutinRegistry = createCutinView();
+
+    private CutinToolRegistryView createCutinView() {
+        CutinToolRegistryView view = new CutinToolRegistryView();
+        // 外部注册区（拓展包/插件工具）变更时失效 OpenAI tools 缓存
+        view.setOnChange(() -> cachedOpenAiTools = null);
+        return view;
+    }
 
     /** 缓存的 OpenAI tools 格式（refresh 时失效） */
     private ONode cachedOpenAiTools = null;
@@ -138,16 +145,16 @@ public class ToolRegistry {
     /**
      * 清空全部工具（含 cutin 视图）——Tool 网关插件禁用时调用，实现“下线全部工具”。
      * <p>
-     * 注意：网关插件自身注册的工具在 stop 时因注销闭包持有旧实例（已被
-     * {@link #syncCutinRegistry()} 的 setTools 替换）无法通过 unregister 移除，
-     * 因此网关禁用时必须以 clearTools 整体清空 legacy 与 cutin 视图。
+     * 注意：cutin 视图分 loopra 同步区与外部注册区（拓展包桥接、插件贡献的
+     * 工具），外部注册工具不随 {@link #syncCutinRegistry()} 清除，因此网关
+     * 禁用时必须以 clearTools 整体清空 legacy 与 cutin 视图（含外部注册区）。
      * </p>
      */
     public synchronized void clearTools() {
         functionToolMap.clear();
         allScannedTools.clear();
         cachedOpenAiTools = null;
-        syncCutinRegistry();
+        cutinRegistry.clearAll();
     }
 
     /**
@@ -299,6 +306,23 @@ public class ToolRegistry {
                     toolNode.set("description", func.descriptionAndMeta());
                     toolNode.set("parameters", ONode.ofJson(
                             ONode.serialize(ToolSchemaSanitizer.sanitize(func.inputSchema()))));
+                });
+            });
+        }
+        // 合并外部注册区（拓展包桥接、插件贡献）工具，模型同样可见可调用。
+        // loopra 工具已由 functionToolMap 生成；gateway 插件会以 CutinFunctionToolBridge
+        // 镜像注册进视图外部区，同 id 者跳过避免重复声明。
+        for (site.sorghum.cutin.core.tool.Tool ext : cutinRegistry.externalTools()) {
+            if (functionToolMap.containsKey(ext.id())) {
+                continue;
+            }
+            site.sorghum.cutin.core.tool.ToolDefinition def = ext.definition();
+            tools.addNew().then(n2 -> {
+                n2.set("type", "function");
+                n2.getOrNew("function").then(toolNode -> {
+                    toolNode.set("name", def.id());
+                    toolNode.set("description", def.description());
+                    toolNode.set("parameters", ONode.ofJson(ONode.serialize(def.inputSchema())));
                 });
             });
         }

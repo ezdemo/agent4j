@@ -5,17 +5,27 @@ import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.io.TempDir;
+import org.noear.solon.ai.chat.tool.FunctionTool;
 import org.noear.solon.test.SolonTest;
+import site.sorghum.cutin.core.event.EventBus;
 import site.sorghum.cutin.core.loop.InterceptPoint;
+import site.sorghum.cutin.core.loop.InterceptorRegistry;
+import site.sorghum.cutin.core.model.ModelRegistry;
 import site.sorghum.cutin.core.plugin.DefaultLoopRegistrar;
+import site.sorghum.cutin.core.tool.Tool;
+import site.sorghum.loopra.integration.cutin.CutinFunctionToolBridge;
+import site.sorghum.loopra.integration.cutin.CutinToolRegistryView;
 
 import java.io.ByteArrayOutputStream;
 import java.io.InputStream;
+import java.lang.reflect.Type;
 import java.net.InetSocketAddress;
 import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
 import java.nio.file.Path;
+import java.util.LinkedHashMap;
 import java.util.List;
+import java.util.Map;
 import java.util.jar.JarEntry;
 import java.util.jar.JarOutputStream;
 
@@ -136,6 +146,84 @@ public class ExtPackStoreTest {
             LoopraExtPackRuntime.detach(late);
             store.uninstall("sample");
         }
+    }
+
+    /**
+     * 真实 AgentLoop 视图场景：桥接工具经 register 进入 CutinToolRegistryView 外部注册区，
+     * loopra 工具表刷新（setTools 全量替换同步区）不得抹掉它们。
+     */
+    @Test
+    void bridgeToolsSurviveCutinViewSyncReplacement() throws Exception {
+        // 与真实 AgentLoop 同构：DefaultLoopRegistrar 包装 CutinToolRegistryView
+        CutinToolRegistryView view = new CutinToolRegistryView();
+        DefaultLoopRegistrar registrar = new DefaultLoopRegistrar(
+            new InterceptorRegistry(), view, new ModelRegistry(), new EventBus());
+        LoopraExtPackRuntime.attach(registrar);
+        try {
+            LoopraExtPackRuntime.registerBridgeEverywhere("sample-bridge", new SampleExtPackBridge());
+            assertTrue(view.find("sample-ext-tool").isPresent());
+
+            // 模拟 loopra 工具表刷新：refresh/register 均触发 syncCutinRegistry → setTools
+            view.setTools(List.of(new CutinFunctionToolBridge(simpleFunctionTool("ping"))));
+            assertTrue(view.find("sample-ext-tool").isPresent(), "loopra 工具表同步不能抹掉桥接工具");
+            assertTrue(view.find("ping").isPresent());
+
+            // 桥接注销：外部注册工具可正常移除
+            LoopraExtPackRuntime.unregisterBridgeEverywhere("sample-bridge");
+            assertFalse(view.find("sample-ext-tool").isPresent());
+        } finally {
+            LoopraExtPackRuntime.detach(registrar);
+        }
+    }
+
+    private static FunctionTool simpleFunctionTool(String name) {
+        Map<String, Object> meta = new LinkedHashMap<>();
+        return new FunctionTool() {
+            @Override
+            public String name() {
+                return name;
+            }
+
+            @Override
+            public String title() {
+                return name;
+            }
+
+            @Override
+            public String description() {
+                return "Simple tool.";
+            }
+
+            @Override
+            public boolean returnDirect() {
+                return false;
+            }
+
+            @Override
+            public String inputSchema() {
+                return "{\"type\":\"object\",\"properties\":{}}";
+            }
+
+            @Override
+            public Type returnType() {
+                return String.class;
+            }
+
+            @Override
+            public Object handle(Map<String, Object> args) {
+                return "pong";
+            }
+
+            @Override
+            public Map<String, Object> meta() {
+                return meta;
+            }
+
+            @Override
+            public void metaPut(String key, Object value) {
+                meta.put(key, value);
+            }
+        };
     }
 
     /** 停用后 loadAll 跳过该拓展包；重新启用后恢复启动。 */
