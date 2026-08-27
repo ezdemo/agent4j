@@ -38,6 +38,25 @@ describe('BlockRenderer sub-agent streaming', () => {
 
     expect(wrapper.text()).toContain('后续消息')
   })
+
+  it('renders user message bubbles (sub_user) as top-level blocks like a normal conversation', async () => {
+    const wrapper = mount(BlockRenderer, {
+      props: {
+        blocks: [
+          {type: 'sub_user', content: '请审查这段代码'},
+          {type: 'content', content: '审查完成，发现 1 个问题。'},
+          {type: 'sub_user', content: '那请修复它'}
+        ]
+      }
+    })
+    await nextTick()
+
+    const bubbles = wrapper.findAll('.block-sub-user')
+    expect(bubbles.length).toBe(2)
+    expect(wrapper.text()).toContain('请审查这段代码')
+    expect(wrapper.text()).toContain('那请修复它')
+    expect(wrapper.text()).toContain('审查完成，发现 1 个问题。')
+  })
 })
 
 describe('BlockRenderer active response state', () => {

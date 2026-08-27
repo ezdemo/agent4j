@@ -6,6 +6,7 @@ import site.sorghum.loopra.bin.agent.hitl.SubAgentHITLBroker;
 import site.sorghum.loopra.bin.agent.listener.AgentLoopListener;
 import site.sorghum.loopra.bin.agent.model.UserMessage;
 import site.sorghum.loopra.bin.agent.output.SubAgentAgentOutput;
+import site.sorghum.loopra.bin.agent.output.SubAgentEventRecorder;
 import site.sorghum.loopra.bin.agent.prompt.PromptPrefix;
 import site.sorghum.loopra.bin.agent.spi.AgentConfig;
 import site.sorghum.loopra.bin.agent.spi.SessionUsageSink;
@@ -71,6 +72,8 @@ public class SubAgent {
     private final String cacheSessionNonce = UUID.randomUUID().toString();
     /** 父代理输出通道，子代理用它把流式结果实时推送给用户。 */
     private AgentOutput parentOutput = null;
+    /** 本轮执行的事件输出目标；非 null 时优先于父输出（继续对话时替换为新的 SSE 通道） */
+    private volatile AgentOutput outputTarget = null;
     /** 父会话 ID（用于子代理 tools 中的 sessionId 传递） */
     private String sessionId = null;
     /** 父会话用量上报通道（用于子代理 token 用量直接上报） */
@@ -85,6 +88,14 @@ public class SubAgent {
     private final AtomicBoolean abortRequested = new AtomicBoolean(false);
     /** 子代理唯一标识（由 SubAgentAgentOutput 分配，用于 HITL Broker 注册） */
     private int subAgentId = 0;
+    /** 子代理会话记录器（可选）：把执行过程以段级粒度落盘为子代理会话，挂在父会话下 */
+    private SubAgentEventRecorder recorder = null;
+    /** 子代理会话名称（name + 首句话，由 SubAgentTool 注入）：sub_start 事件与回放列表均以此命名，多轮不变 */
+    private String sessionName = null;
+    /** 子代理名字（人名/二次元名字等，由 SubAgentTool 注入） */
+    private String agentName = null;
+    /** 会话标题（任务首句，由 SubAgentTool 注入） */
+    private String sessionTitle = null;
 
     /**
      * 构造函数（接受 LoopraModelProvider，便于 DI）
@@ -166,9 +177,20 @@ public class SubAgent {
     }
 
     /**
+     * 设置子代理会话记录器（可选）。设置后子代理执行过程会持久化为独立子代理会话。
+     */
+    public void setRecorder(SubAgentEventRecorder recorder) {
+        this.recorder = recorder;
+    }
+
+    /**
      * 运行子代理，返回最终回复。
      * 子代理拥有独立的 ConversationContext 和 AgentLoop，
      * 继承父级工具集（排除递归 spawn 和用户交互工具）。
+     * <p>
+     * 支持多轮：首次调用创建子循环与上下文，后续调用（继续对话）复用同一循环累积消息；
+     * 每轮都会挂载新一轮输出链，记录器以 sub_start/sub_end 对续写同一子代理会话。
+     * </p>
      *
      * @param task     子代理的任务描述
      * @param listener 事件监听（可选）
@@ -178,34 +200,73 @@ public class SubAgent {
         if (abortRequested.get()) {
             return "⏹️ 子代理已取消";
         }
+        SubAgentEventRecorder activeRecorder = this.recorder;
+        String endStatus = "completed";
+        try {
+            return doRun(task, listener);
+        } catch (IOException | RuntimeException e) {
+            endStatus = "error";
+            throw e;
+        } finally {
+            // 记录收尾：结束状态按 abort > 异常 > 正常 判定；未挂载（未真正执行）时为 no-op
+            if (activeRecorder != null) {
+                activeRecorder.end(abortRequested.get() ? "aborted" : endStatus);
+            }
+        }
+    }
+
+    /** 子代理是否已被显式取消（取消后不可再继续对话）。 */
+    public boolean isAbortRequested() {
+        return abortRequested.get();
+    }
+
+    /** 替换本轮执行的事件输出目标（继续对话时指向新的 SSE 通道，避免事件回流到已结束的父聊天流）。
+     * 传 null 恢复为父输出。
+     */
+    public void setOutputTarget(AgentOutput output) {
+        this.outputTarget = output;
+    }
+
+    /** 设置子代理会话名称（name + 首句话）：决定 sub_start 事件与回放列表的会话命名，多轮保持稳定。 */
+    public void setSessionName(String sessionName) {
+        this.sessionName = sessionName;
+    }
+
+    /** 设置子代理名字（人名/二次元名字等），随 sub_start 事件落盘供列表展示。 */
+    public void setAgentName(String agentName) {
+        this.agentName = agentName;
+    }
+
+    /** 设置会话标题（任务首句），随 sub_start 事件落盘供列表展示。 */
+    public void setSessionTitle(String sessionTitle) {
+        this.sessionTitle = sessionTitle;
+    }
+
+    /**
+     * 首次执行时创建子循环与上下文（惰性）；继续对话时直接复用，不重建。
+     * 创建时机相关的继承配置（计划模式、工具冻结、外部中断检查等）只在此处生效一次。
+     */
+    private void ensureLoop() {
+        if (subLoop != null) return;
         ConversationContext ctx = new ConversationContext(
                 new PromptPrefix(systemPrompt, registry.toOpenAiTools()));
         // 继承父级配置（config、sessionId、sessionUsageSink）和父代理的完整 HITL 模式。
         AgentConfig effectiveConfig = this.config;
-        if (abortRequested.get()) {
-            return "⏹️ 子代理已取消";
-        }
         this.subLoop = new AgentLoop(modelProvider, registry, ctx, effectiveConfig);
         this.subLoop.setHitlMode(this.hitlMode);
         AgentLoop subLoop = this.subLoop;
         if (parentController != null) {
             subLoop.setTerminateOnNoToolCall(parentController.terminateOnNoToolCall());
         }
-
         if (abortRequested.get()) {
             subLoop.requestUserAbort();
-            return "⏹️ 子代理已取消";
+            return;
         }
 
         // 同时观察显式子代理取消和父级用户中断，覆盖 run() 启动前后的竞争窗口。
         subLoop.setExternalAbortCheck(() -> abortRequested.get()
                 || (parentController != null && parentController.isAbortRequested()));
 
-        if (parentOutput != null) {
-            SubAgentAgentOutput wrapped = new SubAgentAgentOutput(parentOutput, task);
-            this.subAgentId = wrapped.getSubId();
-            subLoop.setOutput(wrapped);
-        }
         // 继承父级 sessionId 和 sessionUsageSink（用于 tools 中正确的会话上下文和用量上报）。
         // 文件变更必须由父循环统一 drain 并持久化；否则子循环会提前消费同一会话范围的记录，
         // 使主消息无法展示“已编辑 X 个文件”。
@@ -223,6 +284,39 @@ public class SubAgent {
             subLoop.setPlanMode(true);
         }
         subLoop.freezePromptPrefix();
+    }
+
+    /**
+     * 实际执行体（run 的 try/finally 保证记录器收尾）。
+     * 支持多轮：首次调用创建子循环与上下文，后续调用（继续对话）复用同一循环累积消息。
+     */
+    private String doRun(String task, AgentLoopListener listener) throws IOException {
+        ensureLoop();
+        if (abortRequested.get()) {
+            return "⏹️ 子代理已取消";
+        }
+        AgentLoop subLoop = this.subLoop;
+
+        // 每轮执行：新建本轮输出链（新一轮 subId + 记录器续写新一轮 sub_start）
+        // 输出目标优先取 outputTarget（继续对话的新 SSE 通道），否则回到父输出
+        AgentOutput target = outputTarget != null ? outputTarget : parentOutput;
+        if (target != null) {
+            SubAgentAgentOutput wrapped = new SubAgentAgentOutput(target, task);
+            this.subAgentId = wrapped.getSubId();
+            AgentOutput effective = wrapped;
+            // 挂载记录器：SSE 实时流保持 sub_* 不变，执行过程同时落盘为子代理会话
+            SubAgentEventRecorder activeRecorder = this.recorder;
+            if (activeRecorder != null) {
+                // 会话名（name + 首句话）作为 sub_start 的任务字段：多轮续写同一名称，不回退为单轮消息；
+                // name/title 一并落盘，供会话列表按名字 + 标题展示
+                activeRecorder.attach(wrapped, sessionName != null ? sessionName : task,
+                        agentName, sessionTitle, this.subAgentId);
+                // 注入会话 id：桌面端子代理会话面板按 subSessionId 路由实时事件
+                wrapped.setSubSessionId(activeRecorder.getSubSessionId());
+                effective = activeRecorder;
+            }
+            subLoop.setOutput(effective);
+        }
 
         // 创建用量捕获监听器：拦截 onUsage 记录到 SubAgent 字段，同时委托给外部 listener
         AgentLoopListener capturingListener = new AgentLoopListener() {

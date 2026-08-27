@@ -47,7 +47,7 @@
         <div class="msg-footer">
           <span class="msg-time">{{ msg.time }}</span>
           <span class="msg-actions">
-          <button class="rollback-btn"
+          <button v-if="interactive" class="rollback-btn"
                   :class="{ loading: snapshotRollbackLoading.get(rollbackKey) }"
                   :disabled="rollbackDisabled"
                   @click="$emit('rollbackSnapshot', rollbackId, Boolean(msg.snapshotId), msg.rollbackTimestamp)"
@@ -75,7 +75,7 @@
           </span>
           <span class="msg-actions">
           <button class="copy-msg-btn" @click="$emit('copyMessage', msg)" title="复制消息" v-html="COPY_ICON"></button>
-          <button class="copy-msg-btn" :disabled="branchDisabled" @click="$emit('branchSession', msg, idx)" title="继续到新会话" v-html="BRANCH_ICON"></button>
+          <button v-if="interactive" class="copy-msg-btn" :disabled="branchDisabled" @click="$emit('branchSession', msg, idx)" title="继续到新会话" v-html="BRANCH_ICON"></button>
           </span>
         </div>
       </div>
@@ -130,7 +130,9 @@ const props = defineProps({
   snapshotRollbackLoading: {type: Object, required: true},
   rollbackDisabled: {type: Boolean, default: false},
   branchDisabled: {type: Boolean, default: false},
-  streaming: {type: Boolean, default: false}
+  streaming: {type: Boolean, default: false},
+  /** 消息操作按钮（撤回/分支）开关：子代理会话标签关闭，避免误操作主会话 */
+  interactive: {type: Boolean, default: true}
 })
 
 const emit = defineEmits(['previewImage', 'rollbackSnapshot', 'copyMessage', 'branchSession', 'sendChoice', 'openFile', 'openDiff', 'revertFileChanges', 'viewRawEvents'])

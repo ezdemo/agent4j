@@ -484,6 +484,110 @@ export const sessionsAPI = {
 
 }
 
+// 子代理会话 API（只读回放：子代理会话挂在主代理会话下）
+export const subSessionsAPI = {
+  // 列出某主代理会话下的子代理会话 - GET /api/sub-sessions?workspaceHash=xxx&sessionName=xxx
+  list: (workspaceHash, sessionName) => {
+    return api.get('/sub-sessions', { params: { workspaceHash, sessionName } })
+  },
+
+  // 读取子代理会话事件（重建回放块） - GET /api/sub-sessions/{subSessionId}/events?workspaceHash=xxx&sessionName=xxx
+  events: (subSessionId, workspaceHash, sessionName) => {
+    return api.get(`/sub-sessions/${subSessionId}/events`, { params: { workspaceHash, sessionName } })
+  },
+
+  // 删除子代理会话 - DELETE /api/sub-sessions/{subSessionId}?workspaceHash=xxx&sessionName=xxx
+  remove: (subSessionId, workspaceHash, sessionName) => {
+    return api.delete(`/sub-sessions/${subSessionId}`, { params: { workspaceHash, sessionName } })
+  },
+
+  // 继续对话 - POST /api/sub-sessions/{subSessionId}/chat?workspaceHash=xxx&sessionName=xxx
+  // SSE 流式返回 sub_* 事件；options: { message, workspaceHash, sessionName }
+  chat: (subSessionId, options = {}, onMessage, onDone, onError) => {
+    const abortController = new AbortController()
+
+    ;(async () => {
+      try {
+        const query = new URLSearchParams()
+        if (options.workspaceHash) query.set('workspaceHash', options.workspaceHash)
+        if (options.sessionName) query.set('sessionName', options.sessionName)
+        // 剔除尾部斜杠，防止 apiBase 为 '/' 时产生协议相对 URL
+        const base = (getCustomBaseURL() || '').replace(/\/+$/, '')
+        const url = `${base ? base : ''}/api/sub-sessions/${subSessionId}/chat?${query.toString()}`
+        const res = await fetch(url, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ message: options.message }),
+          signal: abortController.signal
+        })
+
+        if (!res.ok) {
+          let detail = ''
+          try {
+            detail = await res.text()
+          } catch {
+            /* ignore */
+          }
+          if (onError) onError(new Error(`HTTP ${res.status}: ${detail}`))
+          return
+        }
+
+        const reader = res.body.getReader()
+        const decoder = new TextDecoder()
+        let buffer = ''
+        let currentEventType = null
+
+        while (true) {
+          const { done, value } = await reader.read()
+          if (done) break
+
+          buffer += decoder.decode(value, { stream: true })
+          const lines = buffer.split('\n')
+          buffer = lines.pop()
+
+          for (const line of lines) {
+            const trimmed = line.trim()
+            if (trimmed === '') {
+              currentEventType = null
+              continue
+            }
+            if (trimmed.startsWith(':')) continue
+
+            if (trimmed.startsWith('event:')) {
+              currentEventType = trimmed.slice(6).trim()
+            } else if (trimmed.startsWith('data:')) {
+              const payload = trimmed.slice(5).trim()
+              if (payload === '[DONE]') {
+                if (onDone) onDone()
+                return
+              }
+
+              try {
+                const parsed = JSON.parse(payload)
+                if (typeof parsed === 'string') {
+                  if (onMessage) onMessage({ type: currentEventType, content: parsed })
+                } else if (parsed && typeof parsed === 'object') {
+                  if (onMessage) onMessage({ type: currentEventType, ...parsed })
+                } else {
+                  if (onMessage) onMessage({ type: currentEventType, content: payload })
+                }
+              } catch (e) {
+                if (onMessage) onMessage({ type: currentEventType, content: payload })
+              }
+              currentEventType = null
+            }
+          }
+        }
+        if (onDone) onDone()
+      } catch (err) {
+        if (err.name !== 'AbortError' && onError) onError(err)
+      }
+    })()
+
+    return { abort: () => abortController.abort() }
+  }
+}
+
 // 工具 API
 export const toolsAPI = {
   // 列出所有已注册工具（含已禁用的）- GET /api/tools

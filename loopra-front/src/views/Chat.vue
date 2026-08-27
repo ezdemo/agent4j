@@ -35,8 +35,8 @@
       'messages-welcome': !props.sessionName || messages.length === 0,
       'messages-with-queue': queuedMessages.length > 0
     }">
-      <!-- 空状态：无会话或新建的空会话 -->
-      <div v-if="!props.sessionName || messages.length === 0" class="empty welcome-screen">
+      <!-- 空状态：无会话或新建的空会话（子代理会话模式不展示欢迎页） -->
+      <div v-if="!props.sessionName || (messages.length === 0 && !props.subAgent)" class="empty welcome-screen">
         <section class="welcome-panel">
           <h1 class="welcome-heading" aria-label="Loopra">
             <svg viewBox="0 0 174 42" preserveAspectRatio="none" aria-hidden="true">
@@ -95,6 +95,16 @@
         </section>
       </div>
 
+      <!-- 子代理会话加载中占位（事件尚未拉取完成） -->
+      <div v-else-if="props.subAgent && messages.length === 0" class="empty sub-agent-loading">
+        <div class="ai-preparing">
+          <span class="ai-dot"></span>
+          <span class="ai-dot"></span>
+          <span class="ai-dot"></span>
+          <span class="ai-label">子代理会话加载中...</span>
+        </div>
+      </div>
+
       <!-- 消息列表：仅挂载可视区域附近的消息，保留上下占位以维持滚动位置。 -->
       <div v-if="virtualWindow.topHeight" class="virtual-spacer" :style="{ height: virtualWindow.topHeight + 'px' }"></div>
       <div v-for="item in virtualWindow.items" :key="item.msg.id"
@@ -121,6 +131,7 @@
             :snapshot-rollback-loading="snapshotRollbackLoading"
             :rollback-disabled="streaming"
             :branch-disabled="streaming || branchingSession"
+            :interactive="!isSubAgentMode"
             @preview-image="previewImage"
             @rollback-snapshot="openRollbackDialog"
             @copy-message="copyMessage"
@@ -274,7 +285,7 @@
 
     <!-- 输入区（独立组件） -->
     <Transition name="welcome-input-drop">
-    <ChatInput v-if="props.sessionName && messages.length > 0"
+    <ChatInput v-if="props.sessionName && (props.subAgent || messages.length > 0)"
         ref="chatInput"
         v-model:inputText="inputText"
         :streaming="streaming"
@@ -297,17 +308,17 @@
         :currentPermission="currentPermission"
         :petState="petState"
         :queued-messages="queuedMessages"
-        :session-running="sessionTaskRunning"
-        :session-busy="sessionBusy"
-        :session-status-stopping="sessionStatusStopping"
+        :session-running="isSubAgentMode ? (props.subAgent?.status === '运行中') : sessionTaskRunning"
+        :session-busy="isSubAgentMode ? (props.subAgent?.status === '运行中') : sessionBusy"
+        :session-status-stopping="isSubAgentMode ? false : sessionStatusStopping"
         :plan-mode="planMode"
         @send="(imgs, text, linkedProjectHashes) => sendMessage(imgs, text, null, props.sessionName, props.workspaceHash, undefined, null, undefined, linkedProjectHashes)"
         @toggle-plan="togglePlan"
         @remove-queued="removeQueuedMessage"
         @guide-queued="guideQueuedMessage"
-        @abort="abortChat"
-        @clear="clearChat"
-        @export="exportChat"
+        @abort="onAbort"
+        @clear="onClear"
+        @export="onExport"
         @refreshUsage="loadUsage"
         @switchModel="handleSwitchModel"
         @set-default-model="handleSetDefaultModel"
@@ -380,10 +391,11 @@
 import {computed, defineAsyncComponent, nextTick, onBeforeUnmount, onMounted, reactive, ref, watch, watchEffect} from 'vue'
 import {message} from 'ant-design-vue'
 import {CheckOutlined, CloseOutlined, FileTextOutlined} from '@ant-design/icons-vue'
-import {agentAPI, chatAPI, configAPI, gitAPI, sessionsAPI, snapshotAPI} from '../services/api'
+import {agentAPI, chatAPI, configAPI, gitAPI, sessionsAPI, snapshotAPI, subSessionsAPI} from '../services/api'
 import {basicMarkdown} from '../utils/basicMarkdown'
 import {sanitize} from '../utils/sanitize'
 import {buildHistoryItems, mergeFileChanges, moveFileChangesToEnd} from '../utils/chatHistory'
+import {applySubAgentEvent, findSubAgentBlock} from '../utils/subAgentBlocks'
 import {getAssistantTurnBoundaries} from '../utils/sessionBranch'
 import ChatInput from '../components/ChatInput.vue'
 import ActionConfirmDialog from '../components/ActionConfirmDialog.vue'
@@ -529,10 +541,12 @@ const props = defineProps({
   environmentSwitching: {type: Boolean, default: false},
   environmentSwitchTarget: {type: String, default: ''},
   workspaces: {type: Array, default: () => []},
-  version: {type: String, default: ''}
+  version: {type: String, default: ''},
+  /** 子代理会话容器块（非 null 时进入子代理会话模式：复用聊天界面，数据源与发送通道切换） */
+  subAgent: {type: Object, default: null}
 })
 
-const emit = defineEmits(['sessionUpdated', 'sessionBranched', 'startTask', 'switchWorkspace', 'manageWorkspaces', 'manageModels', 'sessionActiveChange', 'welcomeChange', 'refresh-sessions', 'environmentModeChange'])
+const emit = defineEmits(['sessionUpdated', 'sessionBranched', 'startTask', 'switchWorkspace', 'manageWorkspaces', 'manageModels', 'sessionActiveChange', 'welcomeChange', 'refresh-sessions', 'environmentModeChange', 'subAgentEvent'])
 const store = useAppStore()
 
 const messagesContainer = ref(null)
@@ -820,8 +834,43 @@ const rawEventText = (event) => {
   return JSON.stringify(event, null, 2)
 }
 
-const messages = computed(() => store.getSessionMessages(props.sessionName))
-const streaming = computed(() => store.getSessionStreaming(props.sessionName))
+const messages = computed(() => props.subAgent ? subAgentMessages.value : store.getSessionMessages(props.sessionName))
+const streaming = computed(() => isSubAgentMode.value
+    ? props.subAgent?.status === '运行中'
+    : store.getSessionStreaming(props.sessionName))
+
+// ── 子代理会话模式：复用本组件，界面与主会话完全一致，数据源切换为子代理容器块 ──
+// 容器块（tab.blocks）中 sub_user → 用户消息气泡，其余块累积为助手消息；
+// 段落 id 按出现顺序固定，继续对话只追加，派生消息 id 保持稳定（虚拟滚动依赖）。
+const isSubAgentMode = computed(() => !!props.subAgent)
+// 子代理消息时间戳：不引用下方定义的 now（immediate watch 会提前求值本派生，触发 TDZ）
+const subAgentMsgTime = () => new Date().toLocaleTimeString('zh-CN', {hour12: false, hour: '2-digit', minute: '2-digit'})
+const subAgentMessages = computed(() => {
+  const blocks = props.subAgent?.blocks || []
+  const msgs = []
+  let assistant = null
+  let assistantSeq = 0
+  for (const b of blocks) {
+    if (b.type === 'sub_user') {
+      assistant = null
+      msgs.push({
+        id: 'sub-u-' + msgs.length,
+        role: 'user',
+        content: b.content || '',
+        time: subAgentMsgTime(),
+        snapshotId: null,
+        rollbackId: null
+      })
+    } else {
+      if (!assistant) {
+        assistant = {id: 'sub-a-' + (++assistantSeq), role: 'assistant', time: subAgentMsgTime(), blocks: []}
+        msgs.push(assistant)
+      }
+      assistant.blocks.push(b)
+    }
+  }
+  return msgs
+})
 const queuedMessagesBySession = ref({})
 const SESSION_MODEL_STORAGE_KEY = 'loopra.session-model-selections'
 const SESSION_REASONING_EFFORT_STORAGE_KEY = 'loopra.session-reasoning-efforts'
@@ -1088,11 +1137,16 @@ let sessionStatusPollingStarted = false
 const sessionStatusBusy = computed(() => sessionStatusChecking.value || sessionTaskRunning.value)
 const sessionBusy = computed(() => sessionStatusBusy.value)
 
-// 会话执行状态上报：外层布局（桌面端横跨两侧边栏的波动条）据此显隐
-watch([streaming, sessionTaskRunning], ([s, r]) => emit('sessionActiveChange', Boolean(s || r)), { immediate: true })
+// 会话执行状态上报：外层布局（桌面端横跨两侧边栏的波动条）据此显隐（子代理模式不涉及主会话任务）
+watch([streaming, sessionTaskRunning], ([s, r]) => {
+  if (isSubAgentMode.value) return
+  emit('sessionActiveChange', Boolean(s || r))
+}, { immediate: true })
 
-// 欢迎页（无会话或空会话）状态上报：外层布局据此收起左侧文件栏
-const welcomeActive = computed(() => !props.sessionName || messages.value.length === 0)
+// 欢迎页（无会话或空会话）状态上报：外层布局据此收起左侧文件栏（子代理模式恒为非欢迎态）
+const welcomeActive = computed(() => isSubAgentMode.value
+    ? false
+    : !props.sessionName || messages.value.length === 0)
 watch(welcomeActive, (active) => emit('welcomeChange', active), { immediate: true })
 
 const isCurrentSessionStatus = (token, workspaceHash, sessionName) =>
@@ -1356,8 +1410,8 @@ const syncPlanMode = async () => {
 }
 
 onMounted(() => {
-  loadUsage(props.initiallyEmpty ? {skipSessionUsage: true} : undefined)
-  if (!props.initiallyEmpty) startSessionStatusPolling()
+  if (!props.subAgent) loadUsage(props.initiallyEmpty ? {skipSessionUsage: true} : undefined)
+  if (!props.initiallyEmpty && !props.subAgent) startSessionStatusPolling()
   window.addEventListener('keydown', handleImagePreviewKeydown)
   window.addEventListener('resize', updateVirtualViewport)
   // 监听复制成功事件
@@ -1788,12 +1842,82 @@ const openFile = async (filePath) => {
  *   收到有内容的 SSE 事件时才创建助手气泡
  * - /skill: 命令：显示用户气泡 + 助手气泡（正常流程）
  */
+/**
+ * 子代理会话模式发送：追加一轮继续对话。
+ * 用户消息以 sub_user 气泡加入容器块（派生为消息流中的用户气泡），
+ * SSE 返回的 sub_* 事件增量渲染（回放/实时共用同一累积逻辑），结束时通知上层刷新会话列表。
+ */
+const sendSubAgentMessage = async (images = [], overrideText = null) => {
+  const text = overrideText ?? inputText.value.trim()
+  if (!text) return
+  const tab = props.subAgent
+  if (tab.status === '运行中') return
+  if (images && images.length > 0) {
+    message.warning('子代理会话暂不支持图片')
+    return
+  }
+  inputText.value = ''
+  tab.blocks.push({type: 'sub_user', content: text})
+  tab.status = '运行中'
+  userScrolledAway = false
+  await scroll(true) // 用户刚发送，强制滚到底
+
+  subSessionsAPI.chat(tab.subSessionId, {
+    message: text,
+    workspaceHash: props.workspaceHash,
+    sessionName: props.sessionName
+  }, (evt) => {
+    if (evt.type === 'error') {
+      // 后端发送的 SSE 错误事件（HTTP 200 流内错误）
+      tab.status = '失败'
+      tab.blocks.push({type: 'content', content: '❌ 继续对话失败：' + (evt.error || evt.content || '未知错误')})
+      return
+    }
+    applySubAgentEvent(tab, evt)
+  }, () => {
+    // 本轮结束（sub_end 已由事件流更新状态）：通知上层刷新子代理会话列表（重复 apply 幂等）
+    emit('subAgentEvent', {type: 'sub_end', subSessionId: tab.subSessionId, status: tab.status})
+  }, (err) => {
+    tab.status = '失败'
+    tab.blocks.push({type: 'content', content: '❌ 继续对话失败：' + (err?.message || err)})
+    emit('subAgentEvent', {type: 'sub_end', subSessionId: tab.subSessionId, status: 'error'})
+  })
+}
+
+/** 停止按钮：子代理会话暂不支持中断（后端无对应取消通道），仅提示。 */
+const onAbort = () => {
+  if (isSubAgentMode.value) {
+    message.info('子代理会话暂不支持中断，可关闭标签页等待其自行结束')
+    return
+  }
+  abortChat()
+}
+
+/** 清空/导出：仅主会话可用（子代理会话数据由后端 JSONL 管理） */
+const onClear = () => {
+  if (isSubAgentMode.value) {
+    message.info('子代理会话不支持清空')
+    return
+  }
+  clearChat()
+}
+
+const onExport = () => {
+  if (isSubAgentMode.value) {
+    message.info('子代理会话不支持导出')
+    return
+  }
+  exportChat()
+}
+
 const sendMessage = async (images = [], overrideText = null, modelSelection = null,
                             targetSessionName = props.sessionName, targetWorkspaceHash = props.workspaceHash,
                             reasoningEffort = getSessionReasoningEffort(targetSessionName, targetWorkspaceHash),
                             requestAction = null,
                             fastMode = getSessionFastMode(targetSessionName, targetWorkspaceHash),
                             linkedProjectHashes = []) => {
+  // 子代理会话模式：继续对话走子代理 SSE 通道（界面复用，发送通道切换）
+  if (props.subAgent) return sendSubAgentMessage(images, overrideText)
   const text = requestAction ? '' : (overrideText ?? inputText.value.trim())
   if (!text && images.length === 0 && !requestAction) return
   const sessionName = targetSessionName
@@ -1884,90 +2008,10 @@ const sendMessage = async (images = [], overrideText = null, modelSelection = nu
           const msg = getMsg()
           if (!msg) return
 
-          // 按 subId 查找或创建子代理容器块（用于并行子代理事件路由）
-          const findSubAgentBlock = (subId) => {
-            for (let i = msg.blocks.length - 1; i >= 0; i--) {
-              if (msg.blocks[i].type === 'sub_agent' && msg.blocks[i].subId === subId) {
-                return msg.blocks[i]
-              }
-            }
-            const container = { type: 'sub_agent', subId, blocks: [], status: '运行中', taskName: '子代理', expanded: true }
-            msg.blocks.push(container)
-            return container
-          }
-
           // ===== 子代理事件：注入 sub_agent 容器块，内部渲染 =====
-          if (data.type === 'sub_content' || data.type === 'sub_reasoning' || data.type === 'sub_reasoning_started' ||
-              data.type === 'sub_tool_call' || data.type === 'sub_error') {
-            const container = findSubAgentBlock(data.subId)
-            // 向容器内添加内容
-            if (data.type === 'sub_content') {
-              const lb = container.blocks[container.blocks.length - 1]
-              const content = data.token || data.content || ''
-              if (lb?.type === 'content') lb.content += content
-              // 纯空白正文（思考间隙流出的 \n\n）不创建独立块，避免拆散连续思考
-              else if (content.trim()) container.blocks.push({type: 'content', content: content})
-            } else if (data.type === 'sub_reasoning') {
-              const lb = container.blocks[container.blocks.length - 1]
-              const reasoningContent = data.token || data.content || ''
-              if (lb?.type === 'reasoning') lb.content += reasoningContent
-              else if (lb?.type === 'reasoning_started') {
-                Object.assign(lb, {type: 'reasoning', content: reasoningContent, showContent: false})
-              }
-              else container.blocks.push({type: 'reasoning', content: reasoningContent, showContent: false})
-            } else if (data.type === 'sub_reasoning_started') {
-              const lb = container.blocks[container.blocks.length - 1]
-              if (lb?.type !== 'reasoning_started') {
-                container.blocks.push({type: 'reasoning_started', showContent: false})
-              }
-            } else if (data.type === 'sub_tool_call') {
-              let name = data.name || '', args = data.args || data.arguments || ''
-              if (typeof args === 'string') try {
-                args = JSON.parse(args)
-              } catch {
-              }
-              if (name === 'bash_start') notifyBashStart()
-              container.blocks.push({
-                type: 'tool_call',
-                name: name || 'unknown',
-                status: '执行中',
-                args,
-                result: '',
-                toolStartedAt: Date.now(),
-                expanded: true
-              })
-            } else if (data.type === 'sub_error') {
-              const errText = data.error || data.content || '未知错误'
-              container.blocks.push({type: 'content', content: '❌ ' + errText})
-            }
-          } else if (data.type === 'sub_tool_result') {
-            const c = findSubAgentBlock(data.subId)
-            let result = data.result || data.content || ''
-            const rn = typeof result === 'string' ? result : JSON.stringify(result, null, 2)
-            let targetName = data.name || ''
-            let matched = false
-            if (targetName) {
-              for (let j = c.blocks.length - 1; j >= 0; j--) {
-                if (c.blocks[j].type === 'tool_call' && c.blocks[j].name === targetName && !c.blocks[j].result) {
-                  c.blocks[j].result = rn; c.blocks[j].status = '成功'; c.blocks[j].toolDurationMs = Date.now() - c.blocks[j].toolStartedAt; c.blocks[j].expanded = false
-                  matched = true; break
-                }
-              }
-            }
-            if (!matched) {
-              for (let j = c.blocks.length - 1; j >= 0; j--) {
-                if (c.blocks[j].type === 'tool_call' && !c.blocks[j].result) {
-                  c.blocks[j].result = rn; c.blocks[j].status = '成功'; c.blocks[j].toolDurationMs = Date.now() - c.blocks[j].toolStartedAt; c.blocks[j].expanded = false
-                  break
-                }
-              }
-            }
-          } else if (data.type === 'sub_complete') {
-            const c = findSubAgentBlock(data.subId)
-            c.status = '已完成'
-            c.taskName = data?.task || c.taskName || '子代理'
-            c.expanded = false
-          } else if (data.type === 'sub_choice') {
+          // 主消息流保持既有行为（sub_choice 提升为顶级 choice 块，不进容器）；
+          // 事件同时 emit 给上层（桌面端子代理会话面板增量更新）。
+          if (data.type === 'sub_choice') {
             // 子代理 HITL 审批 → 作为顶级 choice 块渲染在主消息流中
             let options = data.options || []
             if (typeof options === 'string') {
@@ -1986,9 +2030,14 @@ const sendMessage = async (images = [], overrideText = null, modelSelection = nu
               description: desc,
               resolved: false
             })
+            emit('subAgentEvent', data)
           } else if (data.type === 'sub_usage' || data.type === 'sub_log') {
             // 暂不处理
-            // ===== 普通主代理事件 =====
+          } else if (data.type && data.type.startsWith('sub_')) {
+            const container = findSubAgentBlock(msg.blocks, data.subId)
+            applySubAgentEvent(container, data, {attachChoice: false})
+            if (data.type === 'sub_tool_call' && data.name === 'bash_start') notifyBashStart()
+            emit('subAgentEvent', data)
           } else if (data.type === 'reasoning') {
             const lb = msg.blocks[msg.blocks.length - 1]
             if (lb?.type === 'reasoning') lb.content += (data.content || '')
@@ -2636,7 +2685,10 @@ const appendElementInspection = async (inspection) => {
 onMounted(() => {
   document.addEventListener('click', handleWelcomeOutsideClick)
   if (props.sessionName) {
-    if (!props.initiallyEmpty) {
+    if (props.subAgent) {
+      // 子代理会话模式：消息来自容器块，不加载主会话历史
+      void focusComposer()
+    } else if (!props.initiallyEmpty) {
       void loadHistory().finally(focusComposer)
       void syncPlanMode()
     } else {

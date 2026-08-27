@@ -43,6 +43,8 @@ public class SubAgentAgentOutput implements AgentOutput {
     private final String taskName;
     /** 子代理唯一标识（自增整数），嵌入所有事件 payload 用于前端区分并行子代理 */
     private final int subId;
+    /** 所属子代理会话 id（由 SubAgent 挂载记录器时注入）：桌面端子代理会话面板按会话路由实时事件 */
+    private String subSessionId = null;
 
     /**
      * @param delegate 父代理的 AgentOutput 实现（仅用于 sendEvent）
@@ -62,16 +64,25 @@ public class SubAgentAgentOutput implements AgentOutput {
         return subId;
     }
 
+    /** 绑定所属子代理会话 id（attach 记录器时注入，后续事件 payload 均携带）。 */
+    public void setSubSessionId(String subSessionId) {
+        this.subSessionId = subSessionId;
+    }
+
     // ==================== JSON 拼接辅助 ====================
 
-    /** 构建 subId 前缀 JSON 片段 */
+    /** 构建 subId 前缀 JSON 片段（含 subSessionId，供前端按会话路由） */
     private String subIdPrefix() {
-        return "{\"subId\":" + subId + ",";
+        return subSessionId != null
+            ? "{\"subId\":" + subId + ",\"subSessionId\":" + escapeJson(subSessionId) + ","
+            : "{\"subId\":" + subId + ",";
     }
 
     /** 构建 subId 作为单独 JSON 对象（用于无其他 payload 的事件） */
     private String subIdOnly() {
-        return "{\"subId\":" + subId + "}";
+        return subSessionId != null
+            ? "{\"subId\":" + subId + ",\"subSessionId\":" + escapeJson(subSessionId) + "}"
+            : "{\"subId\":" + subId + "}";
     }
 
     // ==================== 全部事件 → sub_xxx 独立通道 ====================

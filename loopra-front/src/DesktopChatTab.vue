@@ -35,12 +35,27 @@
           <path d="M10 7h4a3.5 3.5 0 0 1 3.5 3.5V14.5"/>
         </svg>
       </button>
+      <button
+        type="button"
+        class="activity-bar-item"
+        :class="{ active: leftPanelOpen && leftPanelView === 'sub-agents' }"
+        title="子代理"
+        aria-label="子代理"
+        @click="toggleSubAgentPanel"
+      >
+        <svg class="activity-bar-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+          <circle cx="5.5" cy="6" r="2"/>
+          <circle cx="18.5" cy="6" r="2"/>
+          <circle cx="12" cy="18" r="2"/>
+          <path d="M5.5 8v3.5A2.5 2.5 0 0 0 8 14h8a2.5 2.5 0 0 0 2.5-2.5V8"/>
+        </svg>
+      </button>
     </nav>
     <aside
       class="desktop-files-left"
       :class="{ collapsed: !leftPanelOpen }"
       :style="leftPanelOpen ? { width: `${leftPanelWidth}px`, transition: leftPanelDragging ? 'none' : undefined } : null"
-      :aria-label="leftPanelView === 'environment' ? '环境信息' : '项目文件'"
+      :aria-label="leftPanelView === 'environment' ? '环境信息' : leftPanelView === 'sub-agents' ? '子代理' : '项目文件'"
     >
       <FileExplorer
         v-if="filePanelMounted"
@@ -62,6 +77,15 @@
         @mode-change="welcomeWorktreeMode = $event"
         @close="leftPanelOpen = false"
       />
+      <SubAgentPanel
+        v-if="subAgentPanelMounted"
+        v-show="leftPanelView === 'sub-agents'"
+        ref="subAgentPanelRef"
+        :workspace-hash="workspaceHash"
+        :session-name="sessionName"
+        @open="openSubAgentTab"
+        @removed="onSubAgentRemoved"
+      />
       <div
         class="desktop-files-resize-handle"
         :class="{ dragging: leftPanelDragging }"
@@ -72,8 +96,8 @@
     </aside>
     <div class="desktop-chat-area">
       <!-- 编辑器标签栏：Chat 固定第一且不可关闭，文件标签可关闭 -->
-      <EditorTabs v-if="fileTabs.length > 0" :tabs="editorTabs" :active-id="activeTabId" @set-active="setActiveTab" @close="closeFileTab" />
-      <!-- 内容区：Chat 保活 + 单个 Monaco 实例复用多个文件 model -->
+      <EditorTabs v-if="fileTabs.length > 0 || subAgentTabs.length > 0" :tabs="editorTabs" :active-id="activeTabId" @set-active="setActiveTab" @close="closeTab" />
+      <!-- 内容区：Chat 保活 + 单个 Monaco 实例复用多个文件 model + 子代理回放视图 -->
       <div v-show="activeTabId === CHAT_TAB_ID" class="editor-pane">
         <ChatView
           ref="chatRef"
@@ -95,10 +119,12 @@
           @environment-mode-change="setWelcomeEnvironmentMode"
           @manage-workspaces="requestHome"
           @manage-models="requestModelSettings"
+          @sub-agent-event="handleSubAgentEvent"
         />
       </div>
-      <div v-if="fileTabs.length > 0" v-show="activeTabId !== CHAT_TAB_ID" class="editor-pane">
+      <div v-if="fileTabs.length > 0 || subAgentTabs.length > 0" v-show="activeTabId !== CHAT_TAB_ID" class="editor-pane">
         <FileEditor
+          v-show="activeFileTab"
           ref="fileEditorRef"
           :active-file="activeFileTab"
           :workspace-hash="workspaceHash"
@@ -107,6 +133,16 @@
           @saved="onFileSaved"
           @dirty-change="onFileDirtyChange"
           @add-to-session="addFileToSession"
+        />
+        <ChatView
+            v-if="activeSubAgentTab"
+            class="desktop-chat-view"
+            hide-header
+            :streaming-bar-hidden="true"
+            :workspace-hash="workspaceHash"
+            :session-name="sessionName"
+            :sub-agent="activeSubAgentTab"
+            @sub-agent-event="handleSubAgentEvent"
         />
       </div>
     </div>
@@ -140,7 +176,8 @@
 import {message} from 'ant-design-vue'
 import {computed, defineAsyncComponent, nextTick, onBeforeUnmount, onMounted, ref, watch} from 'vue'
 import {useAppStore} from './stores/app'
-import {configAPI, gitAPI, sessionsAPI} from './services/api'
+import {configAPI, gitAPI, sessionsAPI, subSessionsAPI} from './services/api'
+import {applySubAgentEvent, createSubAgentContainer} from './utils/subAgentBlocks'
 import ChatView from './views/Chat.vue'
 import EditorTabs from './components/EditorTabs.vue'
 import FileEditor from './components/FileEditor.vue'
@@ -152,6 +189,7 @@ const EnvironmentPanel = defineAsyncComponent(() => import('./components/Environ
 const RightPanel = defineAsyncComponent(() => import('./components/RightPanel.vue'))
 const TerminalView = defineAsyncComponent(() => import('./components/TerminalView.vue'))
 const FileExplorer = defineAsyncComponent(() => import('./components/FileExplorer.vue'))
+const SubAgentPanel = defineAsyncComponent(() => import('./components/SubAgentPanel.vue'))
 
 const params = new URLSearchParams(window.location.search)
 const sessionName = params.get('sessionName') || ''
@@ -180,6 +218,11 @@ const leftPanelWidth = ref(Number.isFinite(savedLeftPanelWidth) && savedLeftPane
 const leftPanelDragging = ref(false)
 const filePanelMounted = ref(false)
 const environmentPanelMounted = ref(false)
+const subAgentPanelMounted = ref(false)
+const subAgentPanelRef = ref(null)
+// 子代理回放标签：与文件标签共用编辑器标签栏（id 带 sub: 前缀避免与文件 id 冲突）
+const subAgentTabs = ref([]) // [{ id, subSessionId, taskName, status, blocks, loading }]
+const activeSubAgentTab = computed(() => subAgentTabs.value.find((tab) => tab.id === activeTabId.value) || null)
 const environmentPanelRef = ref(null)
 const welcomeWorktreeMode = ref(false)
 const environmentSwitching = ref(false)
@@ -284,6 +327,19 @@ function toggleEnvironmentPanel() {
   leftPanelView.value = 'environment'
   environmentPanelMounted.value = true
   leftPanelOpen.value = true
+}
+
+// 活动栏「子代理」：多标签子代理会话查看窗口（只读回放）
+function toggleSubAgentPanel() {
+  if (leftPanelOpen.value && leftPanelView.value === 'sub-agents') {
+    leftPanelOpen.value = false
+    return
+  }
+  leftPanelView.value = 'sub-agents'
+  subAgentPanelMounted.value = true
+  leftPanelOpen.value = true
+  // 面板已挂载时静默刷新，运行中的子代理会话立即可见
+  subAgentPanelRef.value?.refresh?.()
 }
 
 async function refreshWelcomeEnvironmentMode() {
@@ -436,7 +492,7 @@ async function addFileToSession(payload) {
   await chatRef.value?.appendFileSelection(payload)
 }
 
-// ── 编辑器标签（VS Code 风格：Chat 固定 + 文件可关闭） ──
+// ── 编辑器标签（VS Code 风格：Chat 固定 + 文件/子代理回放可关闭） ──
 const editorTabs = computed(() => [
   { id: CHAT_TAB_ID, label: '对话', icon: 'codicon-comment-discussion', closable: false, title: '对话（固定标签）' },
   ...fileTabs.value.map((tab) => ({
@@ -445,6 +501,12 @@ const editorTabs = computed(() => [
     title: tab.path,
     fileIcon: fileIconFor(tab.name),
     dirty: tab.dirty
+  })),
+  ...subAgentTabs.value.map((tab) => ({
+    id: tab.id,
+    label: tab.taskName,
+    title: tab.taskName,
+    icon: 'codicon-branch'
   }))
 ])
 
@@ -469,15 +531,121 @@ function setActiveTab(id) {
   activeTabId.value = id
 }
 
-function closeFileTab(id, force = false) {
+function closeTab(id, force = false) {
   const index = fileTabs.value.findIndex((tab) => tab.id === id)
-  if (index < 0) return
-  const tab = fileTabs.value[index]
-  if (!force && tab.dirty) {
-    closeConfirm.value = {visible: true, tabId: tab.id, name: tab.name}
+  if (index >= 0) {
+    const tab = fileTabs.value[index]
+    if (!force && tab.dirty) {
+      closeConfirm.value = {visible: true, tabId: tab.id, name: tab.name}
+      return
+    }
+    removeFileTab(index)
     return
   }
-  removeFileTab(index)
+  closeSubAgentTab(id)
+}
+
+// ── 子代理回放标签（双击子代理列表打开，与文件标签同一套标签栏） ──
+const subAgentStatusText = (status) => status === 'completed' ? '已完成'
+  : status === 'aborted' ? '已取消'
+    : status === 'error' ? '失败'
+      : status === 'running' ? '运行中' : (status || '已完成')
+
+async function openSubAgentTab(item) {
+  if (!item?.subSessionId) return
+  const existing = subAgentTabs.value.find((tab) => tab.subSessionId === item.subSessionId)
+  if (existing) {
+    activeTabId.value = existing.id
+    if (existing.blocks.length === 0) await loadSubAgentEvents(existing)
+    return
+  }
+  const tab = createSubAgentContainer(item.subSessionId, {
+    id: `sub:${item.subSessionId}`,
+    subSessionId: item.subSessionId,
+    taskName: item.task || '子代理',
+    status: subAgentStatusText(item.status),
+    loading: true
+  })
+  subAgentTabs.value.push(tab)
+  activeTabId.value = tab.id
+  // 数组内存储的是响应式代理：后续填充必须经由它修改，ChatView 才能感知更新
+  await loadSubAgentEvents(subAgentTabs.value[subAgentTabs.value.length - 1])
+}
+
+/** 从事件流重建回放块（历史回放：sub_content 等为完整段，追加语义与实时一致）。 */
+async function loadSubAgentEvents(tab) {
+  // 调用方可能持有 push 前的原始对象：统一改用数组内的响应式代理再修改
+  const target = subAgentTabs.value.find((t) => t.id === tab.id) || tab
+  target.loading = true
+  // 请求期间实时事件（handleSubAgentEvent）可能已追加到 blocks 尾部：快照保留，避免被覆盖
+  const liveTail = target.blocks.slice()
+  try {
+    const res = await subSessionsAPI.events(target.subSessionId, workspaceHash.value, sessionName)
+    if (res?.success && Array.isArray(res.data)) {
+      const container = createSubAgentContainer(target.subId)
+      for (const evt of res.data) applySubAgentEvent(container, evt)
+      // 首个 sub_start 的任务描述以用户气泡展示（仅首次加载时插入一次）
+      if (!target.taskBubble) {
+        const firstStart = res.data.find((e) => e.type === 'sub_start')
+        if (firstStart?.task) {
+          container.blocks.unshift({type: 'sub_user', content: firstStart.task})
+          target.taskBubble = true
+        }
+      }
+      // REST 落盘段 + 请求期间实时增量（保留尾部，避免丢字）
+      target.blocks.splice(0, target.blocks.length, ...container.blocks, ...liveTail)
+      target.taskName = container.taskName || target.taskName
+      target.status = container.status || target.status
+      target.expanded = true
+    }
+  } catch (e) {
+    console.warn('[desktop-chat-tab] 加载子代理会话事件失败:', e)
+    target.blocks.push({type: 'content', content: '❌ 回放加载失败'})
+  } finally {
+    target.loading = false
+  }
+}
+
+function closeSubAgentTab(id) {
+  const index = subAgentTabs.value.findIndex((tab) => tab.id === id)
+  if (index < 0) return
+  subAgentTabs.value.splice(index, 1)
+  if (activeTabId.value === id) {
+    activeTabId.value = subAgentTabs.value[index] ? subAgentTabs.value[index].id : CHAT_TAB_ID
+  }
+}
+
+/** 子代理会话被删除：同步关闭其回放标签（如已打开）。 */
+function onSubAgentRemoved(subSessionId) {
+  closeSubAgentTab(`sub:${subSessionId}`)
+}
+
+/**
+ * 子代理实时事件（ChatView SSE 同步转发）：自动打开回放标签（不打断主聊天）、
+ * 就地增量更新、结束时静默刷新左侧列表。
+ * 必须以同步方法处理：流式 sub_content/sub_reasoning 是高频 delta，
+ * 若经 ref+watch 传递会被 Vue 批处理吞掉中间事件（每 tick 只留最后一条），导致缺字。
+ */
+function handleSubAgentEvent(evt) {
+  if (!evt?.subSessionId) return
+  let tab = subAgentTabs.value.find((t) => t.subSessionId === evt.subSessionId)
+  if (!tab) {
+    if (evt.type !== 'sub_start') return
+    tab = createSubAgentContainer(evt.subId, {
+      id: `sub:${evt.subSessionId}`,
+      subSessionId: evt.subSessionId,
+      taskName: evt.task || '子代理',
+      status: '运行中'
+    })
+    subAgentTabs.value.push(tab)
+    // 取数组内的响应式代理（push 后局部变量仍指向原始对象）
+    tab = subAgentTabs.value.find((t) => t.subSessionId === evt.subSessionId) || tab
+  }
+  applySubAgentEvent(tab, evt)
+  // 开始/结束都刷新左侧列表：运行中的子代理会话立即可见（status=running）
+  if (evt.type === 'sub_start' || evt.type === 'sub_end' || evt.type === 'sub_complete') {
+    subAgentPanelRef.value?.refresh?.()
+  }
 }
 
 function dismissCloseConfirm() {
@@ -590,10 +758,11 @@ onBeforeUnmount(() => {
   leftPanelDragging.value = false
 })
 
-// 项目变化时自动上报，确保标签栏图标实时更新；同时清空已打开的文件标签
+// 项目变化时自动上报，确保标签栏图标实时更新；同时清空已打开的文件/子代理标签
 watch(workspaceHash, (hash) => {
   if (hash) window.electronAPI?.desktopChatTabs?.reportWorkspace({ tabId, workspaceHash: hash })
   fileEditorRef.value?.closeAll?.()
+  subAgentTabs.value = []
   fileTabs.value = []
   activeTabId.value = CHAT_TAB_ID
 }, { immediate: true })

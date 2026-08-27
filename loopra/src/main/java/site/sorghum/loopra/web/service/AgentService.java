@@ -20,6 +20,7 @@ import site.sorghum.loopra.bin.project.ProjectRegistry;
 import site.sorghum.loopra.bin.session.JsonlSessionStore;
 import site.sorghum.loopra.bin.session.SessionFileChangeTracker;
 import site.sorghum.loopra.bin.session.SessionStore;
+import site.sorghum.loopra.bin.session.SubAgentSessionStore;
 import site.sorghum.loopra.bin.tool.ToolRegistry;
 import site.sorghum.loopra.bin.tool.ToolSystemInitializer;
 import site.sorghum.loopra.tool.AgentOutput;
@@ -1709,6 +1710,8 @@ public class AgentService {
             if (ok) {
                 log.info("[web] 已删除会话文件: {}", sessionName);
             }
+            // 级联删除该会话下挂载的子代理会话（子会话随父会话生命周期）
+            SubAgentSessionStore.deleteParent(sessionsDir, sessionName);
         } catch (Exception e) {
             log.warn("[web] 删除会话文件失败: {}", e.getMessage());
         }
@@ -1753,6 +1756,8 @@ public class AgentService {
 
         // 3. 删除所有会话磁盘文件
         store.clearAll();
+        // 4. 级联清理所有子代理会话目录
+        SubAgentSessionStore.deleteAll(sessionsDir);
         log.info("[web] 已清空所有会话");
     }
 

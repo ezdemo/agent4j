@@ -38,6 +38,11 @@
 
     <!-- 内容 -->
     <div v-else-if="block.type === 'content' && block.content" class="block-content" v-html="fmt(block.content)" @click="onCodeBlockClick"></div>
+ <!-- 用户消息气泡（子代理会话标签页中的继续对话输入） -->
+ <div v-else-if="block.type === 'sub_user' && block.content" class="block-sub-user">
+   <span class="sub-user-label">我</span>
+   <div class="sub-user-content">{{ block.content }}</div>
+ </div>
 
     <!-- 本轮 AI 实际写入的文件（仅在回复结束后追加） -->
     <div v-else-if="block.type === 'file_changes' && block.changes?.length" class="block-file-changes">
@@ -1092,6 +1097,33 @@ const onCollapseAllBlocks = () => {
   line-height: 1.6;
   color: var(--fg);
   margin-bottom: 4px;
+}
+
+/* 子代理内层用户消息气泡（继续对话输入） */
+.block-sub-user {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-end;
+  margin: 4px 0 8px;
+}
+
+.block-sub-user .sub-user-label {
+  font-size: 11px;
+  color: var(--fg-3);
+  margin-bottom: 2px;
+}
+
+.block-sub-user .sub-user-content {
+  max-width: 88%;
+  white-space: pre-wrap;
+  word-break: break-word;
+  font-size: 13px;
+  line-height: 1.6;
+  color: var(--fg);
+  background: var(--accent-bg);
+  border: 1px solid var(--border);
+  border-radius: var(--r);
+  padding: 6px 10px;
 }
 
 .block-content :deep(pre) {

@@ -224,27 +224,13 @@
                   </div>
                   <div class="plugin-runtime">
                     <button
-                      v-if="!pack.started"
-                      class="btn btn-ghost btn-sm"
-                      :disabled="extPackAction === pack.id"
-                      @click="startExtPack(pack)"
-                      title="启动拓展包（加载 Solon 容器并桥接 Agent 能力）"
-                    >启动</button>
-                    <button
-                      v-else
-                      class="btn btn-ghost btn-sm"
-                      :disabled="extPackAction === pack.id"
-                      @click="stopExtPack(pack)"
-                      title="停止拓展包（注销 Agent 桥接并卸载 Solon 容器）"
-                    >停止</button>
-                    <button
                       class="btn btn-ghost btn-sm"
                       style="color:var(--red)"
                       :disabled="extPackAction === pack.id"
                       @click="uninstallExtPack(pack)"
                       title="卸载拓展包"
                     >卸载</button>
-                    <label class="toggle-switch" :class="{disabled: extPackAction === pack.id}" title="停用后启动/重启时跳过">
+                    <label class="toggle-switch" :class="{disabled: extPackAction === pack.id}" title="启用后立即启动，停用后立即停止">
                       <input
                         type="checkbox"
                         :checked="pack.enabled"
@@ -2028,32 +2014,6 @@ const chooseExtPackFile = async () => {
   if (!filePath) return
   extPackSource.value = filePath
   await installExtPack()
-}
-
-const startExtPack = async (pack) => {
-  extPackAction.value = pack.id
-  try {
-    await extpackAPI.start(pack.id)
-    message.success('拓展包已启动: ' + pack.id)
-    await loadExtPacks()
-  } catch (error) {
-    message.error('启动失败: ' + (error.message || error))
-  } finally {
-    extPackAction.value = null
-  }
-}
-
-const stopExtPack = async (pack) => {
-  extPackAction.value = pack.id
-  try {
-    await extpackAPI.stop(pack.id)
-    message.success('拓展包已停止: ' + pack.id)
-    await loadExtPacks()
-  } catch (error) {
-    message.error('停止失败: ' + (error.message || error))
-  } finally {
-    extPackAction.value = null
-  }
 }
 
 const toggleExtPack = async (pack, enabled) => {
