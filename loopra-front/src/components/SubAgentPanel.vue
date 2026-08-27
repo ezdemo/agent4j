@@ -35,12 +35,24 @@
         </div>
       </template>
     </div>
+
+    <!-- 删除确认（系统统一 ActionConfirmDialog） -->
+    <ActionConfirmDialog
+      :model-value="deleteConfirm.visible"
+      title="删除子代理会话？"
+      :message="deleteConfirm.item ? `“${deleteConfirm.item.name || deleteConfirm.item.task || '该会话'}”将被永久删除，无法恢复。` : ''"
+      :actions="deleteConfirmActions"
+      :pending="deletingId !== null"
+      @update:model-value="closeDeleteConfirm"
+      @action="handleDeleteConfirmAction"
+    />
   </section>
 </template>
 
 <script setup>
-import {computed, onMounted, ref} from 'vue'
+import {computed, onMounted, reactive, ref} from 'vue'
 import {subSessionsAPI} from '../services/api'
+import ActionConfirmDialog from './ActionConfirmDialog.vue'
 
 const props = defineProps({
   workspaceHash: {type: String, default: null},
@@ -91,11 +103,32 @@ function openItem(item) {
 }
 
 const deletingId = ref(null)
+// 删除确认对话框（系统统一 ActionConfirmDialog）
+const deleteConfirm = reactive({ visible: false, item: null })
+const deleteConfirmActions = [
+  { key: 'cancel', label: '取消' },
+  { key: 'confirm', label: '删除', variant: 'danger' }
+]
 
-/** 删除子代理会话：确认后调用接口，成功后刷新列表并通知父组件关闭对应回放标签 */
-async function deleteItem(item) {
-  const display = item.name || item.title || item.task || '该会话'
-  if (!window.confirm(`删除子代理会话「${display}」？此操作不可恢复。`)) return
+/** 点击删除按钮：弹出统一确认对话框 */
+function deleteItem(item) {
+  deleteConfirm.item = item
+  deleteConfirm.visible = true
+}
+
+function closeDeleteConfirm() {
+  deleteConfirm.visible = false
+}
+
+/** 确认框按钮回调：取消则关闭，确认则执行删除，成功后刷新列表并通知父组件关闭对应回放标签 */
+async function handleDeleteConfirmAction(key) {
+  if (key !== 'confirm') {
+    closeDeleteConfirm()
+    return
+  }
+  const item = deleteConfirm.item
+  if (!item) return
+  deleteConfirm.visible = false
   deletingId.value = item.subSessionId
   try {
     const res = await subSessionsAPI.remove(item.subSessionId, props.workspaceHash, props.sessionName)

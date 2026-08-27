@@ -1,6 +1,6 @@
 /* @vitest-environment jsdom */
 
-import {flushPromises, shallowMount} from '@vue/test-utils'
+import {flushPromises, mount} from '@vue/test-utils'
 import {beforeEach, describe, expect, it, vi} from 'vitest'
 import SubAgentPanel from './SubAgentPanel.vue'
 
@@ -15,13 +15,22 @@ const {subSessionsAPI} = vi.hoisted(() => ({
 vi.mock('../services/api', () => ({subSessionsAPI}))
 
 function mountPanel(props = {}) {
-  return shallowMount(SubAgentPanel, {
+  return mount(SubAgentPanel, {
     props: {
       workspaceHash: 'h1',
       sessionName: 's1',
       ...props
     }
   })
+}
+
+/** 在删除确认对话框中点击「删除」确认按钮 */
+async function confirmDeleteDialog() {
+  const dialog = document.body.querySelector('.action-confirm-dialog')
+  expect(dialog).not.toBeNull()
+  const confirmButton = [...dialog.querySelectorAll('button')].find((b) => b.textContent.includes('删除'))
+  await confirmButton.click()
+  await flushPromises()
 }
 
 const item = (overrides = {}) => ({
@@ -121,46 +130,53 @@ describe('SubAgentPanel（左侧子代理会话列表）', () => {
     expect(wrapper.find('.sub-agent-item').attributes('title')).toContain('探索项目结构')
   })
 
-  it('deletes session after confirm, emits removed and reloads list', async () => {
+  it('deletes session via unified confirm dialog, emits removed and reloads list', async () => {
     subSessionsAPI.list.mockResolvedValue({success: true, data: [item()]})
     subSessionsAPI.remove.mockResolvedValue({success: true, data: {subSessionId: 'sub-1', deleted: true}})
-    const confirmSpy = vi.spyOn(window, 'confirm').mockReturnValue(true)
     const wrapper = mountPanel()
     await flushPromises()
 
     await wrapper.find('.sub-agent-delete').trigger('click')
     await flushPromises()
+    const dialog = document.body.querySelector('.action-confirm-dialog')
+    expect(dialog).not.toBeNull()
+    expect(dialog.textContent).toContain('初音未来')
 
-    expect(confirmSpy).toHaveBeenCalledWith(expect.stringContaining('初音未来'))
+    await confirmDeleteDialog()
     expect(subSessionsAPI.remove).toHaveBeenCalledWith('sub-1', 'h1', 's1')
     expect(wrapper.emitted('removed')).toHaveLength(1)
     expect(wrapper.emitted('removed')[0][0]).toBe('sub-1')
     expect(subSessionsAPI.list).toHaveBeenCalledTimes(2) // 删除后刷新
-    confirmSpy.mockRestore()
+    expect(document.body.querySelector('.action-confirm-dialog')).toBeNull()
   })
 
-  it('does not delete when confirm is cancelled', async () => {
+  it('does not delete when cancelling the confirm dialog', async () => {
     subSessionsAPI.list.mockResolvedValue({success: true, data: [item()]})
-    const confirmSpy = vi.spyOn(window, 'confirm').mockReturnValue(false)
     const wrapper = mountPanel()
     await flushPromises()
 
     await wrapper.find('.sub-agent-delete').trigger('click')
+    await flushPromises()
+    const dialog = document.body.querySelector('.action-confirm-dialog')
+    const cancelButton = [...dialog.querySelectorAll('button')].find((b) => b.textContent.includes('取消'))
+    await cancelButton.click()
     await flushPromises()
 
     expect(subSessionsAPI.remove).not.toHaveBeenCalled()
     expect(wrapper.emitted('removed')).toBeUndefined()
-    confirmSpy.mockRestore()
+    expect(document.body.querySelector('.action-confirm-dialog')).toBeNull()
   })
 
   it('delete click does not trigger row select/open', async () => {
     subSessionsAPI.list.mockResolvedValue({success: true, data: [item()]})
-    vi.spyOn(window, 'confirm').mockReturnValue(false)
     const wrapper = mountPanel()
     await flushPromises()
 
     await wrapper.find('.sub-agent-delete').trigger('click')
+    await flushPromises()
     expect(wrapper.vm.selectedSubId).toBeNull()
     expect(wrapper.emitted('open')).toBeUndefined()
+    // 关闭对话框，避免污染后续用例
+    document.body.querySelector('.action-confirm-dialog')?.remove()
   })
 })
