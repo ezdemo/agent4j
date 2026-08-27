@@ -33,6 +33,15 @@ public final class ModelApiError {
                 || value.contains("上下文窗口");
     }
 
+    /**
+      * 错误文本中是否出现 {@code invalid_request_error} 类型标记。
+     * <p>
+      * 注意这是全文本子串匹配：OpenAI 兼容网关可能在 429 配额错误的报文里
+      * 嵌套一个 {@code type: invalid_request_error} 的内层错误，因此该判断
+      * 不能单独决定"不可重试"——调用方应先确认 HTTP 状态（见
+      * {@link #isTransientModelError(String)}）。
+     * </p>
+     */
     public static boolean isInvalidRequestError(String error) {
         return error != null && error.toLowerCase(Locale.ROOT).contains("invalid_request_error");
     }
@@ -40,27 +49,28 @@ public final class ModelApiError {
     /**
       * 该错误是否应由 cutin 重试策略重试。
      * <p>
-      * 上下文超限与无效请求被有意排除：上下文超限有独立的折叠恢复，
-      * 而无效请求重试只会重复同样的失败。
+      * 判定优先级：上下文超限 > HTTP 429/5xx 状态 > 无效请求排除 > 其余瞬时信号。
+      * HTTP 429/5xx 是权威信号：OpenAI 兼容网关常把配额/限流错误的内层
+      * {@code type} 标成 {@code invalid_request_error}（例如 {@code insufficient_quota}
+      * 的 429），此时报文里虽含 {@code invalid_request_error} 子串，仍必须按瞬时错误
+      * 重试；上下文超限有独立的折叠恢复，因此永远优先排除。
      * </p>
      */
     public static boolean isTransientModelError(String error) {
         if (error == null || error.isBlank()) {
             return false;
         }
-        if (isContextLengthExceeded(error) || isInvalidRequestError(error)) {
+        if (isContextLengthExceeded(error)) {
             return false;
         }
         String value = error.toLowerCase(Locale.ROOT);
-        return isTransientStatusCode(error)
-            || value.contains("http 429")
-            || value.contains("http 500")
-            || value.contains("http 501")
-            || value.contains("http 502")
-            || value.contains("http 503")
-            || value.contains("http 504")
-            || value.contains("http 5")
-            || value.contains("rate limit")
+        if (isTransientStatusCode(error) || hasHttpTransientStatusMarker(value)) {
+            return true;
+        }
+        if (isInvalidRequestError(error)) {
+            return false;
+        }
+        return value.contains("rate limit")
             || value.contains("rate_limit")
             || value.contains("overloaded")
             || value.contains("overloaded_error")
@@ -96,6 +106,17 @@ public final class ModelApiError {
         } catch (RuntimeException ignored) {
             return false;
         }
+    }
+
+    /** 文本形式携带的 HTTP 429/5xx 状态标记（入参应为小写）。 */
+    private static boolean hasHttpTransientStatusMarker(String value) {
+        return value.contains("http 429")
+            || value.contains("http 500")
+            || value.contains("http 501")
+            || value.contains("http 502")
+            || value.contains("http 503")
+            || value.contains("http 504")
+            || value.contains("http 5");
     }
 
     /** 同时检查异常因果链，避免传输层只暴露简短的 closed 消息。 */
