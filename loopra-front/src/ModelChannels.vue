@@ -26,10 +26,21 @@
         <section class="model-validator">
           <label>
             <span>命令校验模型</span>
-            <select v-model="validationModelKey" title="替代人工 HITL 对待审批工具调用作出决定">
+            <select class="validation-model-select" v-model="validationModelKey" title="替代人工 HITL 对待审批工具调用作出决定">
               <option value="">不启用</option>
               <optgroup v-for="channel in channels" :key="channel.id" :label="channel.name">
                 <option v-for="model in namedModels(channel)" :key="model.id" :value="modelKey(channel.id, model.name)">
+                  {{ model.name }}
+                </option>
+              </optgroup>
+            </select>
+          </label>
+          <label>
+            <span>图片理解模型</span>
+            <select class="image-understanding-model-select" v-model="imageUnderstandingModelKey" title="当前模型不支持图片输入时，用于理解图片并返回文字结果">
+              <option value="">不启用</option>
+              <optgroup v-for="channel in channels" :key="channel.id" :label="channel.name">
+                <option v-for="model in imageModels(channel)" :key="model.id" :value="modelKey(channel.id, model.name)">
                   {{ model.name }}
                 </option>
               </optgroup>
@@ -142,7 +153,7 @@
                       <input v-model="model.contextTokens" type="number" min="1" step="1" placeholder="可空" />
                     </label>
                     <label class="model-config-switch">
-                      <input v-model="model.imageInput" type="checkbox" />
+                      <input v-model="model.imageInput" type="checkbox" @change="ensureImageUnderstandingModel()" />
                       <span>支持图片输入</span>
                     </label>
                   </div>
@@ -203,26 +214,34 @@ const activeChannelId = ref('')
 const currentModel = ref('')
 const validationModel = ref('')
 const validationModelChannelId = ref('')
-const validationModelKey = computed({
-  get: () => validationModel.value && validationModelChannelId.value
-    ? modelKey(validationModelChannelId.value, validationModel.value)
-    : '',
-  set: (value) => {
-    if (!value) {
-      validationModel.value = ''
-      validationModelChannelId.value = ''
-      return
+const imageUnderstandingModel = ref('')
+const imageUnderstandingModelChannelId = ref('')
+
+function modelSelection(modelRef, channelRef) {
+  return computed({
+    get: () => modelRef.value && channelRef.value
+      ? modelKey(channelRef.value, modelRef.value)
+      : '',
+    set: (value) => {
+      if (!value) {
+        modelRef.value = ''
+        channelRef.value = ''
+        return
+      }
+      try {
+        const [channelId, model] = JSON.parse(value)
+        channelRef.value = channelId || ''
+        modelRef.value = model || ''
+      } catch {
+        modelRef.value = ''
+        channelRef.value = ''
+      }
     }
-    try {
-      const [channelId, model] = JSON.parse(value)
-      validationModelChannelId.value = channelId || ''
-      validationModel.value = model || ''
-    } catch {
-      validationModel.value = ''
-      validationModelChannelId.value = ''
-    }
-  }
-})
+  })
+}
+
+const validationModelKey = modelSelection(validationModel, validationModelChannelId)
+const imageUnderstandingModelKey = modelSelection(imageUnderstandingModel, imageUnderstandingModelChannelId)
 const loading = ref(true)
 const saving = ref(false)
 const syncingChannelId = ref('')
@@ -292,23 +311,38 @@ function namedModels(channel) {
   return channel.models.filter((model) => model.name.trim())
 }
 
+function imageModels(channel) {
+  return namedModels(channel).filter((model) => model.imageInput)
+}
+
 function ensureCurrentModel(channel) {
   if (!channel || channel.id !== activeChannelId.value) return
   const names = namedModels(channel).map((model) => model.name)
   if (!names.includes(currentModel.value)) currentModel.value = names[0] || ''
 }
 
-function ensureValidationModel() {
-  const channel = channels.value.find((item) => item.id === validationModelChannelId.value)
-  if (!channel || !namedModels(channel).some((model) => model.name === validationModel.value)) {
-    validationModel.value = ''
-    validationModelChannelId.value = ''
+function ensureModelSelection(modelRef, channelRef, modelsForChannel = namedModels) {
+  const channel = channels.value.find((item) => item.id === channelRef.value)
+  if (!channel || !modelsForChannel(channel).some((model) => model.name === modelRef.value)) {
+    modelRef.value = ''
+    channelRef.value = ''
   }
+}
+
+function ensureValidationModel() {
+  ensureModelSelection(validationModel, validationModelChannelId)
+}
+
+function ensureImageUnderstandingModel() {
+  ensureModelSelection(imageUnderstandingModel, imageUnderstandingModelChannelId, imageModels)
 }
 
 function handleModelNameChange(channel, model) {
   if (channel.id === validationModelChannelId.value && model.originalName === validationModel.value) {
     validationModel.value = model.name
+  }
+  if (channel.id === imageUnderstandingModelChannelId.value && model.originalName === imageUnderstandingModel.value) {
+    imageUnderstandingModel.value = model.name
   }
   if (channel.id === activeChannelId.value && model.originalName === currentModel.value) {
     currentModel.value = model.name
@@ -316,6 +350,7 @@ function handleModelNameChange(channel, model) {
   model.originalName = model.name
   ensureCurrentModel(channel)
   ensureValidationModel()
+  ensureImageUnderstandingModel()
 }
 
 function selectCurrentModel(channel, model) {
@@ -347,16 +382,26 @@ function removeModel(channel, index) {
     message.warning('请先取消或更换命令校验模型')
     return
   }
+  if (channel.id === imageUnderstandingModelChannelId.value && model?.name === imageUnderstandingModel.value) {
+    message.warning('请先取消或更换图片理解模型')
+    return
+  }
   const [removed] = channel.models.splice(index, 1)
   if (channel.id === activeChannelId.value && removed?.name === currentModel.value) ensureCurrentModel(channel)
   ensureValidationModel()
+  ensureImageUnderstandingModel()
 }
 
 function clearModels(channel) {
   if (!channel?.models.length) return
+  if (channel.id === validationModelChannelId.value || channel.id === imageUnderstandingModelChannelId.value) {
+    message.warning('请先取消或更换当前渠道中已选的特殊模型')
+    return
+  }
   channel.models = []
   ensureCurrentModel(channel)
   ensureValidationModel()
+  ensureImageUnderstandingModel()
   message.success('已清空当前渠道模型列表')
 }
 
@@ -372,6 +417,10 @@ function removeChannel(index) {
     message.warning('请先取消或更换命令校验模型')
     return
   }
+  if (channel?.id === imageUnderstandingModelChannelId.value) {
+    message.warning('请先取消或更换图片理解模型')
+    return
+  }
   const [removed] = channels.value.splice(index, 1)
   if (removed?.id === activeChannelId.value) {
     const next = channels.value[0]
@@ -379,6 +428,7 @@ function removeChannel(index) {
     ensureCurrentModel(next || {models: []})
   }
   ensureValidationModel()
+  ensureImageUnderstandingModel()
 }
 
 function canSyncRemoteModels(channel) {
@@ -411,8 +461,11 @@ async function load() {
     currentModel.value = config.model || ''
     validationModel.value = config.validationModel || ''
     validationModelChannelId.value = config.validationModelChannelId || ''
+    imageUnderstandingModel.value = config.imageUnderstandingModel || ''
+    imageUnderstandingModelChannelId.value = config.imageUnderstandingModelChannelId || ''
     if (!channels.value.length) addChannel()
     ensureValidationModel()
+    ensureImageUnderstandingModel()
     const active = channels.value.find((channel) => channel.id === activeChannelId.value) || channels.value[0]
     if (active) {
       activeChannelId.value = active.id
@@ -442,6 +495,7 @@ async function save() {
   const modelNames = active.models.map((model) => model.name)
   const model = modelNames.includes(currentModel.value) ? currentModel.value : modelNames[0]
   ensureValidationModel()
+  ensureImageUnderstandingModel()
   saving.value = true
   try {
     const response = await configAPI.updateConfig({
@@ -449,7 +503,9 @@ async function save() {
       modelChannelId: active.id,
       model,
       validationModel: validationModel.value,
-      validationModelChannelId: validationModelChannelId.value
+      validationModelChannelId: validationModelChannelId.value,
+      imageUnderstandingModel: imageUnderstandingModel.value,
+      imageUnderstandingModelChannelId: imageUnderstandingModelChannelId.value
     })
     if (!response.success) throw new Error(response.message || '保存模型配置失败')
     for (const channel of channels.value) {
@@ -485,6 +541,7 @@ async function syncRemoteModels(channel) {
     channel.models = remoteNames.map((name) => newModel(name))
     if (channel.id === activeChannelId.value) ensureCurrentModel(channel)
     ensureValidationModel()
+    ensureImageUnderstandingModel()
     if (!remoteNames.length) {
       message.warning('远端没有返回可用模型，已清空本地模型')
       return
@@ -528,6 +585,7 @@ onMounted(load)
 .model-channels-sidebar .model-channels-empty { height: auto; flex: 1; }
 .model-channels-detail { flex: 1; min-width: 0; min-height: 0; display: flex; flex-direction: column; overflow: hidden; padding: 24px clamp(20px, 4vw, 48px) 40px; }
 .model-validator { flex: 0 0 auto; padding: 12px 12px 10px; border: 0; border-bottom: 1px solid var(--border); border-radius: 0; background: transparent; }
+.model-validator { display: grid; gap: 10px; }
 .model-validator label { min-width: 0; display: grid; grid-template-columns: minmax(0, 1fr); gap: 6px; color: var(--fg-2); font-size: 13px; }
 .model-validator select { min-width: 0; width: 100%; height: 32px; padding: 0 8px; border: 1px solid var(--border); border-radius: 5px; outline: none; background: var(--bg); color: var(--fg); font: inherit; font-size: 13px; }
 .model-validator select:focus { border-color: var(--accent); box-shadow: 0 0 0 2px color-mix(in srgb, var(--accent) 12%, transparent); }

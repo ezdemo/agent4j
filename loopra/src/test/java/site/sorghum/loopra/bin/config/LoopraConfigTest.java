@@ -379,11 +379,29 @@ class LoopraConfigTest {
     }
 
     @Test
+    void resolvesImageUnderstandingModelAcrossChannels() throws Exception {
+        LoopraConfig config = config("""
+                {"imageUnderstandingModel":"vision-mini","imageUnderstandingModelChannelId":"vision",
+                 "modelChannels":[
+                   {"id":"main","models":[{"name":"main-model","imageInput":false}]},
+                   {"id":"vision","baseUrl":"https://vision.test/v1","apiKey":"vision-key",
+                    "apiProtocol":"responses","models":[{"name":"vision-mini","imageInput":true}]}
+                 ]}
+                """);
+
+        assertEquals("vision-mini", config.imageUnderstandingModel());
+        assertEquals("vision", config.imageUnderstandingModelChannelId());
+        assertTrue(config.imageUnderstandingModelChannel().modelEntry("vision-mini").imageInput());
+        assertEquals("https://vision.test/v1/responses", config.imageUnderstandingModelChannel().apiUrl());
+    }
+
+    @Test
     void emptyValidationSelectionDisablesPersistedValidator() throws Exception {
         Path configDir = tempDir.resolve(".loopra");
         Files.createDirectories(configDir);
         Files.writeString(configDir.resolve("config.json"), """
                 {"validationModel":"guard-mini","validationModelChannelId":"guard",
+                 "imageUnderstandingModel":"vision-mini","imageUnderstandingModelChannelId":"vision",
                  "modelChannels":[{"id":"guard","models":[{"name":"guard-mini"}]}]}
                 """);
 
@@ -391,11 +409,15 @@ class LoopraConfigTest {
         System.setProperty("user.home", tempDir.toString());
         try {
             LoopraConfig config = LoopraConfig.load();
-            config.updateAndSave(Map.of("validationModel", "", "validationModelChannelId", ""));
+            config.updateAndSave(Map.of(
+                    "validationModel", "", "validationModelChannelId", "",
+                    "imageUnderstandingModel", "", "imageUnderstandingModelChannelId", ""));
 
             LoopraConfig saved = LoopraConfig.load();
             assertEquals("", saved.validationModel());
             assertEquals("", saved.validationModelChannelId());
+            assertEquals("", saved.imageUnderstandingModel());
+            assertEquals("", saved.imageUnderstandingModelChannelId());
         } finally {
             System.setProperty("user.home", originalUserHome);
         }

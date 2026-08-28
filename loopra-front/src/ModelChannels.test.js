@@ -22,20 +22,22 @@ vi.mock('./services/api', () => ({
         modelChannelId: 'main',
         validationModel: 'guard-mini',
         validationModelChannelId: 'guard',
+        imageUnderstandingModel: 'main-large',
+        imageUnderstandingModelChannelId: 'main',
         modelChannels: [
           {
             id: 'main',
             name: 'Main',
             baseUrl: 'https://main.test/v1',
             apiKey: '****',
-            models: [{name: 'main-large'}]
+            models: [{name: 'main-large', imageInput: true}]
           },
           {
             id: 'guard',
             name: 'Guard',
             baseUrl: 'https://guard.test/v1',
             apiKey: '****',
-            models: [{name: 'guard-mini'}]
+            models: [{name: 'guard-mini', imageInput: true}]
           }
         ]
       }
@@ -76,7 +78,27 @@ describe('ModelChannels validation model', () => {
 
     expect(configAPI.updateConfig).toHaveBeenCalledWith(expect.objectContaining({
       validationModel: 'guard-mini',
-      validationModelChannelId: 'guard'
+      validationModelChannelId: 'guard',
+      imageUnderstandingModel: 'main-large',
+      imageUnderstandingModelChannelId: 'main'
+    }))
+    wrapper.unmount()
+  })
+
+  it('loads and saves a separately selected image understanding model', async () => {
+    const wrapper = shallowMount(ModelChannels)
+    await flushPromises()
+
+    const selects = wrapper.findAll('.model-validator select')
+    expect(selects).toHaveLength(2)
+    expect(selects[1].element.value).toBe(JSON.stringify(['main', 'main-large']))
+    await selects[1].setValue(JSON.stringify(['guard', 'guard-mini']))
+    await wrapper.find('.model-channels-save').trigger('click')
+    await flushPromises()
+
+    expect(configAPI.updateConfig).toHaveBeenLastCalledWith(expect.objectContaining({
+      imageUnderstandingModel: 'guard-mini',
+      imageUnderstandingModelChannelId: 'guard'
     }))
     wrapper.unmount()
   })

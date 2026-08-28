@@ -27,7 +27,9 @@ public record ConfigDTO(
         boolean modelChannelsConfigured,
         String modelChannelId,
         String validationModel,
-        String validationModelChannelId
+        String validationModelChannelId,
+        String imageUnderstandingModel,
+        String imageUnderstandingModelChannelId
 ) {
     /** 不包含真实 API Key 的渠道配置。 */
     public record ModelChannelConfig(

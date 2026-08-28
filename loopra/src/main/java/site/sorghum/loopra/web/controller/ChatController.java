@@ -99,7 +99,7 @@ public class ChatController {
 
     @ApiOperation(value = "SSE 流式聊天", notes = "通过 Server-Sent Events 流式返回聊天回复，支持实时推送内容片段")
     @ApiImplicitParams({
-            @ApiImplicitParam(name = "message", value = "用户消息", required = true),
+            @ApiImplicitParam(name = "message", value = "用户消息；仅上传图片时可为空"),
             @ApiImplicitParam(name = "workspaceHash", value = "项目 hash"),
             @ApiImplicitParam(name = "sessionName", value = "会话名称")
     })
@@ -111,8 +111,11 @@ public class ChatController {
             return;
         }
         boolean executePlan = request != null && "execute_plan".equals(request.getAction());
-        if (request == null || (!executePlan
-                && (request.getMessage() == null || request.getMessage().trim().isEmpty()))) {
+        boolean hasText = request != null && request.getMessage() != null
+                && !request.getMessage().trim().isEmpty();
+        boolean hasImages = request != null && request.getImages() != null
+                && request.getImages().stream().anyMatch(image -> image != null && !image.isBlank());
+        if (request == null || (!executePlan && !hasText && !hasImages)) {
             ctx.outputAsJson(jsonError(WebErrorMessages.MESSAGE_REQUIRED));
             return;
         }

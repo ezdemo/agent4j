@@ -95,6 +95,8 @@ public class LoopraConfig implements AgentConfig {
                   "modelChannelId": "default",
                   "validationModel": "",
                   "validationModelChannelId": "",
+                  "imageUnderstandingModel": "",
+                  "imageUnderstandingModelChannelId": "",
                   "modelChannels": [
                     {
                       "id": "default",
@@ -398,6 +400,23 @@ public class LoopraConfig implements AgentConfig {
     /** 查询校验模型所属渠道。 */
     public ModelChannel validationModelChannel() {
         return modelChannel(validationModelChannelId());
+    }
+
+    /** 图片理解模型名称；空值表示不启用图片理解回退。 */
+    @Override
+    public String imageUnderstandingModel() {
+        return trim(root.select("$.imageUnderstandingModel").getString());
+    }
+
+    /** 图片理解模型所属渠道 ID。 */
+    public String imageUnderstandingModelChannelId() {
+        return trim(root.select("$.imageUnderstandingModelChannelId").getString());
+    }
+
+    /** 查询图片理解模型所属渠道。 */
+    @Override
+    public ModelChannel imageUnderstandingModelChannel() {
+        return modelChannel(imageUnderstandingModelChannelId());
     }
 
     /** 当前选中模型所属的渠道 ID。 */
@@ -946,10 +965,14 @@ public class LoopraConfig implements AgentConfig {
             String key = entry.getKey();
             Object value = entry.getValue();
 
-            // 跳过空值；校验模型字段允许空字符串以关闭功能；前端回传脱敏密钥时保留现有真实值。
+            // 跳过空值；模型选择字段允许空字符串以关闭对应功能；前端回传脱敏密钥时保留现有真实值。
             if (value == null) continue;
             if (value instanceof String str
-                    && ((str.isEmpty() && !"validationModel".equals(key) && !"validationModelChannelId".equals(key))
+                    && ((str.isEmpty()
+                        && !"validationModel".equals(key)
+                        && !"validationModelChannelId".equals(key)
+                        && !"imageUnderstandingModel".equals(key)
+                        && !"imageUnderstandingModelChannelId".equals(key))
                     || ("apiKey".equals(key) && str.contains("****")))) continue;
 
             // 更新到 ONode

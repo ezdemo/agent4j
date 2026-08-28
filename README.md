@@ -166,7 +166,7 @@ loopra web 0
 }
 ```
 
-`models` 兼容旧版字符串数组。每个模型条目还可配置 `contextTokens`、`imageInput` 和 `price`；未配置时由系统使用默认或可用的模型元数据。
+`models` 兼容旧版字符串数组。每个模型条目还可配置 `contextTokens`、`imageInput` 和 `price`；未配置时由系统使用默认或可用的模型元数据。若当前模型的 `imageInput` 为 `false`，可在模型渠道页选择 `imageUnderstandingModel` 与 `imageUnderstandingModelChannelId`，由该模型先把 `read_image` 的图片转换为文字，再交给当前模型继续处理。`read_image` 的 `prompt` 参数用于描述本次识别任务，例如要求提取 OCR、定位报错或读取表格数值。
 
 ## 核心能力
 
@@ -197,7 +197,9 @@ loopra web 0
 | 项目状态 | `memory` 将跨会话事实保存到 `.loopra/loopra-memory.md`；共享上下文保存到 `.loopra/workspace/` |
 | 多模态与浏览器 | `read_image`，以及桌面端可见 AI 浏览器的 `browser_*` 工具 |
 
-MCP、OpenAPI 和技能可为 Agent 注入额外工具。`read_image` 支持项目路径、绝对路径、Base64/data URI 和 HTTP(S) URL，单张图片最大 5 MiB；当前模型未声明 `imageInput` 能力时，工具会明确提示不可用。`browser_screenshot` 会返回可见视口截图和结构化页面快照，交互操作必须使用对应的 `snapshotId`。浏览器工具只操作可见的 Desktop 浏览器；遇到登录、验证码或安全验证时，Agent 会请求用户接管，不会代填或读取敏感凭据。
+MCP、OpenAPI 和技能可为 Agent 注入额外工具。`read_image` 支持项目路径、绝对路径、Base64/data URI 和 HTTP(S) URL，单张图片最大 5 MiB，并支持可选的 `detail`（`auto`、`low`、`high`）和 `prompt`（本次图片识别任务描述）；当前模型支持 `imageInput` 时原图会作为视觉上下文传入，否则使用已配置的图片理解模型并带上 `prompt` 生成文字结果。`browser_screenshot` 会返回可见视口截图和结构化页面快照，交互操作必须使用对应的 `snapshotId`。浏览器工具只操作可见的 Desktop 浏览器；遇到登录、验证码或安全验证时，Agent 会请求用户接管，不会代填或读取敏感凭据。
+
+用户主动上传图片时，如果当前模型不支持 `imageInput`，系统会先将图片保存到当前项目的 `.loopra/read_img/`，再把项目相对路径和 `read_image` 调用提示交给模型；模型需要理解图片时，应使用该路径调用 `read_image`，而不是猜测图片内容。支持图片输入的模型仍直接接收原图。
 
 ### 子代理与长期协作
 
@@ -228,6 +230,8 @@ MCP、OpenAPI 和技能可为 Agent 注入额外工具。`read_image` 支持项�
 | `model` | string | `deepseek-v4-flash` | 当前模型名称。 |
 | `validationModel` | string | `""` | 可选的工具调用校验模型。 |
 | `validationModelChannelId` | string | `""` | 校验模型所在渠道 ID。 |
+| `imageUnderstandingModel` | string | `""` | 当前模型不支持图片输入时使用的图片理解模型；需在模型条目中启用 `imageInput`。 |
+| `imageUnderstandingModelChannelId` | string | `""` | 图片理解模型所在渠道 ID。 |
 | `workspaceDir` | string | 自动创建默认项目 | 当前项目目录。 |
 | `reasoningEffort` | string | `high` | `low`、`medium`、`high` 或 `max`。 |
 | `hitl` | string | `free` | `free`、`approval` 或 `auto`。 |

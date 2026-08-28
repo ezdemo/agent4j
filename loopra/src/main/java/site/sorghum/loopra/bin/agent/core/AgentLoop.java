@@ -1039,7 +1039,7 @@ public class AgentLoop implements
 
     @Override
     public UserMessage sanitizePreflightMessage(UserMessage message) {
-        return UserMessageSanitizer.sanitize(message, modelProvider);
+        return UserMessageSanitizer.sanitize(message, modelProvider, workingDirectory());
     }
 
     @Override

@@ -6,6 +6,7 @@ import org.noear.solon.ai.chat.tool.FunctionTool;
 import org.noear.solon.annotation.Component;
 import org.noear.solon.annotation.Inject;
 import org.noear.solon.annotation.Param;
+import site.sorghum.loopra.bin.agent.spi.AgentConfig;
 import site.sorghum.loopra.bin.agent.model.ImageToolResult;
 import site.sorghum.loopra.bin.model.LoopraModelProvider;
 import site.sorghum.loopra.bin.model.ModalitySupport;
@@ -27,7 +28,7 @@ import java.util.Collection;
 import java.util.Locale;
 import java.util.Map;
 
- /** 读取本地、base64 编码或远程图片，作为下一次模型请求的视觉上下文。 */
+/** 读取本地、base64 编码或远程图片；必要时交给独立图片理解模型转换为文字。 */
 @Component
 public class ImageReadTool extends AbsToolProvider implements SolonToTools {
     private static final long MAX_IMAGE_BYTES = 5L * 1024 * 1024;
@@ -35,6 +36,10 @@ public class ImageReadTool extends AbsToolProvider implements SolonToTools {
     /** 模型多模态支持提供者（Solon 注入，无容器环境为 null 时不做能力拦截）。 */
     @Inject
     public static ModelModalityProvider modalityProvider;
+
+    /** 当前模型不支持图片时使用的图片理解服务。 */
+    @Inject
+    public static ImageUnderstandingService understandingService;
 
     private static final Map<String, String> MIME_TYPES = Map.of(
             "png", "image/png",
@@ -45,32 +50,30 @@ public class ImageReadTool extends AbsToolProvider implements SolonToTools {
     );
 
     @ToolMapping(name = "read_image", description = """
-            读取 PNG、JPEG、GIF 或 WebP 图片，并将图片作为视觉上下文传给 AI 分析。
+            读取 PNG、JPEG、GIF 或 WebP 图片并分析其内容。
+            当前模型支持图片输入时，图片会作为视觉上下文传给当前模型；当前模型不支持时，自动使用已配置的图片理解模型生成文字结果。
             每次必须提供且仅提供一个来源：file_path（项目相对路径或绝对路径）、base64（原始 Base64 或 data URI）、url（HTTP/HTTPS 图片地址）。
-            detail 可选，取值 auto、low 或 high。图片最大 5 MiB。此工具只读，不支持 SVG 或其他非图片文件。
+            detail 可选，取值 auto、low 或 high；prompt 可选，用于描述本次希望重点识别的内容，例如“提取图片中的报错文字”。
+            图片最大 5 MiB。此工具只读，不支持 SVG 或其他非图片文件。
             """)
     public String readImage(
             @Param(name = "file_path", description = "图片路径。相对路径相对于项目，绝对路径可直接使用", required = false) String filePath,
             @Param(name = "base64", description = "图片的原始 Base64 字符串或 data:image/...;base64,...", required = false) String base64,
             @Param(name = "url", description = "HTTP 或 HTTPS 图片地址", required = false) String url,
             @Param(name = "detail", description = "图片分析精度：auto、low 或 high，默认 auto", required = false, defaultValue = "auto") String detail,
+            @Param(name = "prompt", description = "本次图片识别的任务描述，例如提取文字、识别报错或读取表格", required = false) String prompt,
             @Param(name = "ctx", required = false) ToolContext ctx) {
         String normalizedDetail = normalizeDetail(detail);
         if (normalizedDetail == null) {
             return "PARAM_INVALID: detail must be one of auto, low, or high";
         }
+        String normalizedPrompt = normalizePrompt(prompt);
         int sourceCount = countPresent(filePath, base64, url);
         if (sourceCount == 0) {
             return "PARAM_MISSING: provide exactly one of file_path, base64, or url";
         }
         if (sourceCount > 1) {
             return "PARAM_INVALID: provide only one of file_path, base64, or url";
-        }
-
-        // 模型不支持图片输入时工具不可用，避免生成模型无法接收的图片消息。
-        String blocked = modelImageSupportBlocked(ctx);
-        if (blocked != null) {
-            return "MODEL_NOT_SUPPORTED: " + blocked;
         }
 
         try {
@@ -81,8 +84,25 @@ public class ImageReadTool extends AbsToolProvider implements SolonToTools {
             }
             String dataUri = "data:" + image.mimeType() + ";base64,"
                     + Base64.getEncoder().encodeToString(image.bytes());
+
+            // 模型不支持图片输入时，使用独立的图片理解模型生成文字结果；
+            // 只有在当前模型支持图片时，才把原图作为视觉上下文回放给主模型。
+            String blocked = modelImageSupportBlocked(ctx);
+            if (blocked != null) {
+                AgentConfig config = currentAgentConfig(ctx);
+                if (config == null) {
+                    return "MODEL_NOT_SUPPORTED: " + blocked + "，且无法获取图片理解模型配置";
+                }
+                // Solon 会注入单例；直接 Java 调用或轻量测试环境没有容器时，
+                // 该服务本身无状态，可以安全地按需创建，仍保持同一回退行为。
+                ImageUnderstandingService service = understandingService != null
+                        ? understandingService : new ImageUnderstandingService();
+                return service.understand(config, dataUri, normalizedDetail, normalizedPrompt);
+            }
+
             String summary = "已读取图片 " + image.source() + "（" + image.mimeType() + "，" + image.bytes().length
-                    + " 字节），图片已作为视觉上下文传给 AI。";
+                    + " 字节），图片已作为视觉上下文传给 AI。"
+                    + (normalizedPrompt.isEmpty() ? "" : " 本次识别要求：" + normalizedPrompt);
             return imageResult(summary, dataUri, normalizedDetail);
         } catch (SecurityException e) {
             return "PATH_DENIED: 项目相对路径必须位于当前项目内";
@@ -95,9 +115,19 @@ public class ImageReadTool extends AbsToolProvider implements SolonToTools {
         }
     }
 
-     /** 为只读取工作区图片的调用方保留旧的直接 Java API。 */
+    /** 为已有直接 Java 调用方保留原始五参数 API。 */
+    public String readImage(String filePath, String base64, String url, String detail, ToolContext ctx) {
+        return readImage(filePath, base64, url, detail, null, ctx);
+    }
+
+    /** 为只读取工作区图片的调用方保留旧的直接 Java API。 */
     public String readImage(String filePath, String detail, ToolContext ctx) {
-        return readImage(filePath, null, null, detail, ctx);
+        return readImage(filePath, null, null, detail, null, ctx);
+    }
+
+    /** 为直接 Java 调用方提供带图片识别要求的 API。 */
+    public String readImage(String filePath, String detail, String prompt, ToolContext ctx) {
+        return readImage(filePath, null, null, detail, prompt, ctx);
     }
 
     /**
@@ -122,9 +152,14 @@ public class ImageReadTool extends AbsToolProvider implements SolonToTools {
         if (provider == null) return null;
         ModalitySupport support = provider.getModalitySupport(client.getModelChannelId(), client.getModel());
         if (support != null && !support.imageInput()) {
-            return "当前模型（" + client.getModel() + "）不支持图片输入，read_image 工具不可用";
+            return "当前模型（" + client.getModel() + "）不支持图片输入";
         }
         return null;
+    }
+
+    private static AgentConfig currentAgentConfig(ToolContext ctx) {
+        if (ctx == null || ctx.getLoopController() == null) return null;
+        return ctx.getLoopController().getAgentConfig();
     }
 
     /** 委托内核的图片结果协议（{@link ImageToolResult}），保持对外 API 不变。 */
@@ -305,6 +340,10 @@ public class ImageReadTool extends AbsToolProvider implements SolonToTools {
 
     private static String normalizeDetail(String detail) {
         return ImageToolResult.normalizeDetail(detail);
+    }
+
+    private static String normalizePrompt(String prompt) {
+        return prompt == null ? "" : prompt.trim();
     }
 
     private record ImageData(byte[] bytes, String mimeType, String source) {

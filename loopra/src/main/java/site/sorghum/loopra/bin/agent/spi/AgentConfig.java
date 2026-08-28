@@ -76,6 +76,16 @@ public interface AgentConfig {
     /** 校验模型所在渠道；未配置返回 {@code null}。 */
     Channel validationModelChannel();
 
+    /** 图片理解模型名（空表示未启用图片理解回退）。 */
+    default String imageUnderstandingModel() {
+        return "";
+    }
+
+    /** 图片理解模型所在渠道；未配置返回 {@code null}。 */
+    default Channel imageUnderstandingModelChannel() {
+        return null;
+    }
+
     /** HITL auto 模式的白名单工具列表。 */
     List<String> autoWhitelist();
 

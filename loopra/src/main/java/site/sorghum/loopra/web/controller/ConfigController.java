@@ -92,7 +92,9 @@ public class ConfigController {
                 cfg.modelChannels().stream().anyMatch(channel -> !channel.apiKey().isBlank()),
                 cfg.modelChannelId(),
                 cfg.validationModel(),
-                cfg.validationModelChannelId()
+                cfg.validationModelChannelId(),
+                cfg.imageUnderstandingModel(),
+                cfg.imageUnderstandingModelChannelId()
         );
         return ApiResponse.ok(data);
     }
@@ -109,7 +111,8 @@ public class ConfigController {
         boolean agentReinitialized = false;
         if (body.containsKey("baseUrl") || body.containsKey("apiKey")
                 || body.containsKey("modelChannels") || body.containsKey("modelChannelId")
-                || body.containsKey("validationModel") || body.containsKey("validationModelChannelId")) {
+                || body.containsKey("validationModel") || body.containsKey("validationModelChannelId")
+                || body.containsKey("imageUnderstandingModel") || body.containsKey("imageUnderstandingModelChannelId")) {
             agentService.reinitialize();
             agentReinitialized = true;
         }
@@ -120,7 +123,8 @@ public class ConfigController {
             // baseUrl/apiKey 已在上方处理，跳过
             if ("baseUrl".equals(key) || "apiKey".equals(key)
                     || "modelChannels".equals(key) || "modelChannelId".equals(key)
-                    || "validationModel".equals(key) || "validationModelChannelId".equals(key)) continue;
+                    || "validationModel".equals(key) || "validationModelChannelId".equals(key)
+                    || "imageUnderstandingModel".equals(key) || "imageUnderstandingModelChannelId".equals(key)) continue;
             // 只发布已知的运行时配置键
             if ("model".equals(key) || "reasoningEffort".equals(key) || "hitl".equals(key)
                     || "terminateOnNoToolCall".equals(key) || "fastMode".equals(key) || "disabledTools".equals(key)) {
