@@ -112,8 +112,11 @@ public class LoopraAgent {
             log.info("[bus] 收到配置变更事件: key={}, value={}", e.key(), e.value());
             try {
                 switch (e.key()) {
-                    case "model" -> setModel((String) e.value());
-                    case "reasoningEffort" -> setReasoningEffort(String.valueOf(e.value()));
+                    // 模型和思考强度属于会话设置。全局配置变更只影响新会话，
+                    // 不能广播覆盖已经打开的会话 Agent。
+                    case "model", "reasoningEffort" -> {
+                        // 会话级变更由 AgentService 按会话显式应用。
+                    }
                     case "fastMode" -> setFastMode(Boolean.parseBoolean(String.valueOf(e.value())));
                     case "hitl" -> setHitlMode(String.valueOf(e.value()));
                     case "terminateOnNoToolCall" -> setTerminateOnNoToolCall(Boolean.parseBoolean(String.valueOf(e.value())));
@@ -466,12 +469,27 @@ public class LoopraAgent {
         loop.setModel(model);
     }
 
+    /** 获取当前会话使用的模型。 */
+    public String getModel() {
+        return loop.getModel();
+    }
+
+    /** 获取当前会话使用的模型渠道。 */
+    public String getModelChannelId() {
+        return loop.getModelChannelId();
+    }
+
     /**
      * 运行时切换推理强度（热更新）。
      * 值由模型提供者定义，前端请求会将其传入对应会话。
      */
     public void setReasoningEffort(String reasoningEffort) {
         loop.setReasoningEffort(reasoningEffort);
+    }
+
+    /** 获取当前会话使用的思考强度。 */
+    public String getReasoningEffort() {
+        return loop.getReasoningEffort();
     }
 
     /** 运行时切换快速模式（热更新，OpenAI service_tier=fast，仅 OpenAI 协议生效）。 */

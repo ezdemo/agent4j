@@ -170,6 +170,8 @@ describe('ChatInput linked projects', () => {
     const [, text, hashes] = wrapper.emitted('send')[0]
     expect(text).toContain('关联项目：')
     expect(text).toContain('backend-service')
+    expect(text).toContain('hash: backend')
+    expect(text).toContain('根目录: C:/code/backend')
     expect(hashes).toEqual(['backend'])
     expect(wrapper.find('.project-chips-bar').exists()).toBe(false)
   })

@@ -10,10 +10,12 @@ import site.sorghum.loopra.bin.agent.core.LoopraAgent;
 import site.sorghum.loopra.bin.agent.model.ChatMessage;
 import site.sorghum.loopra.bin.config.ConfigService;
 import site.sorghum.loopra.bin.tool.ToolSystemInitializer;
+import site.sorghum.loopra.web.model.SessionSettingsDTO;
 
 import java.lang.reflect.Field;
 import java.lang.reflect.Method;
 import java.nio.file.Path;
+import java.util.Map;
 
 import static org.junit.jupiter.api.Assertions.*;
 
@@ -104,6 +106,21 @@ class AgentServiceSharedToolSystemTest {
 
         assertFalse(service.getSessionStatus(workspaceA.toString(), sessionName).running(),
                 "仅存在历史和缓存 Agent 时不应报告运行中");
+    }
+
+    @Test
+    void sessionModelSettingsRemainWhenGlobalDefaultsChange() {
+        AgentService service = new AgentService();
+        String channelId = ConfigService.getConfig().activeModelChannel().id();
+
+        service.updateSessionSettings(workspaceA.toString(), "fixed-session",
+                "session-model", channelId, "low");
+        ConfigService.updateConfig(Map.of("model", "global-model", "reasoningEffort", "high"));
+
+        SessionSettingsDTO settings = service.getSessionSettings(workspaceA.toString(), "fixed-session");
+        assertEquals("session-model", settings.model());
+        assertEquals(channelId, settings.modelChannelId());
+        assertEquals("low", settings.reasoningEffort());
     }
 
     @Test

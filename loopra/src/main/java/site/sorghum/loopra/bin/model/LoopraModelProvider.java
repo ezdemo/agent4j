@@ -149,6 +149,11 @@ public class LoopraModelProvider implements ModelProvider {
         return modelChannelId;
     }
 
+    /** 返回当前请求使用的思考强度。 */
+    public String getReasoningEffort() {
+        return reasoningEffort;
+    }
+
     /** 运行时切换模型；模型变化后重建底层 Provider。 */
     public void setModel(String model) {
         synchronized (this) {

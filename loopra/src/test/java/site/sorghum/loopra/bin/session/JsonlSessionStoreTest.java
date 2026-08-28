@@ -268,6 +268,30 @@ class JsonlSessionStoreTest {
     }
 
     @Test
+    void modelSettingsPersistWithoutOverwritingOtherMetadata() throws IOException {
+        String name = store.currentName();
+
+        store.updateTitle(name, "固定模型会话");
+        store.setPlanMode(name, true);
+        store.setModelSettings(name, "gpt-session", "channel-session", "high");
+
+        SessionStore.SessionModelSettings settings = store.getModelSettings(name);
+        assertEquals("gpt-session", settings.model());
+        assertEquals("channel-session", settings.modelChannelId());
+        assertEquals("high", settings.reasoningEffort());
+        assertEquals("固定模型会话", store.getTitle(name));
+        assertTrue(store.isPlanMode(name));
+
+        store.setModelSettings(name, "gpt-next", "channel-next", "low");
+        settings = store.getModelSettings(name);
+        assertEquals("gpt-next", settings.model());
+        assertEquals("channel-next", settings.modelChannelId());
+        assertEquals("low", settings.reasoningEffort());
+        assertEquals("固定模型会话", store.getTitle(name));
+        assertTrue(store.isPlanMode(name));
+    }
+
+    @Test
     void concurrentMetadataUpdatesPreserveAllFields() throws Exception {
         Path sessionsDir = java.nio.file.Files.createTempDirectory("loopra-meta-lock");
         JsonlSessionStore first = new JsonlSessionStore(sessionsDir);

@@ -190,6 +190,22 @@ public interface SessionStore {
     }
 
     /**
+     * 会话级模型设置。设置保存在会话元数据中，与全局默认模型相互独立。
+     * <p>默认实现用于兼容不支持元数据的旧存储实现。</p>
+     */
+    default SessionModelSettings getModelSettings(String name) {
+        return new SessionModelSettings(null, null, null);
+    }
+
+    /**
+     * 持久化会话级模型设置。传入 null 或空字符串表示删除对应字段。
+     */
+    default void setModelSettings(String name, String model, String modelChannelId,
+                                   String reasoningEffort) {
+        // 默认空实现，向后兼容
+    }
+
+    /**
      * 追加一条每日用量记录到全局日志文件 {@code ~/.loopra/usage_daily.jsonl}。
      * <p>
      * 记录格式为一行 JSON：
@@ -227,6 +243,17 @@ public interface SessionStore {
         /** 兼容旧调用方的五参构造：默认非隔离分支模式。 */
         public SessionInfo(String name, long size, long messageCount, long mtime, String title) {
             this(name, size, messageCount, mtime, title, false);
+        }
+    }
+
+    /**
+     * 会话固定使用的模型、渠道和思考强度。
+     */
+    record SessionModelSettings(String model, String modelChannelId, String reasoningEffort) {
+        public boolean hasAnyValue() {
+            return (model != null && !model.isBlank())
+                    || (modelChannelId != null && !modelChannelId.isBlank())
+                    || (reasoningEffort != null && !reasoningEffort.isBlank());
         }
     }
 }

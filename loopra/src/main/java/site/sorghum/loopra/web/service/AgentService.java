@@ -198,8 +198,9 @@ public class AgentService {
      */
     private final SessionAgentCache sessionCache = new SessionAgentCache();
 
-    /** 会话当前使用的模型和渠道，用于避免不同会话间互相覆盖。 */
-    private final ConcurrentHashMap<String, ModelTarget> sessionModelTargets = new ConcurrentHashMap<>();
+    /** 会话模型设置的读取、解析与持久化。 */
+    private final SessionSettingsService sessionSettingsService =
+            new SessionSettingsService(this::sessionStoreFor);
 
     /**
      * 默认项目的共享 ToolRegistry（供 /api/tools 等接口与就绪检查使用）
@@ -299,7 +300,6 @@ public class AgentService {
 
         // 2. 清空所有缓存
         sessionCache.clear();
-        sessionModelTargets.clear();
         sharedToolSystems.clear();
 
         // 3. 重新加载配置并构建共享组件
@@ -499,24 +499,26 @@ public class AgentService {
      * @return Agent 实例
      */
     private LoopraAgent getOrCreateAgent(String sessionKey) {
-        LoopraAgent existing = sessionCache.get(sessionKey);
-        if (existing != null) return existing;
-        return getOrCreateAgent(sessionKey, defaultModelTarget());
+        return getOrCreateAgent(sessionKey, resolveSessionModelSettings(sessionKey, null, null, null));
     }
 
     /**
      * 获取会话 Agent，并确保它连接到本次请求指定的模型渠道。
      * 同一会话的调用方已持有会话锁，因此渠道切换不会与流式响应并发发生。
      */
-    private LoopraAgent getOrCreateAgent(String sessionKey, ModelTarget target) {
+    private LoopraAgent getOrCreateAgent(String sessionKey, SessionStore.SessionModelSettings settings) {
+        ModelTarget target = targetOf(settings);
         // 更新访问顺序并检查缓存
         LoopraAgent agent = sessionCache.get(sessionKey);
         if (agent != null) {
-            ModelTarget currentTarget = sessionModelTargets.get(sessionKey);
-            if (target.equals(currentTarget)) return agent;
+            ModelTarget currentTarget = new ModelTarget(agent.getModel(), agent.getModelChannelId());
+            if (target.equals(currentTarget)) {
+                agent.setReasoningEffort(settings.reasoningEffort());
+                return agent;
+            }
             if (currentTarget != null && currentTarget.channelId().equals(target.channelId())) {
                 agent.setModel(target.model());
-                sessionModelTargets.put(sessionKey, target);
+                agent.setReasoningEffort(settings.reasoningEffort());
                 return agent;
             }
 
@@ -529,9 +531,8 @@ public class AgentService {
             }
             agent.flushSession();
             agent.dispose();
-            agent = createAgent(sessionKey, target, null);
+            agent = createAgent(sessionKey, settings, null);
             sessionCache.put(sessionKey, agent);
-            sessionModelTargets.put(sessionKey, target);
             log.info("[web] 会话模型渠道已切换: {}, {}/{}", sessionKey, target.channelId(), target.model());
             return agent;
         }
@@ -541,23 +542,24 @@ public class AgentService {
             // 双重检查
             agent = sessionCache.get(sessionKey);
             if (agent != null) {
-                return getOrCreateAgent(sessionKey, target);
+                return getOrCreateAgent(sessionKey, settings);
             }
 
             // LRU 淘汰
             sessionCache.evictIfNeeded();
-            agent = createAgent(sessionKey, target, null);
+            agent = createAgent(sessionKey, settings, null);
 
             // 缓存 Agent
             sessionCache.put(sessionKey, agent);
-            sessionModelTargets.put(sessionKey, target);
 
             log.info("[web] 创建新 Agent: {}", sessionKey);
             return agent;
         }
     }
 
-    private LoopraAgent createAgent(String sessionKey, ModelTarget target, String systemPrompt) {
+    private LoopraAgent createAgent(String sessionKey, SessionStore.SessionModelSettings settings,
+                                    String systemPrompt) {
+        ModelTarget target = targetOf(settings);
         String[] parts = sessionKey.split("::", 2);
         String workspacePath = parts[0];
         String sessionName = parts.length > 1 ? parts[1] : "default";
@@ -567,7 +569,7 @@ public class AgentService {
 
         String apiUrl = channel.apiUrl();
         String apiKey = channel.apiKey();
-        String reasoningEffort = cfg.reasoningEffort();
+        String reasoningEffort = settings.reasoningEffort();
         String hitl = cfg.hitl();
         LoopraModelProvider modelProvider = new LoopraModelProvider(apiUrl, apiKey, target.model(), reasoningEffort,
                 target.channelId(), channel.apiProtocol());
@@ -615,16 +617,17 @@ public class AgentService {
     /**
      * 获取或创建会话 Agent（创建时注入自定义系统提示词，仅首次创建生效）。
      */
-    private LoopraAgent getOrCreateAgentWithPrompt(String sessionKey, ModelTarget target, String systemPrompt) {
+    private LoopraAgent getOrCreateAgentWithPrompt(String sessionKey,
+                                                   SessionStore.SessionModelSettings settings,
+                                                   String systemPrompt) {
         LoopraAgent agent = sessionCache.get(sessionKey);
-        if (agent != null) return getOrCreateAgent(sessionKey, target);
+        if (agent != null) return getOrCreateAgent(sessionKey, settings);
         synchronized (this) {
             agent = sessionCache.get(sessionKey);
-            if (agent != null) return getOrCreateAgent(sessionKey, target);
+            if (agent != null) return getOrCreateAgent(sessionKey, settings);
             sessionCache.evictIfNeeded();
-            agent = createAgent(sessionKey, target, systemPrompt);
+            agent = createAgent(sessionKey, settings, systemPrompt);
             sessionCache.put(sessionKey, agent);
-            sessionModelTargets.put(sessionKey, target);
             log.info("[web] 创建新 Agent（自定义提示词）: {}", sessionKey);
             return agent;
         }
@@ -636,16 +639,41 @@ public class AgentService {
         return new ModelTarget(cfg.model(), channel != null ? channel.id() : "default");
     }
 
-    private ModelTarget resolveModelTarget(String requestedModel, String requestedChannelId) {
+    /**
+     * 解析会话级模型设置。请求中显式传入的值优先，其次使用会话元数据，
+     * 再回退到当前 Agent（兼容尚未迁移的旧会话），最后才使用全局默认值。
+     */
+    private SessionStore.SessionModelSettings resolveSessionModelSettings(
+            String sessionKey, String requestedModel, String requestedChannelId,
+            String requestedReasoningEffort) {
+        String[] parts = sessionKey.split("::", 2);
+        String workspacePath = parts.length > 0 ? parts[0] : null;
+        String sessionName = parts.length > 1 ? parts[1] : "default";
+        return resolveSessionModelSettings(
+                workspacePath, sessionName, requestedModel, requestedChannelId, requestedReasoningEffort);
+    }
+
+    private SessionStore.SessionModelSettings resolveSessionModelSettings(
+            String workspacePath, String sessionName, String requestedModel,
+            String requestedChannelId, String requestedReasoningEffort) {
+        String effectiveSessionName = sessionName == null || sessionName.isBlank() ? "default" : sessionName.trim();
+        String resolvedPath = workspacePath != null ? workspacePath : getCurrentProject();
+        String sessionKey = generateSessionKey(resolvedPath, effectiveSessionName);
         LoopraConfig cfg = ConfigService.getConfig();
-        ModelTarget fallback = defaultModelTarget();
-        String channelId = requestedChannelId == null || requestedChannelId.isBlank()
-                ? fallback.channelId() : requestedChannelId.trim();
-        if (cfg.modelChannel(channelId) == null) {
-            throw new ServiceException("模型渠道不存在: " + channelId);
-        }
-        String model = requestedModel == null || requestedModel.isBlank() ? fallback.model() : requestedModel.trim();
-        return new ModelTarget(model, channelId);
+        ModelTarget globalTarget = defaultModelTarget();
+        LoopraAgent cachedAgent = sessionCache.peek(sessionKey);
+        SessionStore.SessionModelSettings cachedSettings = new SessionStore.SessionModelSettings(
+                cachedAgent != null ? cachedAgent.getModel() : null,
+                cachedAgent != null ? cachedAgent.getModelChannelId() : null,
+                cachedAgent != null ? cachedAgent.getReasoningEffort() : null);
+        return sessionSettingsService.resolve(
+                resolvedPath, effectiveSessionName,
+                new SessionStore.SessionModelSettings(requestedModel, requestedChannelId, requestedReasoningEffort),
+                cachedSettings, globalTarget.model(), globalTarget.channelId(), cfg.reasoningEffort(), cfg);
+    }
+
+    private static ModelTarget targetOf(SessionStore.SessionModelSettings settings) {
+        return new ModelTarget(settings.model(), settings.modelChannelId());
     }
 
     private record ModelTarget(String model, String channelId) {}
@@ -987,10 +1015,9 @@ public class AgentService {
         LoopraModelProvider.CURRENT_LOG_SESSION.set(effectiveSessionName);
 
         try {
-            LoopraAgent agent = getOrCreateAgent(sessionKey, resolveModelTarget(requestedModel, requestedChannelId));
-            if (requestedReasoningEffort != null && !requestedReasoningEffort.isBlank()) {
-                agent.setReasoningEffort(requestedReasoningEffort.trim());
-            }
+            SessionStore.SessionModelSettings sessionSettings = resolveSessionModelSettings(
+                    workspacePath, effectiveSessionName, requestedModel, requestedChannelId, requestedReasoningEffort);
+            LoopraAgent agent = getOrCreateAgent(sessionKey, sessionSettings);
             if (requestedFastMode != null) {
                 agent.setFastMode(requestedFastMode);
             }
@@ -1156,6 +1183,9 @@ public class AgentService {
 
         // 直接以目标会话名创建/获取 Agent（switchTo 是惰性的，不创建文件）
         switchSession(workspacePath, sessionName);
+
+        // 会话创建时固定当前有效的模型与思考强度；之后修改全局默认值只影响新会话。
+        resolveSessionModelSettings(workspacePath, sessionName, null, null, null);
 
         // 新建会话时持久化隔离分支开关（仅在显式开启时写 .meta，避免无谓的元数据文件）
         if (Boolean.TRUE.equals(worktreeMode)) {
@@ -1340,6 +1370,28 @@ public class AgentService {
         }
     }
 
+    /** 获取指定会话固定使用的模型、渠道和思考强度。 */
+    public SessionSettingsDTO getSessionSettings(String workspacePath, String sessionName) {
+        if (sessionName == null || sessionName.isBlank()) {
+            throw new ServiceException("会话名称不能为空");
+        }
+        SessionStore.SessionModelSettings settings = resolveSessionModelSettings(
+                workspacePath, sessionName, null, null, null);
+        return new SessionSettingsDTO(settings.model(), settings.modelChannelId(), settings.reasoningEffort());
+    }
+
+    /** 更新指定会话的模型、渠道和思考强度；未提供的字段保持不变。 */
+    public SessionSettingsDTO updateSessionSettings(String workspacePath, String sessionName,
+                                                    String model, String modelChannelId,
+                                                    String reasoningEffort) {
+        if (sessionName == null || sessionName.isBlank()) {
+            throw new ServiceException("会话名称不能为空");
+        }
+        SessionStore.SessionModelSettings settings = resolveSessionModelSettings(
+                workspacePath, sessionName, model, modelChannelId, reasoningEffort);
+        return new SessionSettingsDTO(settings.model(), settings.modelChannelId(), settings.reasoningEffort());
+    }
+
     /**
      * 读取指定会话的隔离分支模式开关（默认 false）。
      */
@@ -1432,6 +1484,7 @@ public class AgentService {
         List<ChatMessage> sourceMessages = store.load(sourceSession);
         List<ChatMessage> branchMessages = copyBranchMessages(sourceMessages, messageCount);
         String sourceTitle = store.getTitle(sourceSession);
+        SessionStore.SessionModelSettings sourceSettings = store.getModelSettings(sourceSession);
 
          // 使用独立存储，让源 Agent 始终绑定到自己的会话。
         ProjectRegistry projectRegistry = new ProjectRegistry();
@@ -1442,6 +1495,10 @@ public class AgentService {
             if (!branchStore.bindTo(newName)) throw new ServiceException("无法创建新会话");
             branchStore.rewrite(branchMessages);
             branchStore.updateTitle(newName, branchTitle(sourceTitle, sourceSession));
+            if (sourceSettings != null && sourceSettings.hasAnyValue()) {
+                branchStore.setModelSettings(newName, sourceSettings.model(),
+                        sourceSettings.modelChannelId(), sourceSettings.reasoningEffort());
+            }
             branchStore.flush();
 
             // 切换到新会话
@@ -1499,15 +1556,17 @@ public class AgentService {
      */
     public UsageDTO getSessionUsageMap(String workspacePath, String sessionName) {
         String sessionKey = generateSessionKey(workspacePath, sessionName);
-        LoopraAgent agent = sessionCache.get(sessionKey);
-
-        // 历史会话可能尚未进入 Agent 缓存。按会话名加载 JSONL 后，仍可离线重算上下文构成。
-        if (agent == null && sessionName != null && !sessionName.isBlank()) {
+        LoopraAgent agent;
+        // 每次按会话解析一次设置，确保模型设置 API 更新后，已缓存 Agent 的用量视图也同步。
+        if (sessionName != null && !sessionName.isBlank()) {
             try {
                 agent = getOrCreateAgent(sessionKey);
             } catch (RuntimeException e) {
                 log.warn("[usage] 加载历史会话 '{}' 失败: {}", sessionName, e.getMessage());
+                agent = sessionCache.peek(sessionKey);
             }
+        } else {
+            agent = sessionCache.get(sessionKey);
         }
 
         long promptTokens = 0;
@@ -1538,7 +1597,7 @@ public class AgentService {
         // 价格计算：优先按模型分别计费，解决模型中途切换导致计价错乱
         try {
             LoopraConfig config = ConfigService.getConfig();
-            currentModel = config.model();
+            currentModel = agent != null && agent.getModel() != null ? agent.getModel() : config.model();
             Map<String, Map<String, Double>> prices = config.price();
 
             if (agent == null) {
@@ -2149,11 +2208,9 @@ public class AgentService {
         LoopraModelProvider.CURRENT_LOG_SESSION.set(effectiveSessionName);
 
         try {
-            LoopraAgent agent = getOrCreateAgentWithPrompt(sessionKey,
-                    resolveModelTarget(requestedModel, requestedChannelId), systemPrompt);
-            if (requestedReasoningEffort != null && !requestedReasoningEffort.isBlank()) {
-                agent.setReasoningEffort(requestedReasoningEffort.trim());
-            }
+            SessionStore.SessionModelSettings sessionSettings = resolveSessionModelSettings(
+                    workspacePath, effectiveSessionName, requestedModel, requestedChannelId, requestedReasoningEffort);
+            LoopraAgent agent = getOrCreateAgentWithPrompt(sessionKey, sessionSettings, systemPrompt);
             if (requestedHitl != null && !requestedHitl.isBlank()) {
                 agent.setHitlMode(requestedHitl.trim());
             }

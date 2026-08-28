@@ -90,6 +90,31 @@ public class SessionController {
         return ApiResponse.ok(new SessionCreateDTO("已创建新会话", workspaceHash, actualName));
     }
 
+    @ApiOperation(value = "获取会话模型设置", notes = "返回该会话固定使用的模型、渠道和思考强度；首次读取旧会话时会初始化设置")
+    @Get
+    @Mapping("/{name}/settings")
+    public ApiResponse<SessionSettingsDTO> getSettings(
+            @ApiParam(value = "会话名称") @Path("name") String name,
+            @ApiParam(value = "项目 hash", required = true) @Param(value = "workspaceHash", required = true) String workspaceHash) {
+        if (!agentService.isReady()) throw new ServiceException(WebErrorMessages.AGENT_NOT_READY);
+        String workspacePath = agentService.resolveProjectHashOrThrow(workspaceHash);
+        return ApiResponse.ok(agentService.getSessionSettings(workspacePath, name));
+    }
+
+    @ApiOperation(value = "更新会话模型设置", notes = "只更新请求中提供的字段，不改变全局默认模型或其他会话")
+    @Put
+    @Mapping("/{name}/settings")
+    public ApiResponse<SessionSettingsDTO> setSettings(
+            @ApiParam(value = "会话名称") @Path("name") String name,
+            @ApiParam(value = "项目 hash", required = true) @Param(value = "workspaceHash", required = true) String workspaceHash,
+            @ApiParam(value = "请求体：{model, modelChannelId, reasoningEffort}") @Body SessionSettingsRequest request) {
+        if (!agentService.isReady()) throw new ServiceException(WebErrorMessages.AGENT_NOT_READY);
+        if (request == null) throw new ServiceException("会话模型设置请求不能为空");
+        String workspacePath = agentService.resolveProjectHashOrThrow(workspaceHash);
+        return ApiResponse.ok(agentService.updateSessionSettings(
+                workspacePath, name, request.getModel(), request.getModelChannelId(), request.getReasoningEffort()));
+    }
+
     @ApiOperation(value = "查询会话隔离分支模式", notes = "返回指定会话的隔离分支模式开关与合并模式")
     @Get
     @Mapping("/{name}/worktree")

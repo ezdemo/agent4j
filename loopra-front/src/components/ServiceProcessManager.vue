@@ -1,13 +1,15 @@
 <template>
-  <div ref="rootRef" class="service-manager" :class="{ 'opens-up': placement === 'top' }">
+  <div ref="rootRef" class="service-manager" :class="{ 'opens-up': placement === 'top', 'has-label': showLabel }">
     <button
       class="tb-service-btn"
-      :class="{ active: open }"
+      :class="{ active: open, 'with-label': showLabel }"
+      :role="showLabel ? 'menuitem' : undefined"
       title="服务进程管理"
       @click.stop="toggle"
       @dblclick.stop
     >
       <ApiOutlined />
+      <span v-if="showLabel" class="service-trigger-label">服务进程</span>
       <span v-if="processes.length" class="service-live-dot"></span>
     </button>
 
@@ -89,7 +91,8 @@ import {
 import {platform} from '@/services/platform'
 
 defineProps({
-  placement: { type: String, default: 'bottom' }
+  placement: { type: String, default: 'bottom' },
+  showLabel: { type: Boolean, default: false }
 })
 
 const rootRef = ref(null)
@@ -218,6 +221,26 @@ onBeforeUnmount(close)
   height: 32px;
   border-radius: var(--r);
   font-size: 16px;
+}
+
+.service-manager.has-label {
+  width: 100%;
+}
+
+.tb-service-btn.with-label {
+  width: 100%;
+  justify-content: flex-start;
+  gap: 8px;
+  padding: 0 8px;
+  font: inherit;
+  font-size: 13px;
+}
+
+.service-trigger-label {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 
 .tb-service-btn:hover,

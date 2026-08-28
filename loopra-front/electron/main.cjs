@@ -1574,10 +1574,10 @@ ipcMain.handle('desktop-home-context-menu', (event, rawTheme) => {
       resolve(action)
     }
     const menu = Menu.buildFromTemplate([
-      { label: '打开需求池', click: () => finish('open-requirement-board') },
-      { label: '打开引导', click: () => finish('open-onboarding') },
+      { label: '需求池', click: () => finish('open-requirement-board') },
+      { label: '引导', click: () => finish('open-onboarding') },
       { label: '更新', click: () => finish('open-update') },
-      { label: '切换主题', click: () => finish('toggle-theme') }
+      { label: rawTheme === 'dark' ? '浅色' : '暗色', click: () => finish('toggle-theme') }
     ])
     menu.popup({
       window: mainWindow,

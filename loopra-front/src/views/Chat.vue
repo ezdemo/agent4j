@@ -392,6 +392,7 @@ import {computed, defineAsyncComponent, nextTick, onBeforeUnmount, onMounted, re
 import {message} from 'ant-design-vue'
 import {CheckOutlined, CloseOutlined, FileTextOutlined} from '@ant-design/icons-vue'
 import {agentAPI, chatAPI, configAPI, gitAPI, sessionsAPI, snapshotAPI, subSessionsAPI} from '../services/api'
+import {legacySessionSettingsStorage} from '../services/sessionSettingsStorage'
 import {basicMarkdown} from '../utils/basicMarkdown'
 import {sanitize} from '../utils/sanitize'
 import {buildHistoryItems, mergeFileChanges, moveFileChangesToEnd} from '../utils/chatHistory'
@@ -418,6 +419,15 @@ const handleSwitchModel = async (modelName, channelId) => {
       ...model,
       active: model.name === selection.model && (model.channelId || '') === selection.channelId
     }))
+    try {
+      await sessionsAPI.setSettings(props.sessionName, props.workspaceHash, {
+        model: selection.model,
+        modelChannelId: selection.channelId
+      })
+    } catch (e) {
+      // 内存状态仍保留本次会话选择，后续聊天请求也会把显式设置同步到后端。
+      console.error('持久化会话模型失败:', e)
+    }
     return
   }
   try {
@@ -472,11 +482,19 @@ const handleSwitchReasoningEffort = async (value) => {
     [conversationKey()]: reasoningEffort
   }
   currentReasoningEffort.value = reasoningEffort
+  if (props.sessionName) {
+    try {
+      await sessionsAPI.setSettings(props.sessionName, props.workspaceHash, {reasoningEffort})
+    } catch (e) {
+      // 内存状态仍保留本次会话选择，后续聊天请求也会把显式设置同步到后端。
+      console.error('持久化会话思考强度失败:', e)
+    }
+    return
+  }
   try {
-    // 输入框的选择既作为当前会话覆盖，也更新全局默认值，保证刷新和新会话仍能恢复。
+    // 未绑定具体会话时，才更新全局默认值。
     await configAPI.updateConfig({reasoningEffort})
   } catch (e) {
-    // 请求失败时会话级 localStorage 缓存仍可继续使用。
     console.error('持久化推理强度失败:', e)
   }
 }
@@ -872,25 +890,7 @@ const subAgentMessages = computed(() => {
   return msgs
 })
 const queuedMessagesBySession = ref({})
-const SESSION_MODEL_STORAGE_KEY = 'loopra.session-model-selections'
-const SESSION_REASONING_EFFORT_STORAGE_KEY = 'loopra.session-reasoning-efforts'
 const SESSION_FAST_MODE_STORAGE_KEY = 'loopra.session-fast-modes'
-const loadSessionModelSelections = () => {
-  try {
-    const stored = JSON.parse(localStorage.getItem(SESSION_MODEL_STORAGE_KEY) || '{}')
-    return stored && typeof stored === 'object' ? stored : {}
-  } catch {
-    return {}
-  }
-}
-const loadSessionReasoningEfforts = () => {
-  try {
-    const stored = JSON.parse(localStorage.getItem(SESSION_REASONING_EFFORT_STORAGE_KEY) || '{}')
-    return stored && typeof stored === 'object' ? stored : {}
-  } catch {
-    return {}
-  }
-}
 const loadSessionFastModes = () => {
   try {
     const stored = JSON.parse(localStorage.getItem(SESSION_FAST_MODE_STORAGE_KEY) || '{}')
@@ -899,39 +899,79 @@ const loadSessionFastModes = () => {
     return {}
   }
 }
-const sessionModelSelections = ref(loadSessionModelSelections())
-const sessionReasoningEfforts = ref(loadSessionReasoningEfforts())
+const legacySessionSettings = legacySessionSettingsStorage.load()
+const legacySessionModelSelections = ref(legacySessionSettings.modelSelections)
+const legacySessionReasoningEfforts = ref(legacySessionSettings.reasoningEfforts)
+// 模型和思考强度以服务端会话元数据为主；内存状态只用于当前页面的即时响应和旧数据迁移。
+const sessionModelSelections = ref({})
+const sessionReasoningEfforts = ref({})
 const sessionFastModes = ref(loadSessionFastModes())
 const conversationKey = (workspaceHash = props.workspaceHash, sessionName = props.sessionName) => `${workspaceHash || ''}::${sessionName || ''}`
 const queuedMessages = computed(() => queuedMessagesBySession.value[conversationKey()] || [])
 const guidingQueuedMessage = ref(false)
-
-watch(sessionModelSelections, selections => {
-  localStorage.setItem(SESSION_MODEL_STORAGE_KEY, JSON.stringify(selections))
-}, {deep: true})
-
-watch(sessionReasoningEfforts, efforts => {
-  localStorage.setItem(SESSION_REASONING_EFFORT_STORAGE_KEY, JSON.stringify(efforts))
-}, {deep: true})
 
 watch(sessionFastModes, modes => {
   localStorage.setItem(SESSION_FAST_MODE_STORAGE_KEY, JSON.stringify(modes))
 }, {deep: true})
 
 const getSessionModelSelection = (sessionName = props.sessionName, workspaceHash = props.workspaceHash) => {
-  const selected = sessionModelSelections.value[conversationKey(workspaceHash, sessionName)]
+  const key = conversationKey(workspaceHash, sessionName)
+  const selected = sessionModelSelections.value[key] || legacySessionModelSelections.value[key]
   if (selected) return selected
   const active = availableModels.value.find(model => model.active)
   return {model: currentModel.value, channelId: active?.channelId || ''}
 }
 
 const getSessionReasoningEffort = (sessionName = props.sessionName, workspaceHash = props.workspaceHash) => (
-  sessionReasoningEfforts.value[conversationKey(workspaceHash, sessionName)] || currentReasoningEffort.value
+  sessionReasoningEfforts.value[conversationKey(workspaceHash, sessionName)]
+  || legacySessionReasoningEfforts.value[conversationKey(workspaceHash, sessionName)]
+  || currentReasoningEffort.value
 )
 
 const getSessionFastMode = (sessionName = props.sessionName, workspaceHash = props.workspaceHash) => (
   sessionFastModes.value[conversationKey(workspaceHash, sessionName)] ?? currentFastMode.value
 )
+
+/** 将旧版浏览器缓存迁移到服务端会话设置；成功后删除对应旧值，避免形成第二个事实来源。 */
+const migrateLegacySessionSettings = async (sessionName, workspaceHash, sessionKey) => {
+  const legacySelection = legacySessionModelSelections.value[sessionKey]
+  const legacyReasoningEffort = legacySessionReasoningEfforts.value[sessionKey]
+  if ((!legacySelection && !legacyReasoningEffort) || typeof sessionsAPI.setSettings !== 'function') return null
+
+  const payload = {}
+  if (legacySelection?.model) payload.model = legacySelection.model
+  if (legacySelection?.channelId) payload.modelChannelId = legacySelection.channelId
+  if (legacyReasoningEffort) payload.reasoningEffort = legacyReasoningEffort
+  if (Object.keys(payload).length === 0) return null
+
+  try {
+    const response = await sessionsAPI.setSettings(sessionName, workspaceHash, payload)
+    if (!response?.success) return null
+    const resolved = response.data || {}
+    const migrated = {
+      model: resolved.model || payload.model,
+      modelChannelId: resolved.modelChannelId || payload.modelChannelId,
+      reasoningEffort: resolved.reasoningEffort || payload.reasoningEffort
+    }
+    if (legacySelection) {
+      const remaining = {...legacySessionModelSelections.value}
+      delete remaining[sessionKey]
+      legacySessionModelSelections.value = remaining
+      legacySessionSettingsStorage.removeModelSelection(sessionKey)
+    }
+    if (legacyReasoningEffort) {
+      const remaining = {...legacySessionReasoningEfforts.value}
+      delete remaining[sessionKey]
+      legacySessionReasoningEfforts.value = remaining
+      legacySessionSettingsStorage.removeReasoningEffort(sessionKey)
+    }
+    return migrated
+  } catch (error) {
+    // 服务端暂不可用时保留旧值，当前页面仍可继续使用兼容回退。
+    console.error('迁移旧版会话设置失败:', error)
+    return null
+  }
+}
 
 const addQueuedMessage = (sessionName, workspaceHash, images, text, modelSelection, reasoningEffort, fastMode, linkedProjectHashes = []) => {
   if (!sessionName) return
@@ -1290,10 +1330,14 @@ const loadUsage = async (override) => {
     if (wsHash) params.workspaceHash = wsHash
     if (sessName) params.sessionName = sessName
 
-    const [usageRes, modelsRes, configRes] = await Promise.allSettled([
+    const sessionSettingsRequest = wsHash && sessName && typeof sessionsAPI.getSettings === 'function'
+      ? sessionsAPI.getSettings(sessName, wsHash)
+      : Promise.resolve(null)
+    const [usageRes, modelsRes, configRes, sessionSettingsRes] = await Promise.allSettled([
       wsHash && !override?.skipSessionUsage ? configAPI.getUsage(params) : Promise.resolve(null),
       configAPI.getModels(),
-      configAPI.getConfig()
+      configAPI.getConfig(),
+      sessionSettingsRequest
     ])
     // 会话切换可能在请求返回前再次发生，过期响应不得覆盖当前会话的用量。
     if (requestId !== usageRequestId) return
@@ -1303,6 +1347,16 @@ const loadUsage = async (override) => {
     const configuredModel = configRes.status === 'fulfilled' && configRes.value.success
       ? configRes.value.data?.model || ''
       : ''
+    let sessionSettings = sessionSettingsRes.status === 'fulfilled' && sessionSettingsRes.value?.success
+      ? sessionSettingsRes.value.data || {}
+      : {}
+    const sessionKey = conversationKey(wsHash, sessName)
+    const migratedSettings = wsHash && sessName
+      ? await migrateLegacySessionSettings(sessName, wsHash, sessionKey)
+      : null
+    if (migratedSettings) sessionSettings = {...sessionSettings, ...migratedSettings}
+    // 迁移可能跨越一次会话切换，避免旧会话的设置覆盖新会话。
+    if (requestId !== usageRequestId) return
     if (modelsRes.status === 'fulfilled' && modelsRes.value.success) {
       const defaultModel = modelsRes.value.data?.current
         || modelsRes.value.data?.models?.find(model => model.active)?.name
@@ -1311,8 +1365,12 @@ const loadUsage = async (override) => {
       const defaultChannelId = modelsRes.value.data?.currentChannelId
         || modelsRes.value.data?.models?.find(model => model.active)?.channelId
         || ''
-      const selection = sessionModelSelections.value[conversationKey()]
-        || {model: defaultModel, channelId: defaultChannelId}
+      const localSelection = sessionModelSelections.value[sessionKey]
+        || legacySessionModelSelections.value[sessionKey]
+      const selection = {
+        model: localSelection?.model || sessionSettings.model || defaultModel,
+        channelId: localSelection?.channelId || sessionSettings.modelChannelId || defaultChannelId
+      }
       currentModel.value = selection.model
       availableModels.value = (modelsRes.value.data?.models || []).map(model => ({
         ...model,
@@ -1322,11 +1380,13 @@ const loadUsage = async (override) => {
     if (configRes.status === 'fulfilled' && configRes.value.success) {
       defaultModel.value = configuredModel
       defaultModelChannelId.value = configRes.value.data?.modelChannelId || ''
-      if (!currentModel.value) currentModel.value = configuredModel
-      currentReasoningEffort.value = sessionReasoningEfforts.value[conversationKey()]
+      if (!currentModel.value) currentModel.value = sessionSettings.model || configuredModel
+      currentReasoningEffort.value = sessionReasoningEfforts.value[sessionKey]
+        || legacySessionReasoningEfforts.value[sessionKey]
+        || sessionSettings.reasoningEffort
         || configRes.value.data?.reasoningEffort || 'max'
       terminateOnNoToolCall.value = configRes.value.data?.terminateOnNoToolCall !== false
-      currentFastMode.value = sessionFastModes.value[conversationKey()]
+      currentFastMode.value = sessionFastModes.value[sessionKey]
         ?? configRes.value.data?.fastMode ?? false
       currentPermission.value = configRes.value.data?.hitl || 'free'
     }

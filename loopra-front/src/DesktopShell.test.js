@@ -103,7 +103,7 @@ describe('DesktopShell 更新按钮', () => {
 })
 
 describe('DesktopShell 首页右键菜单', () => {
-  it('提供打开需求池、更新和切换主题操作', async () => {
+  it('提供需求池、引导、更新和暗色/浅色操作', async () => {
     const {wrapper, store} = await mountShell()
     const homeButton = wrapper.find('.icon-button')
 
@@ -111,9 +111,13 @@ describe('DesktopShell 首页右键菜单', () => {
 
     const menu = document.body.querySelector('.desktop-shell-context-menu')
     expect(menu).not.toBeNull()
-    expect(menu.textContent).toContain('打开需求池')
+    expect(menu.textContent).toContain('需求池')
+    expect(menu.textContent).toContain('引导')
     expect(menu.textContent).toContain('更新')
-    expect(menu.textContent).toContain('切换主题')
+    expect(menu.textContent).toContain('暗色')
+    expect(menu.textContent).not.toContain('打开需求池')
+    expect(menu.textContent).not.toContain('打开引导')
+    expect(menu.textContent).not.toContain('切换主题')
     expect(homeButton.attributes('aria-expanded')).toBe('true')
 
     const menuItems = menu.querySelectorAll('[role="menuitem"]')
@@ -123,7 +127,7 @@ describe('DesktopShell 首页右键菜单', () => {
     expect(document.body.querySelector('.desktop-shell-context-menu')).toBeNull()
 
     await homeButton.trigger('contextmenu', {clientX: 40, clientY: 30})
-    // 菜单顺序：打开需求池 / 打开引导 / 更新 / 切换主题（引导项为新增）
+    // 菜单顺序：需求池 / 引导 / 更新 / 暗色（当前为浅色主题）
     document.body.querySelectorAll('[role="menuitem"]')[2].click()
     await nextTick()
     expect(window.open).toHaveBeenLastCalledWith(expect.stringContaining('/releases'), '_blank')

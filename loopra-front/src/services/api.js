@@ -400,6 +400,18 @@ export const sessionsAPI = {
     return api.post('/sessions/new', null, { params: params || {} })
   },
 
+  // 获取会话固定的模型、渠道和思考强度
+  getSettings: (name, workspaceHash) => {
+    const params = workspaceHash ? { workspaceHash } : {}
+    return api.get(`/sessions/${sessionPathName(name)}/settings`, { params })
+  },
+
+  // 更新会话固定的模型、渠道和思考强度（未提供的字段由后端保持不变）
+  setSettings: (name, workspaceHash, settings) => {
+    const params = workspaceHash ? { workspaceHash } : {}
+    return api.put(`/sessions/${sessionPathName(name)}/settings`, settings || {}, { params })
+  },
+
   // 按助手消息持久化的 diff 反向回打补丁，不影响会话历史
   revertFileChanges: (workspaceHash, changes) => {
     return api.post('/sessions/file-changes/revert', { workspaceHash, changes })

@@ -464,6 +464,21 @@ public class AgentLoop implements
         return modelProvider.getMaxContextTokens();
     }
 
+    /** 获取当前会话使用的模型。 */
+    public String getModel() {
+        return modelProvider.getModel();
+    }
+
+    /** 获取当前会话使用的模型渠道。 */
+    public String getModelChannelId() {
+        return modelProvider.getModelChannelId();
+    }
+
+    /** 获取当前会话使用的思考强度。 */
+    public String getReasoningEffort() {
+        return modelProvider.getReasoningEffort();
+    }
+
     /** 运行时切换模型（热更新） */
     public void setModel(String model) {
         modelProvider.setModel(model);

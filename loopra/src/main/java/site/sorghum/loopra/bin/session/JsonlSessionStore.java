@@ -696,6 +696,46 @@ public class JsonlSessionStore implements SessionStore {
         return mode == null || mode.isBlank() ? "manual" : mode;
     }
 
+    @Override
+    public SessionModelSettings getModelSettings(String name) {
+        org.noear.snack4.ONode meta = readMeta(name);
+        if (meta == null) return new SessionModelSettings(null, null, null);
+        return new SessionModelSettings(
+                metaString(meta, "model"),
+                metaString(meta, "modelChannelId"),
+                metaString(meta, "reasoningEffort"));
+    }
+
+    @Override
+    public void setModelSettings(String name, String model, String modelChannelId,
+                                 String reasoningEffort) {
+        try {
+            writeMeta(name, node -> {
+                setMetaString(node, "model", model);
+                setMetaString(node, "modelChannelId", modelChannelId);
+                setMetaString(node, "reasoningEffort", reasoningEffort);
+            });
+        } catch (IOException e) {
+            log.warn("[jsonl] 持久化会话模型设置失败: {}", e.getMessage());
+        }
+    }
+
+    private static String metaString(org.noear.snack4.ONode meta, String key) {
+        if (meta == null) return null;
+        org.noear.snack4.ONode valueNode = meta.get(key);
+        if (valueNode == null || valueNode.isNull()) return null;
+        String value = valueNode.getString();
+        return value == null || value.isBlank() ? null : value.trim();
+    }
+
+    private static void setMetaString(org.noear.snack4.ONode meta, String key, String value) {
+        if (value == null || value.isBlank()) {
+            meta.remove(key);
+        } else {
+            meta.set(key, value.trim());
+        }
+    }
+
     /** 从已解析的 .meta 节点读取隔离分支模式标记（兼容缺失/非布尔字段）。 */
     private static boolean worktreeModeOf(org.noear.snack4.ONode meta) {
         if (meta == null) return false;

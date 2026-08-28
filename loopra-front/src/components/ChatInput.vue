@@ -1016,7 +1016,15 @@ const handleSend = () => {
     collapsedParts.push(`调用技能：\n${skillLines}`)
   }
   if (selectedProjects.value.length > 0) {
-    const projectLines = selectedProjects.value.map(project => `- ${project.name || project.path}`).join('\n')
+    const projectLines = selectedProjects.value.map(project => {
+      const name = project.name || project.path || project.hash || '未命名项目'
+      const details = [
+        `- 名称: ${name}`,
+        project.hash ? `  hash: ${project.hash}` : '',
+        project.path ? `  根目录: ${project.path}` : ''
+      ].filter(Boolean)
+      return details.join('\n')
+    }).join('\n')
     collapsedParts.push(`关联项目：\n${projectLines}`)
   }
   if (selectedElementContexts.value.length > 0) {

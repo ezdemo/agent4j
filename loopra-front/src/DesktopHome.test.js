@@ -69,16 +69,40 @@ describe('DesktopHome 项目拖拽排序', () => {
     expect(projectNames(wrapper)).toEqual(['A', 'B', 'C'])
   })
 
-  it('左下角菜单精简：需求池/技能/设置文字入口 + 工具图标，子代理/数据面板已收进设置页', async () => {
+  it('左下角菜单精简：常用入口外露，低频工具收进更多菜单', async () => {
     await flushPromises()
     const menuButtons = wrapper.findAll('.desktop-project-footer-menu > button')
     expect(menuButtons.map((button) => button.text().trim())).toEqual(['需求池', '技能'])
     expect(wrapper.find('.desktop-project-footer-settings').text()).toContain('设置')
-    expect(wrapper.find('.desktop-sub-agents-button').exists()).toBe(true)
-    expect(wrapper.find('.desktop-tools-button').exists()).toBe(true)
-    expect(wrapper.find('.desktop-theme-button').exists()).toBe(true)
+    expect(wrapper.find('.desktop-more-button').text()).toContain('更多')
+    expect(wrapper.find('.desktop-footer-more-menu').exists()).toBe(false)
     expect(wrapper.text()).not.toContain('子代理')
-    expect(wrapper.text()).not.toContain('数据面板')
+  })
+
+  it('打开更多菜单后可访问低频工具，选择工具后自动收起', async () => {
+    await flushPromises()
+    await wrapper.find('.desktop-more-button').trigger('click')
+
+    const moreMenu = wrapper.find('.desktop-footer-more-menu')
+    expect(moreMenu.exists()).toBe(true)
+    expect(moreMenu.text()).toContain('子代理')
+    expect(moreMenu.text()).toContain('工具')
+    expect(moreMenu.text()).toContain('深色模式')
+
+    const toolsButton = moreMenu.findAll('.desktop-footer-more-item').find((button) => button.text().trim() === '工具')
+    await toolsButton.trigger('click')
+    expect(wrapper.emitted('open-tools')).toBeTruthy()
+    expect(wrapper.find('.desktop-footer-more-menu').exists()).toBe(false)
+  })
+
+  it('点击其他底部入口时自动收起更多菜单', async () => {
+    await flushPromises()
+    await wrapper.find('.desktop-more-button').trigger('click')
+    expect(wrapper.find('.desktop-footer-more-menu').exists()).toBe(true)
+
+    await wrapper.findAll('.desktop-project-footer-menu > button')[0].trigger('click')
+    expect(wrapper.emitted('open-requirement-board')).toBeTruthy()
+    expect(wrapper.find('.desktop-footer-more-menu').exists()).toBe(false)
   })
 
   it('拖拽过程中列表保持不动，仅显示插入指示，drop 后按新顺序发出 reorder-workspaces', async () => {

@@ -65,38 +65,41 @@
         </div>
         <div class="desktop-project-footer">
           <div class="desktop-project-footer-menu">
-            <button type="button" title="需求池" aria-label="需求池" @click="emit('open-requirement-board')">
+            <button type="button" title="需求池" aria-label="需求池" @click="runFooterAction('open-requirement-board')">
               <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><rect x="3" y="3" width="18" height="18" rx="2"/><path d="M3 9h18M9 21V9"/></svg>
               需求池
             </button>
-            <button type="button" @click="emit('open-skills')">
+            <button type="button" @click="runFooterAction('open-skills')">
               <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="m12 3-1.9 5.8a2 2 0 0 1-1.3 1.3L3 12l5.8 1.9a2 2 0 0 1 1.3 1.3L12 21l1.9-5.8a2 2 0 0 1 1.3-1.3L21 12l-5.8-1.9a2 2 0 0 1-1.3-1.3L12 3Z"/><path d="M5 3v4"/><path d="M19 17v4"/><path d="M3 5h4"/><path d="M17 19h4"/></svg>
               技能
             </button>
           </div>
           <div class="desktop-project-footer-settings">
-            <button type="button" @click="emit('open-settings')">
+            <button type="button" @click="runFooterAction('open-settings')">
               <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1-2.83 2.83l-.06-.06A1.65 1.65 0 0 0 15.14 19a1.65 1.65 0 0 0-1 1.51V20.6a2 2 0 0 1-4 0v-.09a1.65 1.65 0 0 0-1-1.51 1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 1 1-2.83-2.83l.06-.06A1.65 1.65 0 0 0 4.86 15a1.65 1.65 0 0 0-1.51-1H3.4a2 2 0 0 1 0-4h.09A1.65 1.65 0 0 0 5 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 1 1 2.83-2.83l.06.06A1.65 1.65 0 0 0 9.32 4a1.65 1.65 0 0 0 1-1.51V2.4a2 2 0 0 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 1 1 2.83 2.83l-.06.06A1.65 1.65 0 0 0 19 8.32a1.65 1.65 0 0 0 1.51 1h.09a2 2 0 0 1 0 4h-.09a1.65 1.65 0 0 0-1.11 1.68Z"/></svg>
               设置
             </button>
-            <div class="desktop-project-footer-tools">
-              <button class="desktop-sub-agents-button" type="button" title="子代理" aria-label="子代理" @click="emit('open-sub-agents')">
-                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><circle cx="9" cy="8" r="3"/><path d="M3.5 19v-1.5A4.5 4.5 0 0 1 8 13h2a4.5 4.5 0 0 1 4.5 4.5V19"/><circle cx="17" cy="9" r="2.5"/><path d="M15.5 14.2A4 4 0 0 1 21 18v1"/></svg>
+            <div class="desktop-project-footer-more" @click.stop>
+              <button class="desktop-more-button" type="button" :class="{ active: footerMoreOpen }" :aria-expanded="footerMoreOpen" aria-haspopup="menu" title="更多" aria-label="更多" @click="toggleFooterMore">
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2"><circle cx="5" cy="12" r="1"/><circle cx="12" cy="12" r="1"/><circle cx="19" cy="12" r="1"/></svg>
+                <span>更多</span>
               </button>
-              <ServiceProcessManager placement="top" />
-              <button class="desktop-tools-button" type="button" title="工具" aria-label="工具" @click="emit('open-tools')">
-                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M14.7 6.3a1 1 0 0 0 0 1.4l1.6 1.6a1 1 0 0 0 1.4 0l3.77-3.77a6 6 0 0 1-7.94 7.94l-6.91 6.91a2.12 2.12 0 0 1-3-3l6.91-6.91a6 6 0 0 1 7.94-7.94l-3.76 3.76z"/></svg>
-              </button>
-              <button
-                class="desktop-theme-button"
-                type="button"
-                :title="theme === 'dark' ? '切换为浅色模式' : '切换为深色模式'"
-                :aria-label="theme === 'dark' ? '切换为浅色模式' : '切换为深色模式'"
-                @click="emit('toggle-theme')"
-              >
-                <svg v-if="theme === 'dark'" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><circle cx="12" cy="12" r="4"/><path d="M12 2v2M12 20v2M4.93 4.93l1.41 1.41M17.66 17.66l1.41 1.41M2 12h2M20 12h2M4.93 19.07l1.41-1.41M17.66 6.34l1.41-1.41"/></svg>
-                <svg v-else viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M20.2 14.1A8.5 8.5 0 0 1 9.9 3.8 8.5 8.5 0 1 0 20.2 14.1Z"/></svg>
-              </button>
+              <div v-if="footerMoreOpen" class="desktop-footer-more-menu" role="menu">
+                <button class="desktop-footer-more-item" type="button" role="menuitem" @click="runFooterAction('open-sub-agents')">
+                  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><circle cx="9" cy="8" r="3"/><path d="M3.5 19v-1.5A4.5 4.5 0 0 1 8 13h2a4.5 4.5 0 0 1 4.5 4.5V19"/><circle cx="17" cy="9" r="2.5"/><path d="M15.5 14.2A4 4 0 0 1 21 18v1"/></svg>
+                  <span>子代理</span>
+                </button>
+                <button class="desktop-footer-more-item" type="button" role="menuitem" @click="runFooterAction('open-tools')">
+                  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M14.7 6.3a1 1 0 0 0 0 1.4l1.6 1.6a1 1 0 0 0 1.4 0l3.77-3.77a6 6 0 0 1-7.94 7.94l-6.91 6.91a2.12 2.12 0 0 1-3-3l6.91-6.91a6 6 0 0 1 7.94-7.94l-3.76 3.76z"/></svg>
+                  <span>工具</span>
+                </button>
+                <ServiceProcessManager placement="top" :show-label="true" />
+                <button class="desktop-footer-more-item" type="button" role="menuitem" @click="runFooterAction('toggle-theme')">
+                  <svg v-if="theme === 'dark'" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><circle cx="12" cy="12" r="4"/><path d="M12 2v2M12 20v2M4.93 4.93l1.41 1.41M17.66 17.66l1.41 1.41M2 12h2M20 12h2M4.93 19.07l1.41-1.41M17.66 6.34l1.41-1.41"/></svg>
+                  <svg v-else viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M20.2 14.1A8.5 8.5 0 0 1 9.9 3.8 8.5 8.5 0 1 0 20.2 14.1Z"/></svg>
+                  <span>{{ theme === 'dark' ? '浅色模式' : '深色模式' }}</span>
+                </button>
+              </div>
             </div>
           </div>
         </div>
@@ -250,6 +253,7 @@ const draggingHash = ref('')
 const dragOverHash = ref('')
 const dragOverBefore = ref(false)
 const contextMenu = reactive({ visible: false, type: '', item: null, x: 0, y: 0 })
+const footerMoreOpen = ref(false)
 // 会话重命名弹窗
 const renameDialog = reactive({ visible: false, item: null, value: '' })
 const renaming = ref(false)
@@ -525,6 +529,21 @@ function closeContextMenu() {
   contextMenu.item = null
 }
 
+function toggleFooterMore() {
+  closeContextMenu()
+  footerMoreOpen.value = !footerMoreOpen.value
+}
+
+function closeFooterMore() {
+  footerMoreOpen.value = false
+}
+
+function runFooterAction(action) {
+  closeContextMenu()
+  closeFooterMore()
+  emit(action)
+}
+
 async function copyWorkspacePath(workspace) {
   const text = String(workspace?.path || '').trim()
   if (!text) {
@@ -629,18 +648,23 @@ watch(sessions, (list) => {
     if (!kept.length) sessionSelectionAnchor = null
   }
 })
+function onWindowClick() {
+  closeContextMenu()
+  closeFooterMore()
+}
 function onWindowKeydown(event) {
   if (event.key === 'Escape') {
     closeContextMenu()
+    closeFooterMore()
     if (renameDialog.visible) closeRenameDialog()
   }
 }
 onMounted(() => {
-  window.addEventListener('click', closeContextMenu)
+  window.addEventListener('click', onWindowClick)
   window.addEventListener('keydown', onWindowKeydown)
 })
 onBeforeUnmount(() => {
-  window.removeEventListener('click', closeContextMenu)
+  window.removeEventListener('click', onWindowClick)
   window.removeEventListener('keydown', onWindowKeydown)
 })
 </script>
@@ -663,7 +687,23 @@ onBeforeUnmount(() => {
     .desktop-project, .desktop-session { width: 100%; height: 32px; display: flex; align-items: center; gap: 8px; border: 0; border-radius: 5px; background: transparent; color: var(--fg-2, #525866); font: inherit; font-size: 13px; text-align: left; cursor: pointer; padding: 0 8px; box-sizing: border-box; }.desktop-project:hover, .desktop-session:hover, .desktop-project.active { background: var(--bg-3, #f2f3f5); color: var(--fg, #202124); }.desktop-project > span:last-child, .desktop-session-name { overflow: hidden; white-space: nowrap; text-overflow: ellipsis; min-width: 0; flex: 1; }.desktop-project.selected, .desktop-session.selected { background: var(--bg-3, #f2f3f5); color: var(--fg, #202124); }.desktop-session-time { flex: 0 0 auto; margin-left: auto; color: var(--fg-4, #9ca3af); font-size: 12px; font-variant-numeric: tabular-nums; white-space: nowrap; pointer-events: none; }.desktop-project-check, .desktop-session-check { width: 15px; height: 15px; display: inline-flex; align-items: center; justify-content: center; flex: 0 0 auto; border: 1px solid var(--fg-4, #9ca3af); border-radius: 3px; color: #fff; opacity: 0; transition: opacity .12s ease, background-color .12s ease, border-color .12s ease; }.desktop-project:hover .desktop-project-check, .desktop-project.selected .desktop-project-check, .desktop-session:hover .desktop-session-check, .desktop-session.selected .desktop-session-check { opacity: 1; }.desktop-project-check.checked, .desktop-session-check.checked { background: var(--accent, #4f7cff); border-color: var(--accent, #4f7cff); opacity: 1; }.desktop-session { font-weight: 400; }.desktop-home-muted { padding: 12px 8px; color: var(--fg-4, #9ca3af); font-size: 12px; }
 .desktop-project.dragging { opacity: 0.55; }.desktop-project.drag-over-before, .desktop-project.drag-over-after { background: var(--accent-bg, var(--bg-3, #f2f3f5)); }.desktop-project.drag-over-before { box-shadow: inset 0 2px 0 0 var(--blue, #52525b); }.desktop-project.drag-over-after { box-shadow: inset 0 -2px 0 0 var(--blue, #52525b); }
 .desktop-monogram { width: 17px; height: 17px; display: inline-flex; align-items: center; justify-content: center; flex: 0 0 auto; border-radius: 4px; color: #fff; font-size: 11px; font-weight: 700; line-height: 1; text-shadow: 0 1px rgba(0, 0, 0, 0.25); box-shadow: inset 0 1px rgba(255, 255, 255, 0.25), 0 1px 1px rgba(0, 0, 0, 0.16); }.desktop-monogram.tone-0 { background: linear-gradient(135deg, #8b95a3, #5e6878); }.desktop-monogram.tone-1 { background: linear-gradient(135deg, #3dd0e8, #18b4d0); }.desktop-monogram.tone-2 { background: linear-gradient(135deg, #ffa86b, #ff7a3d); }.desktop-monogram.tone-3 { background: linear-gradient(135deg, #9aacf5, #6d80e8); }.desktop-monogram.tone-4 { background: linear-gradient(135deg, #6dd49d, #3eb878); }.desktop-monogram.tone-5 { background: linear-gradient(135deg, #f87fb5, #e85a9c); }.desktop-monogram.tone-6 { background: linear-gradient(135deg, #fcd34d, #f5b800); }.desktop-monogram.tone-7 { background: linear-gradient(135deg, #4dd9a6, #20c084); }.desktop-session-monogram { background: linear-gradient(135deg, #737373, #4c4c4c); }
-.desktop-project-footer { display: flex; flex-direction: column; gap: 2px; padding-top: 8px; border-top: 1px solid var(--border, #e8e8e8); flex: 0 0 auto; }.desktop-project-footer-menu { display: grid; gap: 2px; }.desktop-project-footer-menu > button { width: 100%; }.desktop-project-footer-settings { display: flex; align-items: center; }.desktop-project-footer-settings > button { min-width: 0; flex: 1; }.desktop-project-footer-tools { display: flex; align-items: center; gap: 4px; margin-left: auto; }.desktop-project-footer-tools .desktop-sub-agents-button, .desktop-project-footer-tools .desktop-tools-button, .desktop-project-footer-tools .desktop-theme-button { width: 32px; justify-content: center; }.desktop-project-footer button { height: 32px; display: flex; align-items: center; gap: 8px; padding: 0 8px; border: 0; border-radius: 5px; background: transparent; color: var(--fg-3, #727987); font: inherit; font-size: 13px; cursor: pointer; }.desktop-project-footer button:hover { background: var(--bg-3, #f2f3f5); color: var(--fg, #202124); }.desktop-project-footer svg { width: 16px; height: 16px; }
+.desktop-project-footer { position: relative; display: flex; flex-direction: column; gap: 3px; padding-top: 10px; border-top: 1px solid var(--border, #e8e8e8); flex: 0 0 auto; }
+.desktop-project-footer-menu { display: grid; gap: 2px; }
+.desktop-project-footer-menu > button { width: 100%; }
+.desktop-project-footer-settings { display: flex; align-items: center; gap: 2px; }
+.desktop-project-footer-settings > button:first-child { min-width: 0; flex: 1; }
+.desktop-project-footer-more { position: relative; flex: 0 0 82px; }
+.desktop-project-footer button { height: 32px; display: flex; align-items: center; gap: 8px; padding: 0 8px; border: 0; border-radius: 5px; background: transparent; color: var(--fg-3, #727987); font: inherit; font-size: 13px; cursor: pointer; }
+.desktop-project-footer button:hover, .desktop-project-footer button.active { background: var(--bg-3, #f2f3f5); color: var(--fg, #202124); }
+.desktop-project-footer svg { width: 16px; height: 16px; flex: 0 0 auto; }
+.desktop-more-button { width: 100%; }
+.desktop-footer-more-menu { position: absolute; right: 0; bottom: calc(100% + 8px); z-index: 500; width: 190px; padding: 4px; border: 1px solid var(--border, #e5e7eb); border-radius: 8px; background: var(--bg, #fff); box-shadow: var(--shadow-lg, 0 10px 28px rgba(0, 0, 0, 0.16)); }
+.desktop-footer-more-item { width: 100%; justify-content: flex-start; }
+.desktop-footer-more-item:hover { background: var(--bg-3, #f2f3f5); }
+.desktop-footer-more-menu :deep(.service-manager) { width: 100%; }
+.desktop-footer-more-menu :deep(.tb-service-btn) { width: 100%; height: 32px; justify-content: flex-start; gap: 8px; padding: 0 8px; border: 0; border-radius: 5px; background: transparent; color: var(--fg-3, #727987); font: inherit; font-size: 13px; cursor: pointer; }
+.desktop-footer-more-menu :deep(.tb-service-btn:hover), .desktop-footer-more-menu :deep(.tb-service-btn.active) { background: var(--bg-3, #f2f3f5); color: var(--fg, #202124); }
+.desktop-footer-more-menu :deep(.tb-service-btn > svg) { width: 16px; height: 16px; }
 .desktop-heading-actions .desktop-delete-selected { display: inline-flex; align-items: center; gap: 4px; height: 24px; padding: 2px 8px; border-radius: 5px; background: rgba(220, 38, 38, 0.09); color: #c2413b; font-size: 12px; font-weight: 600; }.desktop-heading-actions .desktop-delete-selected:hover { background: rgba(220, 38, 38, 0.15); color: #b42318; }.desktop-delete-selected svg { width: 12px; height: 12px; }.desktop-heading-actions .desktop-clear-selection { display: inline-flex; align-items: center; justify-content: center; width: 24px; height: 24px; padding: 3px; border-radius: 5px; color: var(--fg-3, #727987); }.desktop-heading-actions .desktop-clear-selection:hover { background: var(--bg-3, #f2f3f5); color: var(--fg, #202124); }.desktop-clear-selection svg { width: 13px; height: 13px; }
 .desktop-heading-title { display: flex; align-items: center; gap: 6px; min-width: 0; }.desktop-heading-title > span { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .desktop-home-heading .desktop-multi-toggle { display: inline-flex; align-items: center; justify-content: center; width: 24px; height: 24px; padding: 3px; box-sizing: border-box; flex: 0 0 24px; color: var(--fg-3, #727987); }.desktop-home-heading .desktop-multi-toggle:hover { background: var(--bg-3, #f2f3f5); color: var(--fg, #202124); }.desktop-home-heading .desktop-multi-toggle.active { background: color-mix(in srgb, var(--accent) 14%, transparent); color: var(--accent); }.desktop-multi-toggle svg { width: 15px; height: 15px; }

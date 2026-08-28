@@ -103,11 +103,11 @@
       >
         <button type="button" role="menuitem" @click="chooseHomeContextAction('open-requirement-board')">
           <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><rect x="3" y="3" width="18" height="18" rx="2"/><path d="M3 9h18M9 21V9"/></svg>
-          打开需求池
+          需求池
         </button>
         <button type="button" role="menuitem" @click="chooseHomeContextAction('open-onboarding')">
           <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M15 4V2M15 10V8M11.5 5.5H9.5M20.5 5.5H18.5M17.99 8.5 19.5 10M12.01 8.5 10.5 10"/><path d="m3 21 8-8"/></svg>
-          打开引导
+          引导
         </button>
         <button type="button" role="menuitem" @click="chooseHomeContextAction('open-update')">
           <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>
@@ -116,12 +116,12 @@
         <button
           type="button"
           role="menuitem"
-          :title="theme === 'dark' ? '切换为浅色主题' : '切换为深色主题'"
+          :title="theme === 'dark' ? '浅色' : '暗色'"
           @click="chooseHomeContextAction('toggle-theme')"
         >
           <svg v-if="theme === 'dark'" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><circle cx="12" cy="12" r="4"/><path d="M12 2v2M12 20v2M4.93 4.93l1.41 1.41M17.66 17.66l1.41 1.41M2 12h2M20 12h2M4.93 19.07l1.41-1.41M17.66 6.34l1.41-1.41"/></svg>
           <svg v-else viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M20.2 14.1A8.5 8.5 0 0 1 9.9 3.8 8.5 8.5 0 1 0 20.2 14.1Z"/></svg>
-          切换主题
+          {{ theme === 'dark' ? '浅色' : '暗色' }}
         </button>
       </div>
       <div
