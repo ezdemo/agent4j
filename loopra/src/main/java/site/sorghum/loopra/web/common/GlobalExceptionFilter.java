@@ -27,11 +27,9 @@ public class GlobalExceptionFilter implements Filter {
 
     @Override
     public void doFilter(Context ctx, FilterChain chain) {
-        // CORS 头：所有响应都加上
-        ctx.headerSet("Access-Control-Allow-Origin", "*");
-        ctx.headerSet("Access-Control-Allow-Methods", "GET, POST, PUT, DELETE, PATCH, OPTIONS");
-        ctx.headerSet("Access-Control-Allow-Headers", "*");
-        ctx.headerSet("Access-Control-Max-Age", "3600");
+        // 异常响应也必须保留 MCP 浏览器客户端需要的 CORS 头。
+        // 不能使用 "*" 配合 credentials；这里按请求 Origin 精确返回，且不启用凭证。
+        applyCorsHeaders(ctx);
 
         // OPTIONS 预检请求直接放行
         if ("OPTIONS".equals(ctx.method())) {
@@ -48,5 +46,21 @@ public class GlobalExceptionFilter implements Filter {
             log.error("GlobalExceptionFilter error", e);
             ctx.outputAsJson(ApiResponse.fail(e.getMessage()).toString());
         }
+    }
+
+    private static void applyCorsHeaders(Context ctx) {
+        String origin = ctx.header("Origin");
+        if (origin == null || origin.isBlank()) {
+            return;
+        }
+
+        ctx.headerSet("Access-Control-Allow-Origin", origin);
+        ctx.headerSet("Access-Control-Allow-Methods", "GET, POST, PUT, DELETE, PATCH, OPTIONS");
+        String requestedHeaders = ctx.header("Access-Control-Request-Headers");
+        ctx.headerSet("Access-Control-Allow-Headers",
+                requestedHeaders == null || requestedHeaders.isBlank() ? "*" : requestedHeaders);
+        ctx.headerSet("Access-Control-Expose-Headers", "Mcp-Session-Id");
+        ctx.headerSet("Access-Control-Max-Age", "3600");
+        ctx.headerSet("Vary", "Origin");
     }
 }

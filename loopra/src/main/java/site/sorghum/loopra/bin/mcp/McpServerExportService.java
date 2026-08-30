@@ -464,7 +464,8 @@ public class McpServerExportService implements EventListener<AppLoadEndEvent> {
 
         @Override
         public String title() {
-            return delegate.title();
+            String title = delegate.title();
+            return title == null || title.isBlank() ? readableToolTitle(name()) : title;
         }
 
         @Override
@@ -512,6 +513,30 @@ public class McpServerExportService implements EventListener<AppLoadEndEvent> {
         public void metaPut(String key, Object value) {
             delegate.metaPut(key, value);
         }
+    }
+
+    /**
+     * MCP 的 title 是可选字段，但 ChatGPT 等客户端对空字符串的兼容性不一致。
+     * Loopra 的工具大多只有机器可读的 snake_case 名称，这里提供稳定的人类可读回退值。
+     */
+    static String readableToolTitle(String toolName) {
+        if (toolName == null || toolName.isBlank()) {
+            return "Loopra Tool";
+        }
+
+        String normalized = toolName.trim()
+                .replaceAll("([a-z0-9])([A-Z])", "$1 $2")
+                .replace('-', ' ')
+                .replace('_', ' ')
+                .replaceAll("\\s+", " ");
+        StringBuilder title = new StringBuilder(normalized.length());
+        for (String word : normalized.split(" ")) {
+            if (word.isBlank()) continue;
+            if (title.length() > 0) title.append(' ');
+            title.append(Character.toUpperCase(word.charAt(0)));
+            if (word.length() > 1) title.append(word.substring(1));
+        }
+        return title.length() == 0 ? "Loopra Tool" : title.toString();
     }
 
     private Map<String, Object> withRuntimeContext(Map<String, Object> args) {

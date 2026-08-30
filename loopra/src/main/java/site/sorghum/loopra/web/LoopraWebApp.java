@@ -36,8 +36,16 @@ public class LoopraWebApp {
         // 启动 Solon Web 服务
         Solon.start(LoopraWebApp.class, args);
 
-        // 全局 CORS 处理（优先级 -1 确保最先执行）
-        Solon.app().router().filter(-1, new CrossFilter().allowedOrigins("*"));
+        // 全局 CORS 处理（优先级 -1 确保最先执行）。
+        // Streamable HTTP 的浏览器客户端需要读取初始化响应中的会话 ID；
+        // 未显式暴露该响应头时，MCP Inspector Web 会报 Failed to fetch。
+        // MCP 使用 Mcp-Session-Id 管理会话，不依赖浏览器 Cookie；
+        // 因此允许任意来源时必须关闭 credentials，否则响应会同时包含
+        // "Access-Control-Allow-Origin: *" 和 credentials=true，浏览器会拒绝它。
+        Solon.app().router().filter(-1, new CrossFilter()
+                .allowedOrigins("*")
+                .allowCredentials(false)
+                .exposedHeaders("Mcp-Session-Id"));
 
         System.out.printf("""
                 [Web Interface]: http://127.0.0.1:%s/index.html

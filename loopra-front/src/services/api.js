@@ -938,6 +938,26 @@ export const mcpAPI = {
     // 刷新 Loopra 内置工具 MCP 发布清单 - POST /api/mcp/export/refresh
     refreshExportTools: () => {
         return api.post('/mcp/export/refresh')
+    },
+
+    // 获取 Cloudflare Quick Tunnel 状态 - GET /api/mcp/tunnel
+    getTunnelStatus: () => {
+        return api.get('/mcp/tunnel')
+    },
+
+    // 保存 Cloudflare Quick Tunnel 配置 - PUT /api/mcp/tunnel/config
+    saveTunnelConfig: (config) => {
+        return api.put('/mcp/tunnel/config', config)
+    },
+
+    // 启动 Cloudflare Quick Tunnel - POST /api/mcp/tunnel/start
+    startTunnel: (config) => {
+        return api.post('/mcp/tunnel/start', config)
+    },
+
+    // 停止 Cloudflare Quick Tunnel - POST /api/mcp/tunnel/stop
+    stopTunnel: () => {
+        return api.post('/mcp/tunnel/stop')
     }
 }
 

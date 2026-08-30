@@ -1006,6 +1006,89 @@
                   </template>
                 </div>
 
+                <!-- ========== Cloudflare Quick Tunnel ========== -->
+                <div class="mcp-tunnel-panel">
+                  <div class="mcp-tunnel-header">
+                    <div>
+                      <h4>Cloudflare Tunnel 内网穿透</h4>
+                      <p>通过 Java 管理 cloudflared，将当前 MCP endpoint 临时发布到公网</p>
+                    </div>
+                    <span :class="`is-${mcpTunnel.state || 'stopped'}`" class="mcp-tunnel-badge">
+                      {{ mcpTunnelStateLabel }}
+                    </span>
+                  </div>
+
+                  <div v-if="mcpTunnelLoading" class="mcp-tunnel-loading">
+                    <svg class="animate-spin" fill="none" height="16" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24" width="16">
+                      <path d="M21 12a9 9 0 11-6.219-8.56"/>
+                    </svg>
+                    正在检测 cloudflared...
+                  </div>
+
+                  <template v-else>
+                    <div v-if="mcpTunnel.error" class="mcp-tunnel-error">
+                      {{ mcpTunnel.error }}
+                    </div>
+                    <div v-if="!mcpTunnel.installed" class="mcp-tunnel-warning">
+                      未检测到 cloudflared。请先安装并加入 PATH，或填写下面的可执行文件路径。
+                      <a href="https://developers.cloudflare.com/tunnel/downloads/" rel="noreferrer" target="_blank">安装说明</a>
+                    </div>
+                    <div v-if="!mcpExport.enabled" class="mcp-tunnel-warning">
+                      请先启用上面的 Loopra MCP 工具发布配置。
+                    </div>
+
+                    <div class="mcp-tunnel-fields">
+                      <div class="mcp-tunnel-field">
+                        <label>cloudflared 路径（可选）</label>
+                        <input
+                          v-model="mcpTunnelConfig.executablePath"
+                          class="form-input"
+                          placeholder="PATH 中的 cloudflared 或完整文件路径"
+                        />
+                      </div>
+                    </div>
+
+                    <div class="mcp-tunnel-footer">
+                      <div class="mcp-tunnel-url">
+                        <template v-if="mcpTunnel.publicUrl">
+                          <span>公网 MCP 地址</span>
+                          <code>{{ mcpTunnel.publicUrl }}</code>
+                          <button class="btn btn-ghost btn-xs" type="button" @click="copyMcpTunnelUrl">复制</button>
+                        </template>
+                        <template v-else>
+                          <span>本地 MCP 地址</span>
+                          <code>{{ mcpTunnel.localUrl || mcpExportEndpointUrl }}</code>
+                        </template>
+                      </div>
+                      <div class="mcp-tunnel-actions">
+                        <button
+                          :disabled="mcpTunnelSaving"
+                          class="btn btn-ghost btn-sm"
+                          type="button"
+                          @click="saveMcpTunnelConfig"
+                        >{{ mcpTunnelSaving ? '保存中...' : '保存路径' }}</button>
+                        <button
+                          v-if="mcpTunnel.running || ['starting', 'stopping'].includes(mcpTunnel.state)"
+                          :disabled="mcpTunnelStopping || mcpTunnel.state === 'stopping'"
+                          class="btn btn-danger btn-sm"
+                          type="button"
+                          @click="stopMcpTunnel"
+                        >{{ mcpTunnelStopping || mcpTunnel.state === 'stopping' ? '停止中...' : '停止隧道' }}</button>
+                        <button
+                          v-else
+                          :disabled="mcpTunnelStarting || !mcpExport.enabled || mcpExport.channel === 'sse'"
+                          class="btn btn-primary btn-sm"
+                          type="button"
+                          @click="startMcpTunnel"
+                        >{{ mcpTunnelStarting ? '启动中...' : '启动临时隧道' }}</button>
+                      </div>
+                    </div>
+                    <p class="mcp-tunnel-hint">
+                      Quick Tunnel 地址临时随机，应用退出后失效；只代理 MCP 路径，不会暴露其它 Loopra 页面。Quick Tunnel 不支持 SSE，请使用 Streamable HTTP。
+                    </p>
+                  </template>
+                </div>
+
                 <!-- 加载中 -->
                 <div v-if="mcpLoading" class="mcp-state-box">
                   <svg class="animate-spin" fill="none" height="24" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24" width="24">
@@ -1991,7 +2074,7 @@ X-Custom-Header=value"
 </template>
 
 <script setup>
-import {computed, defineAsyncComponent, h, onMounted, reactive, ref, watch} from 'vue'
+import {computed, defineAsyncComponent, h, onBeforeUnmount, onMounted, reactive, ref, watch} from 'vue'
 import {message, Modal} from 'ant-design-vue'
 import {useAppStore} from '../stores/app'
 import {
@@ -2881,8 +2964,12 @@ watch(settings, () => {
 // 监听 Tab 切换
 watch(activeTab, async (tab) => {
   if (tab === 'mcp') {
-    if (mcpServers.value.length === 0) loadMcpServers()
-    if (!mcpExportLoaded.value) loadMcpExport()
+    // MCP 状态在本文件后段声明；延后一轮微任务，兼容以 MCP 页签直接打开设置。
+    queueMicrotask(() => {
+      if (mcpServers.value.length === 0) loadMcpServers()
+      if (!mcpExportLoaded.value) loadMcpExport()
+      if (!mcpTunnelLoaded.value) loadMcpTunnel()
+    })
   }
   if (tab === 'lsp' && lspServers.value.length === 0) {
     loadLspServers()
@@ -3563,6 +3650,32 @@ const mcpExport = reactive({
   endpoint: '/mcp'
 })
 
+// Cloudflare Quick Tunnel
+const mcpTunnelLoading = ref(false)
+const mcpTunnelSaving = ref(false)
+const mcpTunnelStarting = ref(false)
+const mcpTunnelStopping = ref(false)
+const mcpTunnelLoaded = ref(false)
+const mcpTunnelConfig = reactive({
+  executablePath: ''
+})
+const mcpTunnel = reactive({
+  state: 'stopped',
+  running: false,
+  installed: false,
+  quickTunnel: true,
+  mcpReady: false,
+  platform: '',
+  configuredExecutablePath: '',
+  executablePath: '',
+  localUrl: '',
+  publicUrl: '',
+  mcpEndpoint: '/mcp',
+  error: '',
+  pid: 0
+})
+let mcpTunnelPollTimer = null
+
 // 计算属性
 const mcpDisallowedSet = computed(() => new Set(mcpDisallowedTools.value))
 
@@ -3592,6 +3705,14 @@ const mcpExportEndpointUrl = computed(() => {
     : ''
   return `${origin}${endpoint}`
 })
+
+const mcpTunnelStateLabel = computed(() => ({
+  stopped: '未启动',
+  starting: '连接中',
+  running: '已发布',
+  stopping: '停止中',
+  error: '异常'
+}[mcpTunnel.state] || '未启动'))
 
 const mcpFormValid = computed(() => {
   if (!mcpForm.name || !/^[a-zA-Z0-9_-]+$/.test(mcpForm.name)) return false
@@ -3772,6 +3893,7 @@ async function saveMcpExport() {
     if (res.success !== false) {
       applyMcpExportConfig(res.data || {})
       message.success('Loopra MCP 发布配置已保存')
+      if (mcpTunnelLoaded.value) loadMcpTunnel()
     } else {
       message.error(res.error || '保存失败')
     }
@@ -3797,6 +3919,144 @@ async function refreshMcpExportTools() {
     message.error('刷新失败: ' + (e.message || ''))
   } finally {
     mcpExportRefreshing.value = false
+  }
+}
+
+// 加载 Cloudflare Quick Tunnel 状态
+async function loadMcpTunnel() {
+  if (mcpTunnelLoading.value) return
+  mcpTunnelLoading.value = true
+  try {
+    const res = await mcpAPI.getTunnelStatus()
+    if (res.success !== false) {
+      applyMcpTunnelStatus(res.data || {})
+    } else {
+      message.error(res.error || '加载 Cloudflare 隧道状态失败')
+    }
+  } catch (e) {
+    console.error('加载 Cloudflare 隧道状态失败:', e)
+    message.error('加载失败: ' + (e.message || ''))
+  } finally {
+    mcpTunnelLoading.value = false
+    mcpTunnelLoaded.value = true
+  }
+}
+
+function applyMcpTunnelStatus(data) {
+  Object.assign(mcpTunnel, {
+    state: data.state || 'stopped',
+    running: data.running === true,
+    installed: data.installed === true,
+    quickTunnel: data.quickTunnel !== false,
+    mcpReady: data.mcpReady === true,
+    platform: data.platform || '',
+    configuredExecutablePath: data.configuredExecutablePath || '',
+    executablePath: data.executablePath || '',
+    localUrl: data.localUrl || '',
+    publicUrl: data.publicUrl || '',
+    mcpEndpoint: data.mcpEndpoint || '/mcp',
+    error: data.error || '',
+    pid: Number(data.pid) || 0
+  })
+  if (data.configuredExecutablePath !== undefined) {
+    mcpTunnelConfig.executablePath = data.configuredExecutablePath || ''
+  }
+  if (mcpTunnel.running || ['starting', 'stopping'].includes(mcpTunnel.state)) {
+    startMcpTunnelPolling()
+  } else {
+    stopMcpTunnelPolling()
+  }
+}
+
+function startMcpTunnelPolling() {
+  if (mcpTunnelPollTimer) return
+  mcpTunnelPollTimer = setInterval(() => {
+    loadMcpTunnel()
+  }, 2000)
+}
+
+function stopMcpTunnelPolling() {
+  if (!mcpTunnelPollTimer) return
+  clearInterval(mcpTunnelPollTimer)
+  mcpTunnelPollTimer = null
+}
+
+async function saveMcpTunnelConfig() {
+  mcpTunnelSaving.value = true
+  try {
+    const res = await mcpAPI.saveTunnelConfig({
+      executablePath: mcpTunnelConfig.executablePath
+    })
+    if (res.success !== false) {
+      applyMcpTunnelStatus(res.data || {})
+      message.success('Cloudflare 隧道配置已保存')
+    } else {
+      message.error(res.error || '保存失败')
+    }
+  } catch (e) {
+    message.error('保存失败: ' + (e.message || ''))
+  } finally {
+    mcpTunnelSaving.value = false
+  }
+}
+
+async function startMcpTunnel() {
+  if (!mcpExport.enabled) {
+    message.warning('请先启用上面的 Loopra MCP 工具发布')
+    return
+  }
+  if (mcpExport.channel === 'sse') {
+    message.warning('Cloudflare Quick Tunnel 不支持 SSE，请切换为 Streamable HTTP')
+    return
+  }
+  mcpTunnelStarting.value = true
+  try {
+    const res = await mcpAPI.startTunnel({
+      executablePath: mcpTunnelConfig.executablePath
+    })
+    if (res.success !== false) {
+      applyMcpTunnelStatus(res.data || {})
+      if (mcpTunnel.running) {
+        message.success('Cloudflare 临时隧道已启动')
+      } else {
+        message.info('cloudflared 正在连接，稍后会显示公网地址')
+      }
+      startMcpTunnelPolling()
+    } else {
+      message.error(res.error || '启动隧道失败')
+    }
+  } catch (e) {
+    message.error('启动隧道失败: ' + (e.message || ''))
+  } finally {
+    mcpTunnelStarting.value = false
+  }
+}
+
+async function stopMcpTunnel() {
+  mcpTunnelStopping.value = true
+  try {
+    const res = await mcpAPI.stopTunnel()
+    if (res.success !== false) {
+      applyMcpTunnelStatus(res.data || {})
+      message.success('Cloudflare 隧道已停止')
+    } else {
+      message.error(res.error || '停止隧道失败')
+    }
+  } catch (e) {
+    message.error('停止隧道失败: ' + (e.message || ''))
+  } finally {
+    mcpTunnelStopping.value = false
+    stopMcpTunnelPolling()
+  }
+}
+
+async function copyMcpTunnelUrl() {
+  if (!mcpTunnel.publicUrl) return
+  try {
+    await navigator.clipboard.writeText(mcpTunnel.publicUrl)
+    message.success('公网 MCP 地址已复制')
+  } catch (e) {
+    message.error('复制失败，请手动复制')
   }
 }
 
@@ -4204,6 +4464,10 @@ onMounted(() => {
   loadSettings()
   loadOpenApiData()
   loadSystemFonts()
+})
+
+onBeforeUnmount(() => {
+  stopMcpTunnelPolling()
 })
 
 // 加载系统提示词
@@ -5806,6 +6070,134 @@ const saveLoopraMd = async () => {
   margin-top: 10px;
 }
 
+.mcp-tunnel-panel {
+  margin-bottom: 16px;
+  padding: 16px;
+  background: var(--bg-2);
+  border: 1px solid var(--border);
+  border-radius: var(--r);
+}
+
+.mcp-tunnel-header,
+.mcp-tunnel-footer {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+}
+
+.mcp-tunnel-header h4 {
+  margin: 0 0 4px;
+  font-size: 14px;
+}
+
+.mcp-tunnel-header p,
+.mcp-tunnel-hint {
+  margin: 0;
+  color: var(--fg-3);
+  font-size: 12px;
+}
+
+.mcp-tunnel-badge {
+  flex-shrink: 0;
+  padding: 4px 8px;
+  border-radius: 999px;
+  background: var(--bg);
+  color: var(--fg-3);
+  font-size: 11px;
+}
+
+.mcp-tunnel-badge.is-running {
+  background: var(--accent-bg);
+  color: var(--accent);
+}
+
+.mcp-tunnel-badge.is-error {
+  background: var(--red-bg);
+  color: var(--red);
+}
+
+.mcp-tunnel-loading {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 20px 0 4px;
+  color: var(--fg-3);
+  font-size: 12px;
+}
+
+.mcp-tunnel-warning,
+.mcp-tunnel-error {
+  margin-top: 14px;
+  padding: 10px;
+  font-size: 12px;
+}
+
+.mcp-tunnel-warning {
+  background: var(--accent-bg);
+  color: var(--fg-2);
+}
+
+.mcp-tunnel-warning a {
+  margin-left: 4px;
+  color: var(--accent);
+}
+
+.mcp-tunnel-error {
+  background: var(--red-bg);
+  color: var(--red);
+}
+
+.mcp-tunnel-fields {
+  margin-top: 14px;
+}
+
+.mcp-tunnel-field label {
+  display: block;
+  margin-bottom: 6px;
+  color: var(--fg-2);
+  font-size: 12px;
+  font-weight: 600;
+}
+
+.mcp-tunnel-footer {
+  align-items: flex-end;
+  margin-top: 14px;
+  padding-top: 14px;
+  border-top: 1px solid var(--border);
+}
+
+.mcp-tunnel-url {
+  min-width: 0;
+  color: var(--fg-3);
+  font-size: 11px;
+}
+
+.mcp-tunnel-url span {
+  display: block;
+  margin-bottom: 4px;
+}
+
+.mcp-tunnel-url code {
+  display: inline-block;
+  max-width: 500px;
+  overflow: hidden;
+  color: var(--accent);
+  text-overflow: ellipsis;
+  vertical-align: middle;
+  white-space: nowrap;
+}
+
+.mcp-tunnel-actions {
+  display: flex;
+  flex-shrink: 0;
+  gap: 8px;
+}
+
+.mcp-tunnel-hint {
+  margin-top: 10px;
+}
+
 .mcp-card .card-body {
   min-height: 200px;
   margin: 12px;
@@ -7185,7 +7577,8 @@ const saveLoopraMd = async () => {
   }
 
   .mcp-export-selection-head,
-  .mcp-export-footer {
+  .mcp-export-footer,
+  .mcp-tunnel-footer {
     align-items: flex-start;
     flex-direction: column;
   }
@@ -7196,6 +7589,15 @@ const saveLoopraMd = async () => {
 
   .mcp-export-tool-description {
     display: none;
+  }
+
+  .mcp-tunnel-actions {
+    justify-content: flex-end;
+    width: 100%;
+  }
+
+  .mcp-tunnel-url code {
+    max-width: 100%;
   }
 }
 </style>

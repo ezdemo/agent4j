@@ -4,6 +4,9 @@ import io.swagger.annotations.Api;
 import io.swagger.annotations.ApiOperation;
 import io.swagger.annotations.ApiParam;
 import org.noear.solon.annotation.*;
+import site.sorghum.loopra.bin.mcp.CloudflareTunnelConfig;
+import site.sorghum.loopra.bin.mcp.CloudflareTunnelService;
+import site.sorghum.loopra.bin.mcp.CloudflareTunnelStatusDTO;
 import site.sorghum.loopra.bin.mcp.McpExportConfig;
 import site.sorghum.loopra.bin.mcp.McpExportConfigDTO;
 import site.sorghum.loopra.bin.mcp.McpManageService;
@@ -33,6 +36,9 @@ public class McpController {
 
     @Inject
     private McpServerExportService mcpServerExportService;
+
+    @Inject
+    private CloudflareTunnelService cloudflareTunnelService;
 
     // ==================== 服务器列表 ====================
 
@@ -156,7 +162,9 @@ public class McpController {
     public ApiResponse<McpExportConfigDTO> saveExportConfig(
             @ApiParam(value = "Loopra MCP 发布配置") @Body McpExportConfig config) {
         try {
-            return ApiResponse.ok(mcpServerExportService.saveConfig(config));
+            McpExportConfigDTO result = mcpServerExportService.saveConfig(config);
+            cloudflareTunnelService.onMcpConfigChanged();
+            return ApiResponse.ok(result);
         } catch (IllegalArgumentException e) {
             throw new ServiceException(e.getMessage());
         }
@@ -167,6 +175,46 @@ public class McpController {
     @Mapping("/export/refresh")
     public ApiResponse<McpExportConfigDTO> refreshExportTools() {
         return ApiResponse.ok(mcpServerExportService.refreshTools());
+    }
+
+    // ==================== Cloudflare Quick Tunnel ====================
+
+    @ApiOperation(value = "获取 Cloudflare 隧道状态", notes = "获取 cloudflared 发现状态及当前临时公网地址")
+    @Get
+    @Mapping("/tunnel")
+    public ApiResponse<CloudflareTunnelStatusDTO> getCloudflareTunnelStatus() {
+        return ApiResponse.ok(cloudflareTunnelService.getStatus());
+    }
+
+    @ApiOperation(value = "保存 Cloudflare 隧道配置", notes = "保存可选的 cloudflared 可执行文件路径，不会启动隧道")
+    @Put
+    @Mapping("/tunnel/config")
+    public ApiResponse<CloudflareTunnelStatusDTO> saveCloudflareTunnelConfig(
+            @ApiParam(value = "Cloudflare 隧道配置") @Body CloudflareTunnelConfig config) {
+        try {
+            return ApiResponse.ok(cloudflareTunnelService.saveConfig(config));
+        } catch (IllegalArgumentException e) {
+            throw new ServiceException(e.getMessage());
+        }
+    }
+
+    @ApiOperation(value = "启动 Cloudflare Quick Tunnel", notes = "将当前 Loopra MCP endpoint 临时发布到 trycloudflare.com")
+    @Post
+    @Mapping("/tunnel/start")
+    public ApiResponse<CloudflareTunnelStatusDTO> startCloudflareTunnel(
+            @ApiParam(value = "Cloudflare 隧道配置，可为空") @Body CloudflareTunnelConfig config) {
+        try {
+            return ApiResponse.ok(cloudflareTunnelService.start(config));
+        } catch (IllegalArgumentException | IllegalStateException e) {
+            throw new ServiceException(e.getMessage());
+        }
+    }
+
+    @ApiOperation(value = "停止 Cloudflare 隧道", notes = "停止由 Loopra 启动的 cloudflared 进程")
+    @Post
+    @Mapping("/tunnel/stop")
+    public ApiResponse<CloudflareTunnelStatusDTO> stopCloudflareTunnel() {
+        return ApiResponse.ok(cloudflareTunnelService.stop());
     }
 
     // ==================== 内部校验 ====================

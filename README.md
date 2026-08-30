@@ -203,6 +203,8 @@ MCP、OpenAPI 和技能可为 Agent 注入额外工具。`read_image` 支持项�
 
 Loopra 也可以在设置页的「MCP 服务器 → 发布 Loopra 工具」中作为 MCP Server 对外提供工具。发布默认关闭，启用后使用 Streamable HTTP（默认 `/mcp`，也可切换 SSE）；工具选择与子代理 `allowedTools` 语义一致：选择「全部已启用」发布当前启用工具，选择「手动选择」时只发布白名单中的工具。配置保存于 `~/.loopra/mcp-server.json`，全局禁用的工具始终不会被发布。连接地址为当前 Web 服务地址加上配置的 endpoint，例如 `http://127.0.0.1:8080/mcp`。
 
+在同一设置页还可以使用「Cloudflare Tunnel 内网穿透」一键启动 Cloudflare Quick Tunnel。Loopra 由 Java `ProcessBuilder` 管理本机 `cloudflared` 进程，不依赖 cmd、bash 或平台专用脚本，因此 Windows、macOS、Linux 均可使用；首次使用需要先安装 `cloudflared` 并加入 PATH，也可以在页面填写可执行文件路径。Quick Tunnel 会生成临时随机公网地址，应用退出后失效；Java 本地代理只转发已配置的 MCP endpoint，不会把 Loopra 的其它 Web 路由一起暴露。该能力适合开发和测试，Quick Tunnel 不支持 SSE，请将 MCP 传输方式设为 Streamable HTTP。
+
 ### 子代理与长期协作
 
 子代理通过 `sub_agent` 派生。`explore`、`review` 和 `plan` 为只读角色；`implement` 与 `test` 可执行经过授权的写操作。每个子代理拥有独立推理上下文，并可经由共享上下文传递结构化结果。
