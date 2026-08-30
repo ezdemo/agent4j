@@ -186,6 +186,7 @@ public class McpServerExportService implements EventListener<AppLoadEndEvent> {
         try {
             syncTools(candidate, next);
             candidate.postStart();
+            McpToolAnnotationSupport.apply(candidate);
             endpointProvider = candidate;
             activeSignature = signature;
             log.info("[mcp-export] MCP endpoint 已启动: {} ({})", next.endpoint, next.channel);
@@ -245,6 +246,10 @@ public class McpServerExportService implements EventListener<AppLoadEndEvent> {
                 provider.addTool(new ContextAwareFunctionTool(tool, this));
             }
         }
+
+        // Solon AI 4.0.6 默认只输出 returnDirect；补充标准安全提示，便于 ChatGPT
+        // 等客户端判断工具是否只读、是否可能产生破坏性副作用。
+        McpToolAnnotationSupport.apply(provider);
     }
 
     private ToolSnapshot discoverTools() {
