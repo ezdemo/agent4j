@@ -5,11 +5,13 @@ import io.swagger.annotations.ApiOperation;
 import org.noear.solon.annotation.Body;
 import org.noear.solon.annotation.Controller;
 import org.noear.solon.annotation.Get;
+import org.noear.solon.annotation.Inject;
 import org.noear.solon.annotation.Init;
 import org.noear.solon.annotation.Mapping;
 import org.noear.solon.annotation.Path;
 import org.noear.solon.annotation.Post;
 import site.sorghum.loopra.bin.config.ConfigService;
+import site.sorghum.loopra.bin.mcp.McpServerExportService;
 import site.sorghum.loopra.integration.cutin.plugin.LoopraPluginRuntime;
 import site.sorghum.loopra.integration.cutin.plugin.LoopraPluginRuntime.PluginView;
 import site.sorghum.loopra.integration.cutin.plugin.external.ExternalPluginStore;
@@ -23,6 +25,9 @@ import java.util.List;
 @Controller
 @Mapping("/api/plugins")
 public class PluginController {
+
+    @Inject
+    private McpServerExportService mcpServerExportService;
 
     @Init
     public void init() {
@@ -53,6 +58,7 @@ public class PluginController {
                 LoopraPluginRuntime.setEnabled(id, !request.enabled);
                 throw persistFailure;
             }
+            mcpServerExportService.refreshTools();
             return ApiResponse.ok(plugin);
         } catch (IllegalArgumentException exception) {
             throw new ServiceException("插件不存在: " + id);

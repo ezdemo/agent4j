@@ -201,6 +201,8 @@ MCP、OpenAPI 和技能可为 Agent 注入额外工具。`read_image` 支持项�
 
 用户主动上传图片时，如果当前模型不支持 `imageInput`，系统会先将图片保存到当前项目的 `.loopra/read_img/`，再把项目相对路径和 `read_image` 调用提示交给模型；模型需要理解图片时，应使用该路径调用 `read_image`，而不是猜测图片内容。支持图片输入的模型仍直接接收原图。
 
+Loopra 也可以在设置页的「MCP 服务器 → 发布 Loopra 工具」中作为 MCP Server 对外提供工具。发布默认关闭，启用后使用 Streamable HTTP（默认 `/mcp`，也可切换 SSE）；工具选择与子代理 `allowedTools` 语义一致：选择「全部已启用」发布当前启用工具，选择「手动选择」时只发布白名单中的工具。配置保存于 `~/.loopra/mcp-server.json`，全局禁用的工具始终不会被发布。连接地址为当前 Web 服务地址加上配置的 endpoint，例如 `http://127.0.0.1:8080/mcp`。
+
 ### 子代理与长期协作
 
 子代理通过 `sub_agent` 派生。`explore`、`review` 和 `plan` 为只读角色；`implement` 与 `test` 可执行经过授权的写操作。每个子代理拥有独立推理上下文，并可经由共享上下文传递结构化结果。

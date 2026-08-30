@@ -923,6 +923,21 @@ export const mcpAPI = {
     // 保存工具权限 - POST /api/mcp/servers/tools/save
     saveToolPermissions: (serverName, disallowedTools) => {
         return api.post('/mcp/servers/tools/save', { serverName, disallowedTools })
+    },
+
+    // 获取 Loopra 内置工具 MCP 发布配置 - GET /api/mcp/export
+    getExportConfig: () => {
+        return api.get('/mcp/export')
+    },
+
+    // 保存 Loopra 内置工具 MCP 发布配置 - PUT /api/mcp/export
+    saveExportConfig: (config) => {
+        return api.put('/mcp/export', config)
+    },
+
+    // 刷新 Loopra 内置工具 MCP 发布清单 - POST /api/mcp/export/refresh
+    refreshExportTools: () => {
+        return api.post('/mcp/export/refresh')
     }
 }
 

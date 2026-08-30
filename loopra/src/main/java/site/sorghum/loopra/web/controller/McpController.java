@@ -4,8 +4,11 @@ import io.swagger.annotations.Api;
 import io.swagger.annotations.ApiOperation;
 import io.swagger.annotations.ApiParam;
 import org.noear.solon.annotation.*;
+import site.sorghum.loopra.bin.mcp.McpExportConfig;
+import site.sorghum.loopra.bin.mcp.McpExportConfigDTO;
 import site.sorghum.loopra.bin.mcp.McpManageService;
 import site.sorghum.loopra.bin.mcp.McpServerDTO;
+import site.sorghum.loopra.bin.mcp.McpServerExportService;
 import site.sorghum.loopra.bin.mcp.McpToolListDTO;
 import site.sorghum.loopra.web.common.ServiceException;
 import site.sorghum.loopra.web.model.ApiResponse;
@@ -27,6 +30,9 @@ public class McpController {
 
     @Inject
     private McpManageService mcpManageService;
+
+    @Inject
+    private McpServerExportService mcpServerExportService;
 
     // ==================== 服务器列表 ====================
 
@@ -133,6 +139,34 @@ public class McpController {
         }
         mcpManageService.saveToolPermissions(request.serverName, request.disallowedTools);
         return ApiResponse.ok("工具权限已保存");
+    }
+
+    // ==================== 发布 Loopra 工具 ====================
+
+    @ApiOperation(value = "获取 Loopra MCP 发布配置", notes = "获取内置工具 MCP endpoint 及工具发布选择")
+    @Get
+    @Mapping("/export")
+    public ApiResponse<McpExportConfigDTO> getExportConfig() {
+        return ApiResponse.ok(mcpServerExportService.getConfig());
+    }
+
+    @ApiOperation(value = "保存 Loopra MCP 发布配置", notes = "保存并立即启停 Loopra 内置工具 MCP endpoint")
+    @Put
+    @Mapping("/export")
+    public ApiResponse<McpExportConfigDTO> saveExportConfig(
+            @ApiParam(value = "Loopra MCP 发布配置") @Body McpExportConfig config) {
+        try {
+            return ApiResponse.ok(mcpServerExportService.saveConfig(config));
+        } catch (IllegalArgumentException e) {
+            throw new ServiceException(e.getMessage());
+        }
+    }
+
+    @ApiOperation(value = "刷新 Loopra MCP 工具", notes = "重新读取当前工具注册表并同步已连接 MCP 客户端")
+    @Post
+    @Mapping("/export/refresh")
+    public ApiResponse<McpExportConfigDTO> refreshExportTools() {
+        return ApiResponse.ok(mcpServerExportService.refreshTools());
     }
 
     // ==================== 内部校验 ====================

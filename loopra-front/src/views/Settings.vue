@@ -899,6 +899,113 @@
                 </div>
               </div>
               <div class="card-body">
+                <!-- ========== 发布 Loopra 内置工具 ========== -->
+                <div class="mcp-export-panel">
+                  <div class="mcp-export-header">
+                    <div>
+                      <h4>发布 Loopra 工具</h4>
+                      <p>把 Loopra 当前工具作为 MCP Server 提供给 Claude Desktop、Cursor 等客户端</p>
+                    </div>
+                    <label class="toggle-switch" title="启用或停用 Loopra MCP Server">
+                      <input v-model="mcpExport.enabled" type="checkbox"/>
+                      <span class="toggle-slider"></span>
+                    </label>
+                  </div>
+
+                  <div v-if="mcpExportLoading" class="mcp-export-loading">
+                    <svg class="animate-spin" fill="none" height="16" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24" width="16">
+                      <path d="M21 12a9 9 0 11-6.219-8.56"/>
+                    </svg>
+                    正在读取工具清单...
+                  </div>
+
+                  <template v-else>
+                    <div class="mcp-export-fields">
+                      <div class="mcp-export-field">
+                        <label>Server 名称</label>
+                        <input v-model="mcpExport.name" class="form-input" maxlength="60" placeholder="loopra"/>
+                      </div>
+                      <div class="mcp-export-field">
+                        <label>Endpoint 路径</label>
+                        <input v-model="mcpExport.endpoint" class="form-input" placeholder="/mcp" @input="mcpExportEndpointPreview = mcpExport.endpoint"/>
+                      </div>
+                      <div class="mcp-export-field">
+                        <label>传输方式</label>
+                        <select v-model="mcpExport.channel" class="form-input">
+                          <option value="streamable">Streamable HTTP（推荐）</option>
+                          <option value="streamable_stateless">Streamable HTTP（无状态）</option>
+                          <option value="sse">SSE</option>
+                        </select>
+                      </div>
+                    </div>
+
+                    <div class="mcp-export-selection">
+                      <div class="mcp-export-selection-head">
+                        <div>
+                          <label>发布哪些工具</label>
+                          <span>{{ mcpExportCheckedCount }} / {{ mcpExportEnabledToolCount }} 个已启用工具</span>
+                        </div>
+                        <button
+                          :disabled="mcpExportRefreshing"
+                          class="btn btn-ghost btn-xs"
+                          type="button"
+                          @click="refreshMcpExportTools"
+                        >{{ mcpExportRefreshing ? '刷新中...' : '刷新清单' }}</button>
+                        <div class="mcp-export-modes">
+                          <button
+                            :class="{active: mcpExportSelectionMode === 'all'}"
+                            class="mcp-export-mode"
+                            type="button"
+                            @click="setMcpExportSelectionMode('all')"
+                          >全部已启用</button>
+                          <button
+                            :class="{active: mcpExportSelectionMode === 'selected'}"
+                            class="mcp-export-mode"
+                            type="button"
+                            @click="setMcpExportSelectionMode('selected')"
+                          >手动选择</button>
+                        </div>
+                      </div>
+
+                      <div v-if="mcpExportSelectionMode === 'selected'" class="mcp-export-tools">
+                        <div class="mcp-export-tool-actions">
+                          <button class="btn btn-ghost btn-xs" type="button" @click="selectMcpExportTools(true)">全选已启用</button>
+                          <button class="btn btn-ghost btn-xs" type="button" @click="selectMcpExportTools(false)">清空选择</button>
+                        </div>
+                        <label
+                          v-for="tool in mcpExportTools"
+                          :key="tool.name"
+                          :class="{disabled: !tool.enabled}"
+                          class="mcp-export-tool"
+                        >
+                          <input
+                            :checked="isMcpExportToolSelected(tool)"
+                            :disabled="!tool.enabled"
+                            type="checkbox"
+                            @change="toggleMcpExportTool(tool)"
+                          />
+                          <span class="mcp-export-tool-name">{{ tool.name }}</span>
+                          <span class="mcp-export-tool-description">{{ tool.description || '暂无描述' }}</span>
+                          <span class="mcp-export-tool-state">{{ tool.enabled ? (isMcpExportToolSelected(tool) ? '已发布' : '未选择') : '全局禁用' }}</span>
+                        </label>
+                      </div>
+                    </div>
+
+                    <div class="mcp-export-footer">
+                      <div v-if="mcpExport.enabled" class="mcp-export-endpoint">
+                        连接地址 <code>{{ mcpExportEndpointUrl }}</code>
+                      </div>
+                      <button
+                        :disabled="mcpExportSaving"
+                        class="btn btn-primary btn-sm"
+                        type="button"
+                        @click="saveMcpExport"
+                      >{{ mcpExportSaving ? '保存中...' : '保存发布配置' }}</button>
+                    </div>
+                    <p class="mcp-export-hint">默认关闭；启用后请只在可信网络中暴露此地址。MCP 调用使用当前 Loopra 工作目录执行。</p>
+                  </template>
+                </div>
+
                 <!-- 加载中 -->
                 <div v-if="mcpLoading" class="mcp-state-box">
                   <svg class="animate-spin" fill="none" height="24" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24" width="24">
@@ -2773,8 +2880,9 @@ watch(settings, () => {
 
 // 监听 Tab 切换
 watch(activeTab, async (tab) => {
-  if (tab === 'mcp' && mcpServers.value.length === 0) {
-    loadMcpServers()
+  if (tab === 'mcp') {
+    if (mcpServers.value.length === 0) loadMcpServers()
+    if (!mcpExportLoaded.value) loadMcpExport()
   }
   if (tab === 'lsp' && lspServers.value.length === 0) {
     loadLspServers()
@@ -3438,6 +3546,23 @@ const mcpToolsConnected = ref(false)
 const mcpTools = ref([])
 const mcpDisallowedTools = ref([])
 
+// Loopra 内置工具 MCP 发布
+const mcpExportLoading = ref(false)
+const mcpExportSaving = ref(false)
+const mcpExportRefreshing = ref(false)
+const mcpExportLoaded = ref(false)
+const mcpExportSelectionMode = ref('all') // all | selected
+const mcpExportSelectedTools = ref([])
+const mcpExportTools = ref([])
+const mcpExportEndpointPreview = ref('/mcp')
+const mcpExport = reactive({
+  enabled: false,
+  name: 'loopra',
+  version: '1.0.0',
+  channel: 'streamable',
+  endpoint: '/mcp'
+})
+
 // 计算属性
 const mcpDisallowedSet = computed(() => new Set(mcpDisallowedTools.value))
 
@@ -3447,6 +3572,25 @@ const mcpEnabledCount = computed(() => {
 
 const mcpAllToolsChecked = computed(() => {
   return mcpTools.value.length > 0 && mcpEnabledCount.value === mcpTools.value.length
+})
+
+const mcpExportSelectedSet = computed(() => new Set(mcpExportSelectedTools.value))
+
+const mcpExportEnabledToolCount = computed(() => {
+  return mcpExportTools.value.filter(tool => tool.enabled).length
+})
+
+const mcpExportCheckedCount = computed(() => {
+  if (mcpExportSelectionMode.value === 'all') return mcpExportEnabledToolCount.value
+  return mcpExportTools.value.filter(tool => tool.enabled && mcpExportSelectedSet.value.has(tool.name)).length
+})
+
+const mcpExportEndpointUrl = computed(() => {
+  const endpoint = mcpExportEndpointPreview.value || mcpExport.endpoint || '/mcp'
+  const origin = typeof window !== 'undefined' && window.location?.origin
+    ? window.location.origin
+    : ''
+  return `${origin}${endpoint}`
 })
 
 const mcpFormValid = computed(() => {
@@ -3535,6 +3679,124 @@ async function loadMcpServers() {
     message.error('加载失败: ' + (e.message || ''))
   } finally {
     mcpLoading.value = false
+  }
+}
+
+// 加载 Loopra 内置工具 MCP 发布配置
+async function loadMcpExport() {
+  if (mcpExportLoading.value) return
+  mcpExportLoading.value = true
+  try {
+    const res = await mcpAPI.getExportConfig()
+    if (res.success !== false) {
+      applyMcpExportConfig(res.data || {})
+    } else {
+      message.error(res.error || '加载 Loopra MCP 发布配置失败')
+    }
+  } catch (e) {
+    console.error('加载 Loopra MCP 发布配置失败:', e)
+    message.error('加载失败: ' + (e.message || ''))
+  } finally {
+    mcpExportLoading.value = false
+    mcpExportLoaded.value = true
+  }
+}
+
+function applyMcpExportConfig(data) {
+  mcpExport.enabled = data.enabled === true
+  mcpExport.name = data.name || 'loopra'
+  mcpExport.version = data.version || '1.0.0'
+  mcpExport.channel = ['sse', 'streamable_stateless'].includes(data.channel)
+    ? data.channel
+    : 'streamable'
+  mcpExport.endpoint = data.endpoint || '/mcp'
+  mcpExportEndpointPreview.value = data.endpointUrl || mcpExport.endpoint
+  mcpExportTools.value = Array.isArray(data.tools) ? data.tools : []
+
+  if (Array.isArray(data.allowedTools)) {
+    mcpExportSelectionMode.value = 'selected'
+    mcpExportSelectedTools.value = [...new Set(data.allowedTools)]
+  } else {
+    mcpExportSelectionMode.value = 'all'
+    mcpExportSelectedTools.value = mcpExportTools.value
+      .filter(tool => tool.enabled)
+      .map(tool => tool.name)
+  }
+}
+
+function setMcpExportSelectionMode(mode) {
+  if (mode === 'selected' && mcpExportSelectionMode.value !== 'selected') {
+    mcpExportSelectedTools.value = mcpExportTools.value
+      .filter(tool => tool.enabled)
+      .map(tool => tool.name)
+  }
+  mcpExportSelectionMode.value = mode
+}
+
+function isMcpExportToolSelected(tool) {
+  return tool.enabled && (mcpExportSelectionMode.value === 'all'
+    || mcpExportSelectedSet.value.has(tool.name))
+}
+
+function toggleMcpExportTool(tool) {
+  if (!tool.enabled) return
+  const selected = new Set(mcpExportSelectedTools.value)
+  if (selected.has(tool.name)) {
+    selected.delete(tool.name)
+  } else {
+    selected.add(tool.name)
+  }
+  mcpExportSelectedTools.value = [...selected]
+}
+
+function selectMcpExportTools(checked) {
+  mcpExportSelectedTools.value = checked
+    ? mcpExportTools.value.filter(tool => tool.enabled).map(tool => tool.name)
+    : []
+}
+
+async function saveMcpExport() {
+  mcpExportSaving.value = true
+  try {
+    const allowedTools = mcpExportSelectionMode.value === 'all'
+      ? null
+      : [...new Set(mcpExportSelectedTools.value)]
+    const res = await mcpAPI.saveExportConfig({
+      enabled: mcpExport.enabled,
+      name: mcpExport.name,
+      version: mcpExport.version,
+      channel: mcpExport.channel,
+      endpoint: mcpExport.endpoint,
+      allowedTools
+    })
+    if (res.success !== false) {
+      applyMcpExportConfig(res.data || {})
+      message.success('Loopra MCP 发布配置已保存')
+    } else {
+      message.error(res.error || '保存失败')
+    }
+  } catch (e) {
+    message.error('保存失败: ' + (e.message || ''))
+  } finally {
+    mcpExportSaving.value = false
+  }
+}
+
+async function refreshMcpExportTools() {
+  if (mcpExportRefreshing.value) return
+  mcpExportRefreshing.value = true
+  try {
+    const res = await mcpAPI.refreshExportTools()
+    if (res.success !== false) {
+      applyMcpExportConfig(res.data || {})
+      message.success('工具清单已刷新')
+    } else {
+      message.error(res.error || '刷新失败')
+    }
+  } catch (e) {
+    message.error('刷新失败: ' + (e.message || ''))
+  } finally {
+    mcpExportRefreshing.value = false
   }
 }
 
@@ -5372,6 +5634,178 @@ const saveLoopraMd = async () => {
 }
 
 /* ==================== MCP 服务器管理 ==================== */
+.mcp-export-panel {
+  margin-bottom: 16px;
+  padding: 16px;
+  background: var(--bg-2);
+  border: 1px solid var(--border);
+  border-radius: var(--r);
+}
+
+.mcp-export-header,
+.mcp-export-footer,
+.mcp-export-selection-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+}
+
+.mcp-export-header h4 {
+  margin: 0 0 4px;
+  font-size: 14px;
+}
+
+.mcp-export-header p,
+.mcp-export-hint {
+  margin: 0;
+  color: var(--fg-3);
+  font-size: 12px;
+}
+
+.mcp-export-loading {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 20px 0 4px;
+  color: var(--fg-3);
+  font-size: 12px;
+}
+
+.mcp-export-fields {
+  display: grid;
+  grid-template-columns: 1fr 1fr 1fr;
+  gap: 12px;
+  margin-top: 16px;
+}
+
+.mcp-export-field label,
+.mcp-export-selection-head label {
+  display: block;
+  margin-bottom: 6px;
+  color: var(--fg-2);
+  font-size: 12px;
+  font-weight: 600;
+}
+
+.mcp-export-selection {
+  margin-top: 16px;
+  padding-top: 14px;
+  border-top: 1px solid var(--border);
+}
+
+.mcp-export-selection-head > div:first-child span {
+  color: var(--fg-3);
+  font-size: 11px;
+}
+
+.mcp-export-modes {
+  display: flex;
+  overflow: hidden;
+  border: 1px solid var(--border);
+  border-radius: var(--r);
+}
+
+.mcp-export-mode {
+  padding: 6px 10px;
+  border: 0;
+  border-right: 1px solid var(--border);
+  background: var(--bg);
+  color: var(--fg-2);
+  cursor: pointer;
+  font-family: var(--sans);
+  font-size: 11px;
+}
+
+.mcp-export-mode:last-child {
+  border-right: 0;
+}
+
+.mcp-export-mode.active {
+  background: var(--accent);
+  color: white;
+}
+
+.mcp-export-tools {
+  max-height: 260px;
+  margin-top: 10px;
+  overflow-y: auto;
+  border: 1px solid var(--border);
+  border-radius: var(--r);
+}
+
+.mcp-export-tool-actions {
+  display: flex;
+  gap: 6px;
+  padding: 8px;
+  border-bottom: 1px solid var(--border);
+}
+
+.mcp-export-tool {
+  display: grid;
+  grid-template-columns: auto minmax(110px, 0.8fr) minmax(0, 2fr) auto;
+  align-items: center;
+  gap: 8px;
+  padding: 8px 10px;
+  border-bottom: 1px solid var(--border);
+  font-size: 11px;
+}
+
+.mcp-export-tool:last-child {
+  border-bottom: 0;
+}
+
+.mcp-export-tool.disabled {
+  opacity: 0.55;
+}
+
+.mcp-export-tool-name {
+  overflow: hidden;
+  color: var(--fg-2);
+  font-family: var(--mono);
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.mcp-export-tool-description {
+  overflow: hidden;
+  color: var(--fg-3);
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.mcp-export-tool-state {
+  color: var(--fg-3);
+  white-space: nowrap;
+}
+
+.mcp-export-footer {
+  margin-top: 14px;
+  padding-top: 14px;
+  border-top: 1px solid var(--border);
+}
+
+.mcp-export-endpoint {
+  min-width: 0;
+  color: var(--fg-3);
+  font-size: 11px;
+}
+
+.mcp-export-endpoint code {
+  display: inline-block;
+  max-width: 380px;
+  margin-left: 4px;
+  overflow: hidden;
+  color: var(--accent);
+  text-overflow: ellipsis;
+  vertical-align: bottom;
+  white-space: nowrap;
+}
+
+.mcp-export-hint {
+  margin-top: 10px;
+}
+
 .mcp-card .card-body {
   min-height: 200px;
   margin: 12px;
@@ -6743,5 +7177,25 @@ const saveLoopraMd = async () => {
   gap: 6px;
   font-size: 12px;
   color: var(--fg-3);
+}
+
+@media (max-width: 720px) {
+  .mcp-export-fields {
+    grid-template-columns: 1fr;
+  }
+
+  .mcp-export-selection-head,
+  .mcp-export-footer {
+    align-items: flex-start;
+    flex-direction: column;
+  }
+
+  .mcp-export-tool {
+    grid-template-columns: auto minmax(0, 1fr) auto;
+  }
+
+  .mcp-export-tool-description {
+    display: none;
+  }
 }
 </style>

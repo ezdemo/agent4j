@@ -13,6 +13,7 @@ import org.noear.solon.annotation.*;
 import site.sorghum.loopra.bin.config.ConfigChangedEvent;
 import site.sorghum.loopra.bin.config.ConfigService;
 import site.sorghum.loopra.bin.config.LoopraConfig;
+import site.sorghum.loopra.bin.mcp.McpServerExportService;
 import site.sorghum.loopra.web.common.ServiceException;
 import site.sorghum.loopra.web.common.WebErrorMessages;
 import site.sorghum.loopra.web.model.*;
@@ -39,6 +40,9 @@ public class ConfigController {
 
     @Inject
     private AgentService agentService;
+
+    @Inject
+    private McpServerExportService mcpServerExportService;
 
     @Inject
     private ConfigService configService;
@@ -281,6 +285,8 @@ public class ConfigController {
         }
         boolean ok = agentService.switchProject(path);
         if (ok) {
+            // 工具中的项目级 Skill 也随工作目录切换，及时同步已发布的 MCP endpoint。
+            mcpServerExportService.refreshTools();
             ProjectSwitchDTO data = new ProjectSwitchDTO(
                     "工作目录已切换", agentService.getCurrentProject(), null);
             return ApiResponse.ok(data);
