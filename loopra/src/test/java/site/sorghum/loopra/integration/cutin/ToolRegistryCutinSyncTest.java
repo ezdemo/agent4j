@@ -10,6 +10,7 @@ import site.sorghum.cutin.core.tool.ToolDefinition;
 import site.sorghum.cutin.core.tool.ToolResult;
 import site.sorghum.loopra.bin.agent.environment.SessionEnvironment;
 import site.sorghum.loopra.bin.tool.ToolRegistry;
+import site.sorghum.loopra.tool.solon.mcp.McpFunctionTool;
 
 import java.lang.reflect.Type;
 import java.nio.file.Paths;
@@ -81,6 +82,33 @@ class ToolRegistryCutinSyncTest {
             .find("runtime_context_tool").orElseThrow().definition().inputSchema();
         assertEquals(Set.of("path"), ((Map<?, ?>) cutinSchema.get("properties")).keySet());
         assertEquals(List.of("path"), cutinSchema.get("required"));
+    }
+
+    @Test
+    void mcpBridgeDoesNotForwardLoopraRuntimeContext() {
+        java.util.concurrent.atomic.AtomicReference<Map<String, Object>> captured =
+                new java.util.concurrent.atomic.AtomicReference<>();
+        FunctionTool delegate = new org.noear.solon.ai.chat.tool.FunctionToolDesc("resolve-library-id")
+                .description("Resolve a library id.")
+                .inputSchema("{\"type\":\"object\",\"properties\":{\"libraryName\":{\"type\":\"string\"}}}")
+                .returnType(String.class)
+                .doHandle(args -> {
+                    captured.set(new LinkedHashMap<>(args));
+                    return "ok";
+                });
+        Map<String, Object> runtimeContext = new LinkedHashMap<>();
+        runtimeContext.put("ctx", new Object());
+        runtimeContext.put("__cwd", "C:/project");
+        CutinFunctionToolBridge.setCallContext(runtimeContext);
+        try {
+            ToolResult result = new CutinFunctionToolBridge(new McpFunctionTool(delegate)).call(
+                    new ToolCall("call-1", "resolve-library-id", Map.of("libraryName", "Solon"), null), null);
+
+            assertEquals("ok", result.content());
+            assertEquals(Map.of("libraryName", "Solon"), captured.get());
+        } finally {
+            CutinFunctionToolBridge.clearCallContext();
+        }
     }
 
     @Test

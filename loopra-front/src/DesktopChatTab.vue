@@ -4,7 +4,7 @@
     <div v-if="sessionActive" class="desktop-streaming-bar">
       <div class="desktop-streaming-bar-inner"></div>
     </div>
-    <!-- 左侧固定活动栏：文件 / 版本管理 -->
+    <!-- 左侧固定活动栏：文件 / 环境 / 子代理 / 项目能力 -->
     <nav class="desktop-activity-bar" aria-label="侧边栏菜单">
       <button
         type="button"
@@ -50,12 +50,29 @@
           <path d="M5.5 8v3.5A2.5 2.5 0 0 0 8 14h8a2.5 2.5 0 0 0 2.5-2.5V8"/>
         </svg>
       </button>
+      <button
+        type="button"
+        class="activity-bar-item"
+        :class="{ active: leftPanelOpen && leftPanelView === 'project-capabilities' }"
+        title="项目能力"
+        aria-label="项目能力"
+        @click="toggleProjectCapabilitiesPanel"
+      >
+        <svg class="activity-bar-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+          <path d="M5 6h14" />
+          <path d="M5 12h14" />
+          <path d="M5 18h14" />
+          <circle cx="9" cy="6" r="1.5" />
+          <circle cx="15" cy="12" r="1.5" />
+          <circle cx="11" cy="18" r="1.5" />
+        </svg>
+      </button>
     </nav>
     <aside
       class="desktop-files-left"
       :class="{ collapsed: !leftPanelOpen }"
       :style="leftPanelOpen ? { width: `${leftPanelWidth}px`, transition: leftPanelDragging ? 'none' : undefined } : null"
-      :aria-label="leftPanelView === 'environment' ? '环境信息' : leftPanelView === 'sub-agents' ? '子代理' : '项目文件'"
+      :aria-label="leftPanelView === 'environment' ? '环境信息' : leftPanelView === 'sub-agents' ? '子代理' : leftPanelView === 'project-capabilities' ? '项目能力' : '项目文件'"
     >
       <FileExplorer
         v-if="filePanelMounted"
@@ -85,6 +102,13 @@
         :session-name="sessionName"
         @open="openSubAgentTab"
         @removed="onSubAgentRemoved"
+      />
+      <ProjectCapabilitiesPanel
+        v-if="projectCapabilitiesPanelMounted"
+        v-show="leftPanelView === 'project-capabilities'"
+        ref="projectCapabilitiesPanelRef"
+        :workspace-hash="workspaceHash"
+        :workspace-name="activeWorkspaceName"
       />
       <div
         class="desktop-files-resize-handle"
@@ -182,6 +206,7 @@ import ChatView from './views/Chat.vue'
 import EditorTabs from './components/EditorTabs.vue'
 import FileEditor from './components/FileEditor.vue'
 import ActionConfirmDialog from './components/ActionConfirmDialog.vue'
+import ProjectCapabilitiesPanel from './components/ProjectCapabilitiesPanel.vue'
 import {fileIconFor} from './utils/fileIcons'
 import {applyHighlightTheme} from './utils/highlight'
 
@@ -220,6 +245,8 @@ const filePanelMounted = ref(false)
 const environmentPanelMounted = ref(false)
 const subAgentPanelMounted = ref(false)
 const subAgentPanelRef = ref(null)
+const projectCapabilitiesPanelMounted = ref(false)
+const projectCapabilitiesPanelRef = ref(null)
 // 子代理回放标签：与文件标签共用编辑器标签栏（id 带 sub: 前缀避免与文件 id 冲突）
 const subAgentTabs = ref([]) // [{ id, subSessionId, taskName, status, blocks, loading }]
 const activeSubAgentTab = computed(() => subAgentTabs.value.find((tab) => tab.id === activeTabId.value) || null)
@@ -249,6 +276,10 @@ let fileTabSeq = 0
 const activeWorkspacePath = computed(() => {
   const workspace = workspaces.value.find((item) => item.hash === workspaceHash.value)
   return workspace?.path || ''
+})
+const activeWorkspaceName = computed(() => {
+  const workspace = workspaces.value.find((item) => item.hash === workspaceHash.value)
+  return workspace?.name || ''
 })
 const tabId = `${workspaceHash.value || ''}:${sessionName}`
 let stopRightPanelListener = null
@@ -340,6 +371,18 @@ function toggleSubAgentPanel() {
   leftPanelOpen.value = true
   // 面板已挂载时静默刷新，运行中的子代理会话立即可见
   subAgentPanelRef.value?.refresh?.()
+}
+
+// 活动栏「项目能力」：展示当前项目独有的 Skill/MCP
+function toggleProjectCapabilitiesPanel() {
+  if (leftPanelOpen.value && leftPanelView.value === 'project-capabilities') {
+    leftPanelOpen.value = false
+    return
+  }
+  leftPanelView.value = 'project-capabilities'
+  projectCapabilitiesPanelMounted.value = true
+  leftPanelOpen.value = true
+  projectCapabilitiesPanelRef.value?.load?.()
 }
 
 async function refreshWelcomeEnvironmentMode() {

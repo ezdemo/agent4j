@@ -63,6 +63,7 @@ function mountTab() {
         RightPanel: true,
         TerminalView: true,
         FileExplorer: true,
+        ProjectCapabilitiesPanel: true,
         ActionConfirmDialog: true
       }
     }
@@ -246,6 +247,19 @@ describe('DesktopChatTab 子代理回放标签', () => {
     await nextTick()
     // 运行中的子代理会话立即可见：sub_start 触发列表刷新
     expect(subPanelRefreshSpy).toHaveBeenCalled()
+  })
+
+  it('opens the project capabilities panel from the left activity bar', async () => {
+    const wrapper = mountTab()
+    await flushPromises()
+
+    wrapper.vm.toggleProjectCapabilitiesPanel()
+    await nextTick()
+
+    expect(wrapper.vm.projectCapabilitiesPanelMounted).toBe(true)
+    expect(wrapper.vm.leftPanelOpen).toBe(true)
+    expect(wrapper.vm.leftPanelView).toBe('project-capabilities')
+    expect(wrapper.find('.activity-bar-item[aria-label="项目能力"]').exists()).toBe(true)
   })
 
   it('openSubAgentTab fills blocks through the reactive proxy (ChatView perceives updates)', async () => {

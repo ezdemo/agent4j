@@ -197,7 +197,22 @@ loopra web 0
 | 项目状态 | `memory` 将跨会话事实保存到 `.loopra/loopra-memory.md`；共享上下文保存到 `.loopra/workspace/` |
 | 多模态与浏览器 | `read_image`，以及桌面端可见 AI 浏览器的 `browser_*` 工具 |
 
-MCP、OpenAPI 和技能可为 Agent 注入额外工具。`read_image` 支持项目路径、绝对路径、Base64/data URI 和 HTTP(S) URL，单张图片最大 5 MiB，并支持可选的 `detail`（`auto`、`low`、`high`）和 `prompt`（本次图片识别任务描述）；当前模型支持 `imageInput` 时原图会作为视觉上下文传入，否则使用已配置的图片理解模型并带上 `prompt` 生成文字结果。`browser_screenshot` 会返回可见视口截图和结构化页面快照，交互操作必须使用对应的 `snapshotId`。浏览器工具只操作可见的 Desktop 浏览器；遇到登录、验证码或安全验证时，Agent 会请求用户接管，不会代填或读取敏感凭据。
+MCP、OpenAPI 和技能可为 Agent 注入额外工具。除用户级 `~/.loopra/mcp-servers.json` 外，项目根目录下的 `.loopra/mcp-servers.json` 也会被自动读取；项目级配置只对当前项目的 Agent 生效，不会写入或污染用户级 MCP 配置。项目技能可放在 `.loopra/skills/<skill-name>/SKILL.md`，与用户级 `~/.loopra/skills` 分开挂载。桌面端会话左侧的“项目能力”入口只展示当前项目 Skill、项目 MCP 连接状态及工具列表。修改项目 MCP 文件后，可点击该面板的刷新按钮，或让 Agent 调用 `mcprefresh`；后者会在当前回复结束后重建连接，并从下一条消息起使用新工具。项目文件支持标准的 `mcpServers` 对象格式，也兼容 Loopra 管理页使用的 `servers` 数组格式，例如：
+
+```json
+{
+  "mcpServers": {
+    "project-tools": {
+      "type": "stdio",
+      "command": "node",
+      "args": ["tools/server.js"],
+      "env": {"PROJECT_ROOT": "."}
+    }
+  }
+}
+```
+
+`read_image` 支持项目路径、绝对路径、Base64/data URI 和 HTTP(S) URL，单张图片最大 5 MiB，并支持可选的 `detail`（`auto`、`low`、`high`）和 `prompt`（本次图片识别任务描述）；当前模型支持 `imageInput` 时原图会作为视觉上下文传入，否则使用已配置的图片理解模型并带上 `prompt` 生成文字结果。`browser_screenshot` 会返回可见视口截图和结构化页面快照，交互操作必须使用对应的 `snapshotId`。浏览器工具只操作可见的 Desktop 浏览器；遇到登录、验证码或安全验证时，Agent 会请求用户接管，不会代填或读取敏感凭据。
 
 用户主动上传图片时，如果当前模型不支持 `imageInput`，系统会先将图片保存到当前项目的 `.loopra/read_img/`，再把项目相对路径和 `read_image` 调用提示交给模型；模型需要理解图片时，应使用该路径调用 `read_image`，而不是猜测图片内容。支持图片输入的模型仍直接接收原图。
 

@@ -368,6 +368,22 @@ export const agentAPI = {
     return api.get('/agent/skills')
   },
 
+  // 获取当前项目的 Skill/MCP 能力摘要 - GET /api/agent/project-capabilities?workspaceHash=xxx
+  getProjectCapabilities: (workspaceHash) => {
+    return api.get('/agent/project-capabilities', {
+      params: {workspaceHash},
+      silent: true
+    })
+  },
+
+  // 重新加载当前项目的 Skill/MCP 配置 - POST /api/agent/project-capabilities/refresh?workspaceHash=xxx
+  refreshProjectCapabilities: (workspaceHash) => {
+    return api.post('/agent/project-capabilities/refresh', null, {
+      params: {workspaceHash},
+      silent: true
+    })
+  },
+
     // 获取当前会话的系统提示词 - GET /api/agent/prompt?workspaceHash=xxx&sessionName=xxx
     getSystemPrompt: (params) => {
         return api.get('/agent/prompt', {params: params || {}})

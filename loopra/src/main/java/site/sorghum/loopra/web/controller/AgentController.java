@@ -197,6 +197,34 @@ public class AgentController {
         return ApiResponse.ok(agentService.getCommandMetaList());
     }
 
+    @ApiOperation(value = "获取当前项目能力", notes = "返回当前项目会话可见的项目 Skill 与项目级 MCP 摘要")
+    @Get
+    @Mapping("/project-capabilities")
+    public ApiResponse<ProjectCapabilitiesDTO> projectCapabilities(
+            @ApiParam(value = "项目 hash", required = true)
+            @Param(value = "workspaceHash", required = true)
+            String workspaceHash) {
+        if (!agentService.isReady()) {
+            throw new ServiceException(WebErrorMessages.AGENT_NOT_READY);
+        }
+        String workspacePath = agentService.resolveProjectHashOrThrow(workspaceHash);
+        return ApiResponse.ok(agentService.getProjectCapabilities(workspacePath));
+    }
+
+    @ApiOperation(value = "刷新当前项目能力", notes = "重新加载项目 .loopra 下的 Skill/MCP 配置；运行中的会话不会被强制中断")
+    @Post
+    @Mapping("/project-capabilities/refresh")
+    public ApiResponse<ProjectCapabilitiesDTO> refreshProjectCapabilities(
+            @ApiParam(value = "项目 hash", required = true)
+            @Param(value = "workspaceHash", required = true)
+            String workspaceHash) {
+        if (!agentService.isReady()) {
+            throw new ServiceException(WebErrorMessages.AGENT_NOT_READY);
+        }
+        String workspacePath = agentService.resolveProjectHashOrThrow(workspaceHash);
+        return ApiResponse.ok(agentService.refreshProjectCapabilities(workspacePath));
+    }
+
     @ApiOperation(value = "获取可用 skill 列表", notes = "返回当前已注册的所有 skill")
     @Get
     @Mapping("/skills")

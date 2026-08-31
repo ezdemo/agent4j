@@ -117,7 +117,7 @@ public class LoopraConfig implements AgentConfig {
                   "lang": "ZH",
                   "hitl": "free",
                   "autoWhitelist": [
-                    "resolve-library-id", "query-docs", "skillrefresh", "skilllist",
+                    "resolve-library-id", "query-docs", "skillrefresh", "mcprefresh", "skilllist",
                     "read", "glob", "write", "ls", "grep", "edit", "finish",
                     "java_source", "checklist_step", "workspace_read", "webfetch",
                     "codesearch", "ask_choice", "browser_request_user_action", "workspace_list", "workspace_write",

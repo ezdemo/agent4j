@@ -6,6 +6,7 @@ import site.sorghum.cutin.core.tool.*;
 import site.sorghum.loopra.bin.tool.ToolSchemaSanitizer;
 import site.sorghum.loopra.tool.HitlRequiredException;
 import site.sorghum.loopra.tool.ToolContext;
+import site.sorghum.loopra.tool.solon.mcp.McpFunctionTool;
 
 import java.nio.file.Path;
 import java.util.*;
@@ -44,7 +45,12 @@ public final class CutinFunctionToolBridge implements Tool {
     public ToolResult call(ToolCall call, LoopContext context) {
         try {
             Map<String, Object> args = new LinkedHashMap<>(call.arguments());
-            args.putAll(effectiveCallContext(context));
+            // MCP 的 handler 会把整个 Map 原样作为远端 CallToolRequest.arguments。
+            // Loopra 内部 ctx 可能包含 AgentLoop/sessionStore，不能跨协议边界序列化。
+            // 本地 Solon 工具仍保留原有运行时上下文注入。
+            if (!(delegate instanceof McpFunctionTool)) {
+                args.putAll(effectiveCallContext(context));
+            }
             org.noear.solon.ai.chat.tool.ToolResult result = delegate.call(args);
             String content = result == null ? "" : result.getContent();
             return ToolResult.success(call.id(), content == null ? "" : content);

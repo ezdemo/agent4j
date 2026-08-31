@@ -4,7 +4,6 @@ import lombok.Getter;
 import lombok.SneakyThrows;
 import org.noear.solon.Solon;
 import org.noear.solon.ai.chat.tool.FunctionTool;
-import org.noear.solon.ai.talents.cli.SkillTalent;
 import org.noear.solon.ai.talents.lsp.LspManager;
 import org.noear.solon.ai.talents.lsp.LspTalent;
 import org.noear.solon.ai.talents.mount.MountDir;
@@ -12,8 +11,10 @@ import org.noear.solon.ai.talents.mount.MountManager;
 import org.noear.solon.ai.talents.mount.MountType;
 import site.sorghum.loopra.tool.SolonToTools;
 import site.sorghum.loopra.tool.solon.lsp.SharedLoopraLspSkill;
+import site.sorghum.loopra.tool.solon.mcp.ProjectMcpSkill;
 
 import java.nio.file.Files;
+import java.nio.file.Path;
 import java.nio.file.Paths;
 import java.util.Collection;
 import java.util.Map;
@@ -23,8 +24,10 @@ import java.util.stream.Stream;
 
 /** 基于 Solon MountManager 的 Loopra 技能/终端/LSP 能力提供者。 */
 public class LoopraSkillProvider implements SolonToTools {
-    SkillTalent skillTalent;
+    LoopraSkillTalent skillTalent;
     SessionTerminalTalent terminalTalent;
+    @Getter
+    ProjectMcpSkill projectMcpSkill;
     @Getter
     LspTalent lspTalent;
     public static Map<String, LoopraSkillProvider> cliSkillProviderMap = new ConcurrentHashMap<>();
@@ -34,14 +37,23 @@ public class LoopraSkillProvider implements SolonToTools {
     @SneakyThrows
     public LoopraSkillProvider(String workDir) {
         Files.createDirectories(Paths.get(System.getProperty("user.home"), ".loopra", "skills"));
-        poolManager = new MountManager(workDir) {{
-            register(MountDir.builder()
+        poolManager = new MountManager(workDir);
+        poolManager.register(MountDir.builder()
+                .type(MountType.SKILLS)
+                .alias("@loopra-skills")
+                .path("~/.loopra/skills")
+                .build());
+        // 项目 Skill 与用户 Skill 分开挂载；不存在时保留挂载，后续 refresh 可发现新目录。
+        if (workDir != null && !workDir.isBlank() && !"~".equals(workDir)) {
+            Path projectSkills = Paths.get(workDir).toAbsolutePath().normalize()
+                    .resolve(".loopra").resolve("skills");
+            poolManager.register(MountDir.builder()
                     .type(MountType.SKILLS)
-                    .alias("@loopra-skills")
-                    .path("~/.loopra/skills")
+                    .alias("@project-skills")
+                    .path(projectSkills.toString())
                     .build());
-        }};
-        skillTalent = new SkillTalent(poolManager);
+        }
+        skillTalent = new LoopraSkillTalent(poolManager);
         terminalTalent = new SessionTerminalTalent(poolManager, workDir);
         terminalTalent.setSandboxEnabled(false);
         terminalTalent.setBashAsyncEnabled(true);
@@ -50,6 +62,7 @@ public class LoopraSkillProvider implements SolonToTools {
         );
         SharedLoopraLspSkill share = Solon.context().getBean(SharedLoopraLspSkill.class);
         share.copyToLoopra(lspTalent);
+        projectMcpSkill = ProjectMcpSkill.load(Paths.get(workDir));
     }
 
     public static LoopraSkillProvider getOrCreate(String rootDir) {
@@ -62,7 +75,11 @@ public class LoopraSkillProvider implements SolonToTools {
      */
     public static void removeFor(String rootDir) {
         if (rootDir == null) return;
-        cliSkillProviderMap.remove(Paths.get(rootDir).toAbsolutePath().normalize().toString());
+        LoopraSkillProvider removed = cliSkillProviderMap.remove(
+                Paths.get(rootDir).toAbsolutePath().normalize().toString());
+        if (removed != null && removed.projectMcpSkill != null) {
+            removed.projectMcpSkill.close();
+        }
     }
 
      /** 已安装技能目录变化后，刷新所有启用的技能池。 */
@@ -76,7 +93,8 @@ public class LoopraSkillProvider implements SolonToTools {
         return Stream.of(
                 skillTalent,
                 terminalTalent,
-                lspTalent
+                lspTalent,
+                projectMcpSkill
         ).map(
                 talent -> talent.getTools(null)
         ).filter(
