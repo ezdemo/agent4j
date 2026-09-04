@@ -725,8 +725,8 @@ const formatName = (n) => {
 <style scoped>
 .sidebar {
   width: 260px;
-  background: #f7f7f8;
-  border-right: 1px solid #dcdde1;
+  background: #fcfcfd;
+  border-right: 1px solid #eeeef0;
   box-shadow: none;
 }
 
@@ -734,8 +734,8 @@ const formatName = (n) => {
   display: grid;
   gap: 4px;
   padding: 12px 10px;
-  border-bottom: 1px solid #dedfe3;
-  background: #fafafb;
+  border-bottom: 1px solid #eeeef0;
+  background: #ffffff;
 }
 
 .shortcut-row {
@@ -758,7 +758,7 @@ const formatName = (n) => {
 
 .shortcut-row:hover,
 .shortcut-row:focus-visible {
-  background: #eeeeF1;
+  background: #f6f6f7;
   color: var(--fg);
   outline: none;
 }
@@ -770,9 +770,9 @@ const formatName = (n) => {
 }
 
 .shortcut-row-primary {
-  background: #e5e6e9;
-  box-shadow: inset 0 0 0 1px #d9dade;
-  color: #202127;
+  background: #f1f1f3;
+  box-shadow: none;
+  color: #27272a;
   font-weight: 600;
 }
 
@@ -783,8 +783,8 @@ const formatName = (n) => {
 
 .shortcut-row-primary:hover,
 .shortcut-row-primary:focus-visible {
-  background: #dcdee2;
-  color: #17181c;
+  background: #f6f6f7;
+  color: #18181b;
 }
 
 .sidebar-search {
@@ -823,8 +823,8 @@ const formatName = (n) => {
   justify-content: space-between;
   min-height: 42px;
   padding: 0 12px;
-  border-bottom: 1px solid #dedfe3;
-  background: #f2f2f4;
+  border-bottom: 1px solid #eeeef0;
+  background: #fafafa;
 }
 
 .project-tabs,
@@ -886,7 +886,7 @@ const formatName = (n) => {
 
 .project-list {
   padding: 8px;
-  background: #f7f7f8;
+  background: #fcfcfd;
 }
 
 .project-item + .project-item { border-top: 0; }
@@ -898,10 +898,10 @@ const formatName = (n) => {
   border-radius: 5px;
 }
 
-.project-header:hover { background: #eceef1; }
+.project-header:hover { background: #f6f6f7; }
 .project-header.active {
-  background: #e7e8eb;
-  box-shadow: inset 0 0 0 1px #dddee2;
+  background: #f1f1f3;
+  box-shadow: none;
 }
 
 .project-header.active .project-name { color: var(--fg); }
@@ -934,10 +934,10 @@ const formatName = (n) => {
 }
 
 .session-item { gap: 7px; }
-.session-item:hover { background: #eceef1; }
+.session-item:hover { background: #f6f6f7; }
 .session-item.active {
-  background: #e2e3e7;
-  box-shadow: inset 0 0 0 1px #d9dade;
+  background: #f1f1f3;
+  box-shadow: none;
 }
 .session-name { font-size: 13px; }
 .session-item.active .session-name { font-weight: 600; }
@@ -949,8 +949,8 @@ const formatName = (n) => {
   justify-content: center;
   min-height: 58px;
   padding: 9px 12px;
-  border-top: 1px solid #dedfe3;
-  background: #f2f2f4;
+  border-top: 1px solid #eeeef0;
+  background: #fafafa;
 }
 
 .sidebar-foot-actions {

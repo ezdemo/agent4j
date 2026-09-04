@@ -146,8 +146,8 @@ onBeforeUnmount(() => resizeObserver?.disconnect())
   height: 36px;
   min-width: 0;
   flex-shrink: 0;
-  background: var(--bg-2, #f7f7f8);
-  border-bottom: 1px solid var(--border);
+  background: var(--bg, #fbfbfc);
+  border-bottom: 1px solid var(--border-soft, #eeeef0);
   overflow: hidden;
 }
 
@@ -178,23 +178,23 @@ onBeforeUnmount(() => resizeObserver?.disconnect())
   color: var(--fg-muted);
   cursor: pointer;
   user-select: none;
-  border-right: 1px solid var(--border);
-  transition: background 0.15s, color 0.15s;
+  border-right: 1px solid var(--border-soft, #eeeef0);
+  transition: background-color var(--t), color var(--t);
 }
 
 .et-fixed-tab {
   z-index: 1;
   min-width: 88px;
-  background: var(--bg-2, #f7f7f8);
+  background: var(--bg, #fbfbfc);
 }
 
 .et-tab:hover {
-  background: var(--surface-hover, rgba(0, 0, 0, 0.04));
+  background: var(--surface-hover, #f6f6f7);
   color: var(--fg-secondary);
 }
 
 .et-tab.active {
-  background: var(--bg);
+  background: var(--bg-active, #f1f1f3);
   color: var(--fg);
 }
 
@@ -273,7 +273,7 @@ i.et-file-icon {
 }
 
 .et-close:hover {
-  background: var(--danger-bg, rgba(239, 68, 68, 0.12));
+  background: var(--bg-hover, #f6f6f7);
   color: var(--danger);
 }
 
@@ -284,11 +284,11 @@ i.et-file-icon {
   padding: 0 3px;
   flex-shrink: 0;
   background: var(--bg-2, #f7f7f8);
-  border-left: 1px solid var(--border);
+  border-left: 1px solid var(--border-soft, #eeeef0);
 }
 
 .et-scroll-button:hover:not(:disabled) {
-  background: var(--surface-hover, rgba(0, 0, 0, 0.04));
+  background: var(--surface-hover, #f6f6f7);
   color: var(--fg);
 }
 

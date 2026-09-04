@@ -1184,21 +1184,21 @@ onBeforeUnmount(() => {
 </script>
 
 <style scoped>
-.desktop-shell { width: 100vw; height: 100vh; display: flex; flex-direction: column; overflow: hidden; background: var(--bg, #fff); color: var(--fg, #202124); }
-.desktop-titlebar { position: relative; height: 44px; min-height: 44px; display: flex; align-items: center; background: var(--bg, #fff); -webkit-app-region: drag; user-select: none; }
-.desktop-titlebar::after { position: absolute; right: 0; bottom: 0; left: 0; height: 1px; background: var(--border, #e8e8e8); content: ''; pointer-events: none; }
+.desktop-shell { width: 100vw; height: 100vh; display: flex; flex-direction: column; overflow: hidden; background: var(--bg, #fbfbfc); color: var(--fg, #27272a); }
+.desktop-titlebar { position: relative; height: 44px; min-height: 44px; display: flex; align-items: center; background: var(--bg, #fbfbfc); -webkit-app-region: drag; user-select: none; }
+.desktop-titlebar::after { position: absolute; right: 0; bottom: 0; left: 0; height: 1px; background: var(--border, #eeeeF0); content: ''; pointer-events: none; }
 .desktop-left-controls { display: flex; align-items: center; gap: 4px; padding: 0 8px 0 32px; flex: 0 0 auto; }
-.icon-button, .desktop-tab, .desktop-tab-add, .window-button { -webkit-app-region: no-drag; border: 0; background: transparent; color: var(--fg-2, #5f6368); }
-.icon-button { width: 28px; height: 28px; padding: 5px; border-radius: 5px; }
+.icon-button, .desktop-tab, .desktop-tab-add, .window-button { -webkit-app-region: no-drag; border: 0; background: transparent; color: var(--fg-3, #71717a); }
+.icon-button { width: 32px; height: 32px; padding: 6px; border-radius: 8px; transition: background-color var(--t), color var(--t); }
 .icon-button svg, .desktop-tab svg, .desktop-tab-add svg { width: 18px; height: 18px; }
-.icon-button:hover, .icon-button.active, .desktop-tab-add:hover, .window-button:hover { background: var(--bg-3, #f3f4f6); color: var(--fg, #202124); }
+.icon-button:hover, .icon-button.active, .desktop-tab-add:hover, .window-button:hover { background: var(--bg-hover, #f6f6f7); color: var(--fg, #27272a); }
 .desktop-tabs { height: 100%; display: flex; align-items: center; gap: 4px; min-width: 80px; flex: 1; overflow-x: auto; padding: 0 18px 0 8px; scrollbar-width: none; }
 .desktop-tab.dragging { opacity: 0.55; }
-.desktop-tab.drag-over { background: var(--bg-3, #f3f4f6); box-shadow: inset 0 0 0 1px var(--border, #d6dae1); }
+.desktop-tab.drag-over { background: var(--bg-hover, #f6f6f7); box-shadow: inset 0 0 0 1px var(--border, #e8e8eb); }
 .desktop-tabs::-webkit-scrollbar { display: none; }
-.desktop-tab { display: inline-flex; align-items: center; gap: 7px; height: 30px; padding: 0 10px; border-radius: 6px; cursor: pointer; flex: 0 1 16vw; min-width: 96px; max-width: 230px; text-align: left; container-type: inline-size; }
-.desktop-tab:hover { background: var(--bg-3, #f3f4f6); color: var(--fg, #202124); }
-.desktop-tab.active { background: var(--bg-3, #f1f2f4); color: var(--fg, #202124); }
+.desktop-tab { display: inline-flex; align-items: center; gap: 7px; height: 30px; padding: 0 10px; border-radius: 8px; cursor: pointer; flex: 0 1 16vw; min-width: 96px; max-width: 230px; text-align: left; container-type: inline-size; transition: background-color var(--t), color var(--t); }
+.desktop-tab:hover { background: var(--bg-hover, #f6f6f7); color: var(--fg, #27272a); }
+.desktop-tab.active { background: var(--bg-active, #f1f1f3); color: var(--fg, #27272a); }
 .desktop-tab.active .desktop-tab-title { font-weight: 500; }
 .desktop-tab-title { overflow: hidden; white-space: nowrap; text-overflow: ellipsis; flex: 1 1 auto; min-width: 0; font-size: 14px; font-weight: 400; }
 .desktop-tab-actions { display: flex; align-items: center; gap: 2px; flex: 0 0 auto; }
@@ -1207,7 +1207,7 @@ onBeforeUnmount(() => {
 .desktop-tab:hover .desktop-tab-reload, .desktop-tab:focus-within .desktop-tab-reload { display: inline-flex; }
 .desktop-tab-reload svg { width: 12px; height: 12px; }
 .desktop-tab-close svg { width: 14px; height: 14px; }
-.desktop-tab-reload:hover, .desktop-tab-close:hover { background: rgba(0, 0, 0, 0.08); }
+.desktop-tab-reload:hover, .desktop-tab-close:hover { background: var(--bg-hover, #f6f6f7); }
 .desktop-tab-monogram { width: 16px; height: 16px; display: inline-flex; align-items: center; justify-content: center; flex: 0 0 auto; border-radius: 4px; color: #fff; font-size: 10px; font-weight: 700; line-height: 1; text-shadow: 0 1px rgba(0, 0, 0, 0.25); box-shadow: inset 0 1px rgba(255, 255, 255, 0.25), 0 1px 1px rgba(0, 0, 0, 0.16); }
 .desktop-tab-monogram.tone-0 { background: linear-gradient(135deg, #8b95a3, #5e6878); }
 .desktop-tab-monogram.tone-1 { background: linear-gradient(135deg, #3dd0e8, #18b4d0); }
@@ -1228,9 +1228,9 @@ onBeforeUnmount(() => {
 @container (max-width: 99px) {
   .desktop-tab-title { flex: 0 1 auto; max-width: 2em; }
 }
-.desktop-tab-add { display: inline-flex; width: 28px; height: 28px; align-items: center; justify-content: center; border-radius: 5px; flex: 0 0 auto; cursor: pointer; }
+.desktop-tab-add { display: inline-flex; width: 32px; height: 32px; align-items: center; justify-content: center; border-radius: 8px; flex: 0 0 auto; cursor: pointer; transition: background-color var(--t), color var(--t); }
 .desktop-window-controls { height: 100%; display: flex; align-items: center; padding-right: 14px; flex: 0 0 auto; -webkit-app-region: no-drag; }
-.window-button { width: 44px; height: 30px; display: inline-flex; align-items: center; justify-content: center; border-radius: 5px; }
+.window-button { width: 44px; height: 30px; display: inline-flex; align-items: center; justify-content: center; border-radius: 8px; transition: background-color var(--t), color var(--t); }
 .update-check-button.has-update { width: auto; padding: 0 12px; gap: 5px; background: rgba(59, 130, 246, 0.1); color: #2563eb; }
 .update-check-button.has-update:hover { background: rgba(59, 130, 246, 0.16); color: #1d4ed8; }
 .update-label { font-size: 12px; font-weight: 500; line-height: 1; }

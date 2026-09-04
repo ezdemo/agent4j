@@ -832,7 +832,7 @@ watch(workspaceHash, (hash) => {
   gap: 4px;
   background: var(--bg);
   border-right: 1px solid var(--border);
-  box-shadow: 1px 0 0 color-mix(in srgb, var(--border) 35%, transparent);
+  box-shadow: none;
   z-index: 40;
   user-select: none;
 }
@@ -847,23 +847,19 @@ watch(workspaceHash, (hash) => {
   flex: 0 0 40px;
   padding: 0;
   border: 1px solid transparent;
-  border-radius: 6px;
+  border-radius: 8px;
   background: transparent;
-  color: var(--fg-2);
+  color: var(--fg-3);
   font-size: 21px;
   line-height: 1;
   cursor: pointer;
   outline: none;
-  transition: color var(--t), background-color var(--t), border-color var(--t), transform 0.12s ease;
+  transition: color var(--t), background-color var(--t), border-color var(--t);
 }
 
 .activity-bar-item:hover {
-  color: var(--text);
-  background: color-mix(in srgb, var(--text) 7%, transparent);
-}
-
-.activity-bar-item:active {
-  transform: scale(0.96);
+  color: var(--fg);
+  background: var(--bg-3);
 }
 
 .activity-bar-item:focus-visible {
@@ -898,11 +894,6 @@ watch(workspaceHash, (hash) => {
   width: 20px;
   height: 20px;
   flex: 0 0 20px;
-  transition: transform var(--t);
-}
-
-.activity-bar-item:hover .activity-bar-icon {
-  transform: scale(1.06);
 }
 
 
@@ -945,7 +936,7 @@ watch(workspaceHash, (hash) => {
   flex-direction: column;
   flex-shrink: 0;
   overflow: hidden;
-  background: #f7f7f8;
+  background: #fcfcfd;
   border-right: 1px solid var(--border);
   transition: width 0.2s, opacity 0.2s;
 }

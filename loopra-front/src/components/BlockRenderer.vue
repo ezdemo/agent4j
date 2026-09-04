@@ -1010,23 +1010,23 @@ const onCollapseAllBlocks = () => {
 <style scoped>
 /* 思考块 */
 .block-reasoning {
-  background: var(--glass-bg-2);
-  backdrop-filter: blur(var(--blur-sm));
-  -webkit-backdrop-filter: blur(var(--blur-sm));
-  border: 1px solid var(--glass-border);
-  border-radius: var(--r);
+  background: var(--bg-subtle, #fafafb);
+  border: 1px solid var(--border, #e8e8eb);
+  border-radius: 9px;
   overflow: hidden;
-  margin-bottom: 4px;
+  margin-bottom: 6px;
 }
 
 .reasoning-head {
   display: flex;
   align-items: center;
   gap: 6px;
-  padding: 6px 10px;
+  min-height: 36px;
+  padding: 8px 12px;
   font-size: 12px;
+  line-height: 20px;
   font-weight: 500;
-  color: var(--fg-3);
+  color: var(--fg-2);
   cursor: pointer;
 }
 
@@ -1035,7 +1035,8 @@ const onCollapseAllBlocks = () => {
 }
 
 .reasoning-text {
-  padding: 0 10px 8px;
+  padding: 8px 12px 10px;
+  border-top: 1px solid var(--border-soft, var(--border, #eeeef0));
   font-size: 12px;
   font-family: var(--mono);
   color: var(--fg-3);
@@ -1094,7 +1095,7 @@ const onCollapseAllBlocks = () => {
 /* 内容块 */
 .block-content {
   font-size: 14px;
-  line-height: 1.6;
+  line-height: 1.7;
   color: var(--fg);
   margin-bottom: 4px;
 }
@@ -1221,17 +1222,20 @@ const onCollapseAllBlocks = () => {
   border-collapse: collapse;
   width: 100%;
   margin: 0.5em 0;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  overflow: hidden;
 }
 
 .block-content :deep(th),
 .block-content :deep(td) {
-  border: 1px solid var(--border);
-  padding: 6px 10px;
+  border: 1px solid var(--glass-border);
+  padding: 7px 12px;
   text-align: left;
 }
 
 .block-content :deep(th) {
-  background: var(--bg-3);
+  background: var(--bg-subtle);
   font-weight: 600;
 }
 
@@ -1265,7 +1269,7 @@ const onCollapseAllBlocks = () => {
 
 .finish-content {
   font-size: 14px;
-  line-height: 1.6;
+  line-height: 1.7;
   color: var(--fg);
 }
 
@@ -1363,17 +1367,20 @@ const onCollapseAllBlocks = () => {
   border-collapse: collapse;
   width: 100%;
   margin: 0.5em 0;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  overflow: hidden;
 }
 
 .finish-content :deep(th),
 .finish-content :deep(td) {
-  border: 1px solid var(--border);
-  padding: 6px 10px;
+  border: 1px solid var(--glass-border);
+  padding: 7px 12px;
   text-align: left;
 }
 
 .finish-content :deep(th) {
-  background: var(--bg-3);
+  background: var(--bg-subtle);
   font-weight: 600;
 }
 
@@ -1678,25 +1685,28 @@ const onCollapseAllBlocks = () => {
   max-width: 100%;
   width: max-content;
   overflow-x: auto;
+  overflow-y: hidden;
   border-collapse: collapse;
   margin: 8px 0;
-  font-size: 13px;
-  border-radius: var(--r);
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  background: var(--bg-2);
+  font-size: 14px;
 }
 
 .block-content :deep(th), .block-content :deep(td) {
-  border: 1px solid var(--border);
-  padding: 5px 12px;
+  border: 1px solid var(--glass-border);
+  padding: 7px 12px;
   text-align: left;
 }
 
 .block-content :deep(th) {
-  background: var(--bg-2);
+  background: var(--bg-subtle);
   font-weight: 600;
 }
 
 .block-content :deep(tr:nth-child(2n) td) {
-  background: var(--bg-2);
+  background: transparent;
 }
 
 /* 引用块 */
@@ -1865,9 +1875,9 @@ const onCollapseAllBlocks = () => {
 .block-file-changes {
   overflow: hidden;
   margin: 10px 0 4px;
-  border: 1px solid var(--glass-border);
-  border-radius: var(--r);
-  background: var(--glass-bg);
+  border: 1px solid var(--border, #e8e8eb);
+  border-radius: 9px;
+  background: var(--bg-subtle, #fafafb);
 }
 
 .file-changes-head {
@@ -1879,7 +1889,7 @@ const onCollapseAllBlocks = () => {
 }
 
 .file-changes-head.clickable { cursor: pointer; }
-.file-changes-head.clickable:hover { background: var(--bg-2); }
+.file-changes-head.clickable:hover { background: var(--bg-hover); }
 .file-changes-head.clickable:focus-visible { outline: 2px solid var(--accent); outline-offset: -2px; }
 
 .file-changes-icon {
@@ -1929,7 +1939,7 @@ const onCollapseAllBlocks = () => {
   gap: 12px;
   padding: 11px 16px;
   border: 0;
-  border-top: 1px solid var(--border);
+  border-top: 1px solid var(--border-soft, var(--border, #eeeef0));
   background: transparent;
   color: var(--fg-2);
   cursor: pointer;
@@ -1937,7 +1947,7 @@ const onCollapseAllBlocks = () => {
 }
 
 .file-change-row:hover {
-  background: var(--bg-2);
+  background: var(--bg-hover);
 }
 
 .file-change-path {
@@ -1970,8 +1980,8 @@ const onCollapseAllBlocks = () => {
 
 /* 工具分组展开内容 */
 .tool-group-detail {
-  border-top: 1px solid var(--glass-border);
-  padding: 4px 6px;
+  border-top: 1px solid var(--border-soft, var(--border, #eeeef0));
+  padding: 6px 8px;
 }
 
 .tool-group-item-block + .tool-group-item-block {
@@ -1991,26 +2001,25 @@ const onCollapseAllBlocks = () => {
 
 /* 工具块 */
 .block-tool {
-  background: var(--glass-bg);
-  backdrop-filter: blur(var(--blur-sm));
-  -webkit-backdrop-filter: blur(var(--blur-sm));
-  border: 1px solid var(--glass-border);
-  border-radius: var(--r);
+  background: var(--bg-subtle, #fafafb);
+  border: 1px solid var(--border, #e8e8eb);
+  border-radius: 9px;
   overflow: hidden;
-  margin-bottom: 4px;
+  margin-bottom: 6px;
 }
 
 .tool-head {
   display: flex;
   align-items: center;
   gap: 6px;
-  padding: 8px 10px;
+  min-height: 36px;
+  padding: 8px 12px;
   cursor: pointer;
   transition: background var(--t);
 }
 
 .tool-head:hover {
-  background: var(--bg-2);
+  background: var(--bg-hover);
 }
 
 .tool-icon {

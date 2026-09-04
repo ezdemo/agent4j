@@ -578,7 +578,7 @@ onMounted(load)
 .model-channels[data-theme="dark"] .model-channels-save:not(:disabled) { background: #d4d4d8; color: #18181b; }
 .model-channels[data-theme="dark"] .model-channels-save:not(:disabled):hover { background: #f4f4f5; }
 .model-channels[data-theme="dark"] .model-channels-save:disabled { background: #303034; color: #9499a3; opacity: 1; }
-.model-channels-body { box-sizing: border-box; width: 100%; min-width: 0; min-height: 0; flex: 1; margin: 0; display: flex; overflow: hidden; }
+.model-channels-body { box-sizing: border-box; width: 100%; min-width: 0; min-height: 0; flex: 1; margin: 0; display: flex; overflow: hidden; padding-inline: clamp(12px, 2vw, 24px); }
 .model-channels-sidebar { box-sizing: border-box; flex: 0 0 240px; width: 240px; min-width: 0; display: flex; flex-direction: column; border-right: 1px solid var(--border); background: var(--bg-2); overflow: hidden; }
 /* 侧栏定高不滚：渠道按钮列表在内部滚动（作用等同右侧模型列表） */
 .model-channels-sidebar .model-channel-toggles { min-height: 0; flex: 1 1 auto; display: flex; flex-direction: column; overflow-x: hidden; overflow-y: auto; }
@@ -640,5 +640,5 @@ onMounted(load)
 .model-channels-delete { display: inline-flex; align-items: center; gap: 6px; margin-top: 26px; padding: 4px 6px; border: 0; border-radius: 5px; background: transparent; color: #c2413b; font: inherit; font-size: 13px; cursor: pointer; }
 .model-channels-delete:hover { background: rgba(220, 38, 38, .09); }
 .model-channels-delete svg { width: 15px; height: 15px; }
-@media (max-width: 700px) { .model-channels-header { padding: 0 14px; } .model-channels-header p { display: none; } .model-channels-sidebar { flex-basis: 172px; } .model-channels-detail { padding: 14px 14px 32px; } .model-channel-fields-grid { grid-template-columns: minmax(0, 1fr); gap: 12px; } .model-config-main { grid-template-columns: minmax(0, 1fr) auto; } .model-config-main .model-config-switch { grid-column: 1 / -1; } .model-config-price { flex-wrap: wrap; } .model-config-price .model-config-switch { width: 100%; } }
+@media (max-width: 700px) { .model-channels-header { padding: 0 14px; } .model-channels-header p { display: none; } .model-channels-body { padding-inline: 8px; } .model-channels-sidebar { flex-basis: 172px; } .model-channels-detail { padding: 14px 14px 32px; } .model-channel-fields-grid { grid-template-columns: minmax(0, 1fr); gap: 12px; } .model-config-main { grid-template-columns: minmax(0, 1fr) auto; } .model-config-main .model-config-switch { grid-column: 1 / -1; } .model-config-price { flex-wrap: wrap; } .model-config-price .model-config-switch { width: 100%; } }
 </style>

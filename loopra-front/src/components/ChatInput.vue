@@ -2014,18 +2014,19 @@ defineExpose({focus: () => inputField.value?.focus(), addFileContext, addElement
   display: flex;
   flex-direction: column;
   gap: 0;
-  background: var(--glass-bg-2);
-  border: 1px solid var(--glass-border);
-  border-radius: var(--r-lg);
+  background: var(--bg-2);
+  border: 1px solid var(--border-2);
+  border-radius: 15px;
   padding: 6px 8px 0;
-  transition: border-color var(--t);
-  box-shadow: var(--glass-shadow);
+  transition: border-color 120ms ease, box-shadow 120ms ease;
+  box-shadow: 0 1px 2px rgba(0, 0, 0, 0.03), 0 8px 24px rgba(0, 0, 0, 0.04);
   position: relative;
   z-index: 10;
 }
 
 .input-box.focused {
-  border-color: var(--accent);
+  border-color: var(--focus-border, #b7b7c0);
+  box-shadow: 0 0 0 3px rgba(0, 0, 0, 0.025), 0 8px 24px rgba(0, 0, 0, 0.05);
 }
 
 .input-box.file-drop-active {
@@ -2220,15 +2221,15 @@ defineExpose({focus: () => inputField.value?.focus(), addFileContext, addElement
 .input-area:not(.welcome-mode) .input-box {
   min-height: 98px;
   padding: 14px 16px 9px;
-  border-color: var(--border);
-  border-radius: 14px;
-  background: var(--bg);
-  box-shadow: 0 3px 12px rgba(20, 24, 32, 0.08);
+  border-color: var(--border-2);
+  border-radius: 15px;
+  background: var(--bg-2);
+  box-shadow: 0 1px 2px rgba(0, 0, 0, 0.03), 0 8px 24px rgba(0, 0, 0, 0.04);
 }
 
 .input-area:not(.welcome-mode) .input-box.focused {
-  border-color: var(--accent);
-  box-shadow: 0 0 0 2px color-mix(in srgb, var(--accent) 14%, transparent), 0 3px 12px rgba(20, 24, 32, 0.08);
+  border-color: var(--focus-border, #b7b7c0);
+  box-shadow: 0 0 0 3px rgba(0, 0, 0, 0.025), 0 8px 24px rgba(0, 0, 0, 0.05);
 }
 
 .input-area:not(.welcome-mode) .input-row {
@@ -2270,7 +2271,7 @@ defineExpose({focus: () => inputField.value?.focus(), addFileContext, addElement
   min-height: 24px;
   margin-top: 4px;
   padding: 0;
-  border-top-color: var(--border);
+  border-top-color: var(--border-soft, #eeeeF0);
   flex-direction: row;
   justify-content: space-between;
   gap: 0;
@@ -3287,7 +3288,7 @@ defineExpose({focus: () => inputField.value?.focus(), addFileContext, addElement
   padding: 4px 4px 4px 12px;
   font-size: 11px;
   color: var(--fg-3);
-  border-top: 1px solid var(--glass-border);
+  border-top: 1px solid var(--border-soft, #eeeeF0);
   margin-top: 4px;
   position: relative;
 }
@@ -4217,15 +4218,15 @@ defineExpose({focus: () => inputField.value?.focus(), addFileContext, addElement
 .input-area.welcome-mode .input-box {
   min-height: 98px;
   padding: 14px 16px 9px;
-  border-color: var(--border);
-  border-radius: 14px;
-  background: var(--bg);
-  box-shadow: 0 3px 12px rgba(20, 24, 32, 0.08);
+  border-color: var(--border-2);
+  border-radius: 15px;
+  background: var(--bg-2);
+  box-shadow: 0 1px 2px rgba(0, 0, 0, 0.03), 0 8px 24px rgba(0, 0, 0, 0.04);
 }
 
 .input-area.welcome-mode .input-box.focused {
-  border-color: var(--accent);
-  box-shadow: 0 0 0 2px color-mix(in srgb, var(--accent) 14%, transparent), 0 3px 12px rgba(20, 24, 32, 0.08);
+  border-color: var(--focus-border, #b7b7c0);
+  box-shadow: 0 0 0 3px rgba(0, 0, 0, 0.025), 0 8px 24px rgba(0, 0, 0, 0.05);
 }
 
 .input-area.welcome-mode .input-row {

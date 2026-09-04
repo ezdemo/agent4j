@@ -423,14 +423,13 @@ onBeforeUnmount(() => {
 }
 
 .user-body {
-  background: var(--accent-bg);
-  backdrop-filter: blur(var(--blur-sm));
-  -webkit-backdrop-filter: blur(var(--blur-sm));
+  background: var(--blue-bg);
   border: 1px solid var(--glass-border);
   color: var(--fg);
-  padding: 8px 12px;
-  border-radius: var(--r-lg);
-  box-shadow: var(--glass-shadow);
+  padding: 9px 13px;
+  border-radius: 14px;
+  border-top-right-radius: 7px;
+  box-shadow: none;
 }
 
 .compacted-body {
@@ -507,13 +506,11 @@ onBeforeUnmount(() => {
 }
 
 .assistant-body {
-  background: var(--glass-bg-2);
-  backdrop-filter: blur(var(--blur-sm));
-  -webkit-backdrop-filter: blur(var(--blur-sm));
-  border: 1px solid var(--glass-border);
-  border-radius: var(--r-lg);
-  padding: 9px 13px;
-  box-shadow: 0 7px 18px rgba(22, 28, 36, 0.06);
+  background: transparent;
+  border: 0;
+  border-radius: 0;
+  padding: 0;
+  box-shadow: none;
 }
 
 .msg-blocks {
@@ -530,7 +527,7 @@ onBeforeUnmount(() => {
 .user-body .msg-time,
 .assistant-body .msg-time {
   font-size: 12px;
-  color: var(--fg-3);
+  color: var(--fg-4);
   opacity: 1;
   margin-top: 0;
   font-variant-numeric: tabular-nums;
@@ -538,7 +535,8 @@ onBeforeUnmount(() => {
 
 .msg-text {
   font-size: 14px;
-  line-height: 1.6;
+  line-height: 1.7;
+  color: var(--fg);
   white-space: pre-wrap;
   word-break: break-word;
 }
@@ -704,23 +702,25 @@ onBeforeUnmount(() => {
   cursor: pointer;
   padding: 3px 5px;
   border-radius: var(--r-sm);
-  transition: opacity 0.2s, background 0.2s;
+  transition: opacity 120ms ease, color 120ms ease, background-color 120ms ease;
   line-height: 1;
-  color: var(--fg-3);
+  color: var(--fg-4);
 }
 
 .assistant-body .copy-msg-btn,
 .user-body .copy-msg-btn {
-  opacity: 0.5;
+  opacity: 1;
 }
 
 .msg-body:hover .copy-msg-btn {
-  opacity: 0.8;
+  opacity: 1;
 }
 
 .copy-msg-btn:hover {
   opacity: 1 !important;
-  background: var(--glass-bg-2);
+  background: var(--bg-3);
+  color: var(--fg-2);
+  border-radius: 6px;
 }
 
 /* 用户消息展开/收起按钮 */
@@ -750,9 +750,9 @@ onBeforeUnmount(() => {
   cursor: pointer;
   padding: 3px 5px;
   border-radius: var(--r-sm);
-  transition: opacity 0.2s, background 0.2s;
+  transition: opacity 120ms ease, color 120ms ease, background-color 120ms ease;
   line-height: 1;
-  color: var(--fg-3);
+  color: var(--fg-4);
 }
 
 .rollback-btn.loading {
@@ -771,7 +771,9 @@ onBeforeUnmount(() => {
 
 .rollback-btn:hover {
   opacity: 1 !important;
-  background: var(--glass-bg-2);
+  background: var(--bg-3);
+  color: var(--fg-2);
+  border-radius: 6px;
 }
 
 /* 链接悬停浮层 */

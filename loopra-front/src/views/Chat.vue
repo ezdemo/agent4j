@@ -2801,10 +2801,10 @@ defineExpose({clearMessages, resetLocalMessages, loadSession, sendCommand, start
   margin: 0 auto 6px;
   box-sizing: border-box;
   overflow: hidden;
-  background: var(--glass-bg-2);
-  border: 1px solid var(--accent);
-  border-radius: var(--r-lg);
-  box-shadow: var(--glass-shadow);
+  background: var(--bg-2);
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  box-shadow: none;
 }
 
 .plan-review-head {
@@ -2920,7 +2920,7 @@ defineExpose({clearMessages, resetLocalMessages, loadSession, sendCommand, start
   padding: 12px 16px;
   color: var(--fg-2);
   font-size: 13px;
-  line-height: 1.6;
+  line-height: 1.7;
 }
 
 /* markdown 排版（与消息内容块一致；全局 reset 清掉了列表缩进，需恢复） */
@@ -3018,17 +3018,20 @@ defineExpose({clearMessages, resetLocalMessages, loadSession, sendCommand, start
   border-collapse: collapse;
   width: 100%;
   margin: 0.5em 0;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  overflow: hidden;
 }
 
 .plan-review-content :deep(th),
 .plan-review-content :deep(td) {
-  border: 1px solid var(--border);
-  padding: 6px 10px;
+  border: 1px solid var(--glass-border);
+  padding: 7px 12px;
   text-align: left;
 }
 
 .plan-review-content :deep(th) {
-  background: var(--bg-3);
+  background: var(--bg-subtle);
   font-weight: 600;
 }
 
@@ -3274,13 +3277,11 @@ defineExpose({clearMessages, resetLocalMessages, loadSession, sendCommand, start
 }
 
 .assistant-body {
-  background: var(--glass-bg-2);
-  backdrop-filter: blur(var(--blur-sm));
-  -webkit-backdrop-filter: blur(var(--blur-sm));
-  border: 1px solid var(--glass-border);
-  border-radius: var(--r-lg);
-  padding: 8px 12px;
-  box-shadow: var(--glass-shadow);
+  background: transparent;
+  border: 0;
+  border-radius: 0;
+  padding: 0;
+  box-shadow: none;
 }
 
 .ai-dot {
