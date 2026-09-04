@@ -95,7 +95,7 @@ public class LoopraSkillProvider implements SolonToTools {
                 terminalTalent,
                 lspTalent,
                 projectMcpSkill
-        ).map(
+        ).filter(Objects::nonNull).map(
                 talent -> talent.getTools(null)
         ).filter(
                 Objects::nonNull
